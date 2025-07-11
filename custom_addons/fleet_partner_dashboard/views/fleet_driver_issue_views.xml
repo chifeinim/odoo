@@ -51,7 +51,7 @@
     </record>
 
     <!-- Action -->
-    <record id="action_fleet_driver_issues" model="ir.actions.act_window">
+    <record id="action_fleet_driver_issue" model="ir.actions.act_window">
         <field name="name">Driver Issues</field>
         <field name="res_model">x_fleet_driver_issue</field>
         <field name="view_mode">tree,form</field>
@@ -62,8 +62,4 @@
         </field>
     </record>
 
-    <!-- Menu (if not already included) -->
-    <menuitem id="menu_fleet_driver_issue" name="Driver Issues"
-              parent="menu_fleet_dashboard_root"
-              sequence="30" action="action_fleet_driver_issues"/>
 </odoo>

@@ -8,7 +8,7 @@
             <tree>
                 <field name="name"/>
                 <field name="phone"/>
-                <field name="id"/>
+                <field name="yango_driver_id"/>
                 <field name="hire_date"/>
                 <field name="work_status"/>
                 <field name="type"/>
@@ -27,7 +27,7 @@
                     <group>
                         <field name="name"/>
                         <field name="phone"/>
-                        <field name="id"/>
+                        <field name="yango_driver_id"/>
                         <field name="hire_date"/>
                     </group>
                     <group>
@@ -68,10 +68,4 @@
         <field name="view_mode">tree,form</field>
     </record>
 
-    <!-- Menu -->
-    <menuitem id="menu_fleet_driver"
-              name="Drivers"
-              parent="menu_fleet_dashboard_root"
-              sequence="10"
-              action="action_fleet_driver"/>
 </odoo>

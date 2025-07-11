@@ -30,7 +30,6 @@
                                 <tree>
                                     <field name="name"/>
                                     <field name="phone"/>
-                                    <field name="email"/>
                                 </tree>
                             </field>
                         </page>
@@ -47,10 +46,4 @@
         <field name="view_mode">tree,form</field>
     </record>
 
-    <!-- Menu -->
-    <menuitem id="menu_fleet_product_type"
-              name="Product Types"
-              parent="menu_fleet_dashboard_root"
-              sequence="30"
-              action="action_fleet_product_type"/>
 </odoo>

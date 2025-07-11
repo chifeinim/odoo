@@ -51,10 +51,4 @@
         <field name="view_mode">tree,form</field>
     </record>
 
-    <!-- Menu -->
-    <menuitem id="menu_fleet_order"
-              name="Orders"
-              parent="menu_fleet_dashboard_root"
-              sequence="20"
-              action="action_fleet_order"/>
 </odoo>

@@ -6,7 +6,7 @@ class FleetDriver(models.Model):
 
     name = fields.Char(string="Driver Name", required=True) #first_name + last_name
     phone = fields.Char(string="Phone") #phone_number
-    id = fields.Char(string="Yango Driver ID") #yango_driver_id
+    yango_driver_id = fields.Char(string="Yango Driver ID") #yango_driver_id
     hire_date = fields.Date(string="Hire Date") #hire_date
     work_status = fields.Selection([
         ('not_working', 'Not Working'),
