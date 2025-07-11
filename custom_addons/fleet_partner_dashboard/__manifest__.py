@@ -1,0 +1,19 @@
+{
+    'name': 'Fleet Partner Dashboard',
+    'version': '15.0.1.0.0',
+    'summary': 'Manage fleet drivers, orders, issues, and product types',
+    'category': 'Fleet',
+    'author': 'Your Name or Company',
+    'website': 'https://github.com/chifeinim',
+    'depends': ['base', 'mail'],
+    'data': [
+        'views/fleet_driver_views.xml',
+        'views/fleet_order_views.xml',
+        'views/fleet_driver_issue_views.xml',
+        'views/product_type_views.xml',
+        'views/menu_views.xml',
+        'views/driver_issue_tag_views.xml',
+    ],
+    'installable': True,
+    'application': True,
+}

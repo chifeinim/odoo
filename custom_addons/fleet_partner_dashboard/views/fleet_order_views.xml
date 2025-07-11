@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Tree View -->
+    <record id="view_fleet_order_tree" model="ir.ui.view">
+        <field name="name">x.fleet.order.tree</field>
+        <field name="model">x_fleet_order</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="order_date"/>
+                <field name="status"/>
+                <field name="price"/>
+                <field name="driver"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_fleet_order_form" model="ir.ui.view">
+        <field name="name">x.fleet.order.form</field>
+        <field name="model">x_fleet_order</field>
+        <field name="arch" type="xml">
+            <form string="Fleet Order">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="order_date"/>
+                        <field name="status"/>
+                        <field name="cancellation_description"/>
+                        <field name="pickup_address"/>
+                        <field name="price"/>
+                    </group>
+                    <group>
+                        <field name="driver"/>
+                        <field name="driver_id"/>
+                        <field name="driver_name"/>
+                    </group>
+                    <group>
+                        <field name="pick_latitude"/>
+                        <field name="pick_longitude"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_fleet_order" model="ir.actions.act_window">
+        <field name="name">Fleet Orders</field>
+        <field name="res_model">x_fleet_order</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- Menu -->
+    <menuitem id="menu_fleet_order"
+              name="Orders"
+              parent="menu_fleet_dashboard_root"
+              sequence="20"
+              action="action_fleet_order"/>
+</odoo>

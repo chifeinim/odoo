@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- Tree View -->
+    <record id="view_fleet_product_type_tree" model="ir.ui.view">
+        <field name="name">x.fleet.product.type.tree</field>
+        <field name="model">x_fleet_product_type</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="active"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_fleet_product_type_form" model="ir.ui.view">
+        <field name="name">x.fleet.product.type.form</field>
+        <field name="model">x_fleet_product_type</field>
+        <field name="arch" type="xml">
+            <form string="Fleet Product Type">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="description"/>
+                        <field name="active"/>
+                    </group>
+                    <notebook>
+                        <page string="Drivers">
+                            <field name="driver_ids">
+                                <tree>
+                                    <field name="name"/>
+                                    <field name="phone"/>
+                                    <field name="email"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_fleet_product_type" model="ir.actions.act_window">
+        <field name="name">Product Types</field>
+        <field name="res_model">x_fleet_product_type</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- Menu -->
+    <menuitem id="menu_fleet_product_type"
+              name="Product Types"
+              parent="menu_fleet_dashboard_root"
+              sequence="30"
+              action="action_fleet_product_type"/>
+</odoo>
