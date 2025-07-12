@@ -1,6 +1,10 @@
 <odoo>
-    <!-- Root Menu -->
-    <menuitem id="menu_fleet_dashboard_root" name="Fleet Dashboard"/>
+<!-- Root Menu -->
+    <menuitem id="menu_fleet_dashboard_root"
+          name="Fleet Dashboard"
+          action="action_fleet_driver"
+          sequence="10"/>
+
 
     <!-- Drivers Menu -->
     <menuitem id="menu_fleet_driver" name="Drivers"

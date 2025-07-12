@@ -7,6 +7,7 @@
     'website': 'https://github.com/chifeinim',
     'depends': ['base', 'mail'],
     'data': [
+        'security/ir.model.access.csv',
         'views/fleet_driver_views.xml',
         'views/fleet_order_views.xml',
         'views/fleet_driver_issue_views.xml',
