@@ -10,7 +10,7 @@
                 <field name="driver_id"/>
                 <field name="date_reported"/>
                 <field name="status"/>
-                <field name="tag_ids" widget="many2many_tags"/>
+                <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
             </tree>
         </field>
     </record>
@@ -27,7 +27,7 @@
                         <field name="driver_id"/>
                         <field name="status"/>
                         <field name="date_reported"/>
-                        <field name="tag_ids" widget="many2many_tags"/>
+                        <field name="tag_ids" widget="many2many_tags" options="{'color_field': 'color'}"/>
                         <field name="description"/>
                     </group>
                 </sheet>
