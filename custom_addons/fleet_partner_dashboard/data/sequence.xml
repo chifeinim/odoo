@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="seq_fleet_driver_issue" model="ir.sequence">
+        <field name="name">Fleet Driver Issue</field>
+        <field name="code">fleet.driver.issue</field>
+        <field name="prefix">ISSUE/</field>
+        <field name="padding">4</field>
+        <field name="company_id" eval="False"/>
+    </record>
+</odoo>
