@@ -1,35 +1,13 @@
 /** @odoo-module **/
 
-import { Component, useState, onWillStart, mount } from "@odoo/owl";
-import { jsonrpc } from "@web/core/network/rpc_service";
+console.log("✅ OwlDriverDashboard JS is loaded!");
 
-class DriverDashboard extends Component {
-    setup() {
-        this.state = useState({ data: {} });
+import { registry } from "@web/core/registry"
+const { Component } = owl
+import { qweb } from "web.core";
 
-        onWillStart(async () => {
-            try {
-                const result = await jsonrpc("/fleet_dashboard/data");
-                this.state.data = result || {};
-            } catch (error) {
-                console.error("Failed to load dashboard data:", error);
-                this.state.data = {};
-            }
-        });
-    }
+export class OwlDriverDashboard extends Component {}
 
-    static template = "fleet_partner_dashboard.DriverDashboard";
-}
+OwlDriverDashboard.template = "owl.OwlDriverDashboard"
 
-console.log("DriverDashboard script loaded");
-
-document.addEventListener("DOMContentLoaded", () => {
-    const mountPoint = document.getElementById("fleet_dashboard_root");
-    if (mountPoint) {
-        console.log("Mount point found, mounting component");
-        mount(DriverDashboard, { target: mountPoint });
-    } else {
-        console.warn("Mount point #fleet_dashboard_root not found");
-    }
-});
-
+registry.category("actions").add("owl.driver_dashboard", OwlDriverDashboard)

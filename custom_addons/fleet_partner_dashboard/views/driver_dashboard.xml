@@ -1,0 +1,14 @@
+<?xml version = "1.0"  encoding="UTF-8" ?>
+<odoo>
+  <data>
+    <record id="action_owl_driver_dashboard" model="ir.actions.client">
+      <field name="name">Driver Dashboard</field>
+      <field name="tag">owl.driver_dashboard</field>
+      <field name="target">main</field>
+    </record>
+    <menuitem name = "OWL Tutorial" id="menu_owl_tutorial" sequence="10">
+      <menuitem name="Driver Dashboard" id="menu_owl_driver_dashboard" sequence="10" action="action_owl_driver_dashboard"/>
+    </menuitem>
+  </data>
+</odoo>
+    

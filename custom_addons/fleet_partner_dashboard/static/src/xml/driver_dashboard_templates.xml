@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+  <t t-name="owl.OwlDriverDashboard" owl="1">
+    <h1>Custom Driver Dashboard</h1>
+  </t>
+</templates>
