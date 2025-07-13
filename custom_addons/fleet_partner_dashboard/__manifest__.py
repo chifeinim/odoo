@@ -5,7 +5,7 @@
     'category': 'Fleet',
     'author': 'Your Name or Company',
     'website': 'https://github.com/chifeinim',
-    'depends': ['base', 'mail'],
+    'depends': ['base', 'mail', 'web'],
     'data': [
         'data/sequence.xml',
         'security/ir.model.access.csv',
@@ -14,8 +14,15 @@
         'views/fleet_driver_issue_views.xml',
         'views/product_type_views.xml',
         'views/driver_issue_tag_views.xml',
+        'views/dashboard_template.xml',
         'views/menu_views.xml',
     ],
+    'assets': {
+        'web.assets_frontend': [
+            'fleet_partner_dashboard/static/src/js/dashboard/driver_dashboard.js',
+            'fleet_partner_dashboard/static/src/js/dashboard/driver_dashboard.xml',
+        ],
+    },
     'installable': True,
     'application': True,
 }

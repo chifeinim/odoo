@@ -39,4 +39,19 @@
               parent="menu_fleet_driver_issue"
               action="action_driver_issue_tags"
               sequence="20"/>
+
+    <!-- Action to open OWL page -->
+    <record id="action_fleet_dashboard_webpage" model="ir.actions.act_url">
+        <field name="name">Fleet Dashboard</field>
+        <field name="url">/fleet_partner_dashboard</field>
+        <field name="target">self</field>
+    </record>
+
+    <!-- Dashboard Menu (Parent already exists) -->
+    <menuitem id="menu_fleet_dashboard_page"
+              name="Dashboard"
+              parent="menu_fleet_dashboard_root"
+              sequence="1"
+              action="action_fleet_dashboard_webpage"/>
+
 </odoo>

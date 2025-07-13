@@ -1,0 +1,13 @@
+<odoo>
+  <template id="dashboard_template" name="Driver Dashboard">
+    <t t-call="web.layout">
+      <t t-set="title">Fleet Driver Dashboard</t>
+      <div class="container mt-4">
+        <div class="card p-3 shadow-sm">
+          <!-- Mount point -->
+          <div id="fleet_dashboard_root"></div>
+        </div>
+      </div>
+    </t>
+  </template>
+</odoo>
