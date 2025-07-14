@@ -20,18 +20,28 @@ export class OwlDriverDashboard extends Component {
 
     onMounted(async () => {
       try {
-        const { windows, drivers } = await this.env.services.rpc(
+        const { windows, drivers: rawDrivers } = await this.env.services.rpc(
           '/fleet_partner_dashboard/data',
           {}
         );
         this.state.windows = windows;
-        this.state.drivers = drivers;
+
+        const sorted = rawDrivers.sort((a, b) => {
+          const a7 = a.periods[0].tags.length,  b7 = b.periods[0].tags.length;
+          if (b7 !== a7)  return b7 - a7;
+          const a30 = a.periods[1].tags.length, b30 = b.periods[1].tags.length;
+          if (b30 !== a30) return b30 - a30;
+          return a.name.localeCompare(b.name);
+        });
+        this.state.drivers = sorted;
       } catch (err) {
         this.state.error = err;
+        console.error("❌ Dashboard data error", err);
       } finally {
         this.state.loading = false;
       }
     });
+
   }
 }
 

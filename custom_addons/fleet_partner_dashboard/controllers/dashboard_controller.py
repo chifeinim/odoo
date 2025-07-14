@@ -20,7 +20,12 @@ class FleetDashboardController(http.Controller):
         result = []
         for drv in drivers:
             issues = drv.issue_ids.filtered('date_reported')
-            row = {'name': drv.name, 'periods': []}
+            # add phone into the row dict
+            row = {
+                'name': drv.name,
+                'phone': drv.phone or '',
+                'periods': [],
+            }
             for days, label in windows:
                 if days is not None:
                     cutoff = today - timedelta(days=days)

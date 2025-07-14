@@ -23,6 +23,7 @@
           <thead>
             <tr>
               <th>Driver</th>
+              <th>Phone</th>
               <t t-foreach="state.windows" t-as="w" t-key="w">
                 <th t-esc="w"/>
               </t>
@@ -36,6 +37,7 @@
                 t-key="d.name">
               <tr>
                 <td><t t-esc="d.name"/></td>
+                <td t-esc="d.phone"/>
                 <t t-foreach="d.periods" t-as="p" t-key="p.label">
                   <td>
                     <t t-if="p.tags.length">
