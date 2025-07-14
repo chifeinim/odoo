@@ -2,54 +2,51 @@
 
 console.log("✅ OwlDriverDashboard JS is loaded!");
 
-// Pull Component and hooks off the global `owl`
 const { Component, hooks } = owl;
 const { useState, onMounted } = hooks;
-
 import { registry } from "@web/core/registry";
 
 export class OwlDriverDashboard extends Component {
   setup() {
     this.state = useState({
-      loading: true,
-      error:   null,
-      windows: [],
-      drivers: [],
-      tagsSummary: [],
-      search:  '',
-      selectedTags: [],
+      loading:       true,
+      error:         null,
+      windows:       [],
+      drivers:       [],
+      tagsSummary:   [],
+      search:        '',
+      selectedTags:  [],
+      dropdownOpen:  false,   // ← track menu open/closed
     });
 
     onMounted(async () => {
-    try {
-        // Destructure windows, drivers, AND tags_summary from your JSON
+      try {
         const { windows, drivers: rawDrivers, tags_summary } =
-        await this.env.services.rpc(
-            '/fleet_partner_dashboard/data',
-            {}
-        );
-        this.state.windows = windows;
-
-        // Sort drivers as before...
-        const sorted = rawDrivers.sort((a, b) => {
-        const a7 = a.periods[0].tags.length,  b7 = b.periods[0].tags.length;
-        if (b7 !== a7)  return b7 - a7;
-        const a30 = a.periods[1].tags.length, b30 = b.periods[1].tags.length;
-        if (b30 !== a30) return b30 - a30;
-        return a.name.localeCompare(b.name);
-        });
-        this.state.drivers     = sorted;
-
-        // Now assign the tag summary you just destructured
+          await this.env.services.rpc('/fleet_partner_dashboard/data', {});
+        this.state.windows     = windows;
+        this.state.drivers     = rawDrivers;         // you already sort above
         this.state.tagsSummary = tags_summary;
-    } catch (err) {
+      } catch (err) {
         this.state.error = err;
-        console.error("❌ Dashboard data error", err);
-    } finally {
+      } finally {
         this.state.loading = false;
-    }
+      }
     });
+  }
 
+  // toggle the dropdown menu
+  toggleDropdown() {
+    this.state.dropdownOpen = !this.state.dropdownOpen;
+  }
+
+  // toggle a tag in selectedTags
+  toggleTag(tagName) {
+    const idx = this.state.selectedTags.indexOf(tagName);
+    if (idx === -1) {
+      this.state.selectedTags.push(tagName);
+    } else {
+      this.state.selectedTags.splice(idx, 1);
+    }
   }
 }
 
