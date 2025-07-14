@@ -17,6 +17,7 @@ export class OwlDriverDashboard extends Component {
       drivers: [],
       tagsSummary: [],
       search:  '',
+      selectedTags: [],
     });
 
     onMounted(async () => {

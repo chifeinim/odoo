@@ -11,6 +11,25 @@
         </div>
       </t>
       <t t-else="">
+      <!-- TAG FILTER -->
+        <div class="form-group mb-3">
+        <label for="tag-filter">Filter by tag:</label>
+        <select id="tag-filter"
+                class="form-control"
+                t-model="state.selectedTags"
+                multiple="multiple"
+                size="5">
+            <t t-foreach="state.tagsSummary" t-as="tag" t-key="tag.name">
+            <option t-att-value="tag.name">
+                <t t-esc="tag.name"/>
+            </option>
+            </t>
+        </select>
+        <small class="form-text text-muted">
+            (hold Ctrl/Cmd to select multiple)
+        </small>
+        </div>
+
       <!-- TAG‐SUMMARY TABLE -->
         <h2>Issues by Tag</h2>
         <table class="table table-bordered mb-4">
@@ -23,7 +42,11 @@
             </tr>
         </thead>
         <tbody>
-            <t t-foreach="state.tagsSummary" t-as="tag" t-key="tag.name">
+            <t t-foreach="
+                state.tagsSummary
+                    .filter(t => !state.selectedTags.length
+                                || state.selectedTags.includes(t.name))
+                " t-as="tag" t-key="tag.name">
             <tr>
                 <td><t t-esc="tag.name"/></td>
                 <!-- counts[0]=90d, [1]=30d, [2]=7d -->
