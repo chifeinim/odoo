@@ -11,7 +11,32 @@
         </div>
       </t>
       <t t-else="">
+      <!-- TAG‐SUMMARY TABLE -->
+        <h2>Issues by Tag</h2>
+        <table class="table table-bordered mb-4">
+        <thead>
+            <tr>
+            <th>Tag</th>
+            <th>Last 3 Months</th>
+            <th>Last Month</th>
+            <th>Last 7 Days</th>
+            </tr>
+        </thead>
+        <tbody>
+            <t t-foreach="state.tagsSummary" t-as="tag" t-key="tag.name">
+            <tr>
+                <td><t t-esc="tag.name"/></td>
+                <!-- counts[0]=90d, [1]=30d, [2]=7d -->
+                <td><t t-esc="tag.counts[0]"/></td>
+                <td><t t-esc="tag.counts[1]"/></td>
+                <td><t t-esc="tag.counts[2]"/></td>
+            </tr>
+            </t>
+        </tbody>
+        </table>
+
         <!-- Search bar -->
+        <h2>Issues by Driver</h2>
         <div class="form-group mb-3">
           <input type="text"
                  class="form-control"

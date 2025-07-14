@@ -39,9 +39,34 @@ class FleetDashboardController(http.Controller):
                 })
             result.append(row)
 
+        # New: build tag summary
+        Tag = request.env['x_fleet_driver_issue_tag'].sudo()
+        tags = Tag.search([], order='name')
+        tags_summary = []
+        for tag in tags:
+            counts = []
+            for days, _ in windows[:3][::-1]:  # reversed: 90,30,7
+                if days is not None:
+                    cutoff = today - timedelta(days=days)
+                    domain = [
+                        ('tag_ids', 'in', tag.id),
+                        ('date_reported', '>=', cutoff),
+                    ]
+                else:
+                    domain = [('tag_ids', 'in', tag.id)]
+                counts.append(request.env['x_fleet_driver_issue']
+                              .sudo().search_count(domain))
+            # counts = [90d_count, 30d_count, 7d_count]
+            tags_summary.append({'name': tag.name, 'counts': counts})
+        # sort by counts[0] (90d), then counts[1] (30d), then counts[2] (7d)
+        tags_summary.sort(key=lambda x: (-x['counts'][0],
+                                        -x['counts'][1],
+                                        -x['counts'][2]))
+
         return {
             'windows': [lbl for _, lbl in windows],
             'drivers': result,
+            'tags_summary': tags_summary,
         }
 
     @http.route('/fleet_partner_dashboard', type='http', auth='user')
