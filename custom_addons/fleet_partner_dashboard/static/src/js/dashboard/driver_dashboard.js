@@ -2,20 +2,41 @@
 
 console.log("✅ OwlDriverDashboard JS is loaded!");
 
-// Use the global `owl` object (already on the page)
-const { Component } = owl;
+// Pull Component and hooks off the global `owl`
+const { Component, hooks } = owl;
+const { useState, onMounted } = hooks;
 
-// Import the client‐action registry
+// Registry import stays the same
 import { registry } from "@web/core/registry";
 
 export class OwlDriverDashboard extends Component {
   setup() {
-    // Here you can initialize state, fetch data, etc.
+    this.state = useState({
+      loading: true,
+      error:   null,
+      windows: [],
+      drivers: [],
+    });
+
+    onMounted(async () => {
+      try {
+        // <<-- corrected rpc invocation:
+        const { windows, drivers } = await this.env.services.rpc(
+          '/fleet_partner_dashboard/data',
+          {}
+        );
+        this.state.windows = windows;
+        this.state.drivers = drivers;
+      } catch (err) {
+        this.state.error = err;
+        console.error("❌ Dashboard data error", err);
+      } finally {
+        this.state.loading = false;
+      }
+    });
   }
 }
 
-// Point to your QWeb template
 OwlDriverDashboard.template = "owl.OwlDriverDashboard";
 
-// Register under the same tag as in your ir.actions.client
 registry.category("actions").add("owl.driver_dashboard", OwlDriverDashboard);

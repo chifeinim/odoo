@@ -1,6 +1,48 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
   <t t-name="owl.OwlDriverDashboard" owl="1">
-    <h1>Custom Driver Dashboard</h1>
+    <div class="o_fleet_dashboard">
+      <t t-if="state.loading">
+        <div>Loading…</div>
+      </t>
+      <t t-elif="state.error">
+        <div class="alert alert-danger">
+          <t t-esc="state.error.message || state.error"/>
+        </div>
+      </t>
+      <t t-else="">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Driver</th>
+              <t t-foreach="state.windows" t-as="w" t-key="w">
+                <th t-esc="w"/>
+              </t>
+            </tr>
+          </thead>
+          <tbody>
+            <t t-foreach="state.drivers" t-as="d" t-key="d.name">
+              <tr>
+                <td><t t-esc="d.name"/></td>
+                <t t-foreach="d.periods" t-as="p" t-key="p.label">
+                  <td>
+                    <t t-if="p.tags.length">
+                      <ul class="o_dashboard_list">
+                        <t t-foreach="p.tags" t-as="tag" t-key="tag">
+                          <li t-esc="tag"/>
+                        </t>
+                      </ul>
+                    </t>
+                    <t t-else="">
+                      <span class="text-muted">(none)</span>
+                    </t>
+                  </td>
+                </t>
+              </tr>
+            </t>
+          </tbody>
+        </table>
+      </t>
+    </div>
   </t>
 </templates>

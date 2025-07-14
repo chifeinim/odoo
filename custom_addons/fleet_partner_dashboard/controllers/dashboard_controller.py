@@ -1,55 +1,44 @@
+# -*- coding: utf-8 -*-
 from odoo import http
 from odoo.http import request
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 
 class FleetDashboardController(http.Controller):
 
-    @http.route('/fleet_dashboard/data', type='json', auth='user')
-    def get_driver_issues_data(self):
-        Issue = request.env['x_fleet_driver_issue'].sudo()
+    @http.route('/fleet_partner_dashboard/data', type='json', auth='user')
+    def dashboard_data(self):
+        # Define your time windows and labels
+        windows = [
+            (7,   'Last 7 Days'),
+            (30,  'Last Month'),
+            (90,  'Last 3 Months'),
+            (None,'All Time'),
+        ]
+        today = date.today()
+        drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
 
-        today = datetime.today().date()
-        periods = {
-            '7_days': today - timedelta(days=7),
-            '30_days': today - timedelta(days=30),
-            '90_days': today - timedelta(days=90),
+        result = []
+        for drv in drivers:
+            issues = drv.issue_ids.filtered('date_reported')
+            row = {'name': drv.name, 'periods': []}
+            for days, label in windows:
+                if days is not None:
+                    cutoff = today - timedelta(days=days)
+                    subset = issues.filtered(lambda i: i.date_reported >= cutoff)
+                else:
+                    subset = issues
+                tags = subset.mapped('tag_ids.name')
+                row['periods'].append({
+                    'label': label,
+                    'tags': tags,
+                })
+            result.append(row)
+
+        return {
+            'windows': [lbl for _, lbl in windows],
+            'drivers': result,
         }
 
-        drivers_data = {}
-
-        all_issues = Issue.search([])
-
-        for issue in all_issues:
-            driver = issue.driver_id.name
-            date = issue.date_reported
-            tag_names = [tag.name for tag in issue.tag_ids]
-
-            if not drivers_data.get(driver):
-                drivers_data[driver] = {
-                    '7_days': [],
-                    '30_days': [],
-                    '90_days': [],
-                    'all_time': set()
-                }
-
-            if date >= periods['7_days']:
-                drivers_data[driver]['7_days'].extend(tag_names)
-            if date >= periods['30_days']:
-                drivers_data[driver]['30_days'].extend(tag_names)
-            if date >= periods['90_days']:
-                drivers_data[driver]['90_days'].extend(tag_names)
-
-            drivers_data[driver]['all_time'].update(tag_names)
-
-        # Remove duplicates and convert sets to lists
-        for d in drivers_data:
-            for key in ['7_days', '30_days', '90_days']:
-                drivers_data[d][key] = list(set(drivers_data[d][key]))
-            drivers_data[d]['all_time'] = list(drivers_data[d]['all_time'])
-
-        return drivers_data
-
-    @http.route('/fleet_partner_dashboard', type='http', auth='user', website=True)
+    @http.route('/fleet_partner_dashboard', type='http', auth='user')
     def dashboard(self, **kw):
         return request.render('fleet_partner_dashboard.dashboard_template')
-
