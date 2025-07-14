@@ -15,7 +15,7 @@
         <!-- TAG-FILTER DROPDOWN -->
         <div class="dropdown mb-3" t-att-class="{'show': state.dropdownOpen}">
           <button type="button"
-                  class="btn btn-outline-secondary dropdown-toggle"
+                  class="btn btn-primary dropdown-toggle"
                   t-on-click="toggleDropdown">
             Filter by issue type
             <t t-if="state.selectedTags.length">
