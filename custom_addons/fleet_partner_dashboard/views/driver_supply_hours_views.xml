@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <data>
+    <!-- 1) List view -->
+    <record id="view_driver_supply_hours_tree" model="ir.ui.view">
+      <field name="name">x.fleet.driver.supply.hours.tree</field>
+      <field name="model">x_fleet_driver_supply_hours</field>
+      <field name="arch" type="xml">
+        <tree string="Supply Hours">
+          <field name="driver_id"/>
+          <field name="date"/>
+          <field name="seconds"/>
+        </tree>
+      </field>
+    </record>
+
+    <!-- 2) Form view -->
+    <record id="view_driver_supply_hours_form" model="ir.ui.view">
+      <field name="name">x.fleet.driver.supply.hours.form</field>
+      <field name="model">x_fleet_driver_supply_hours</field>
+      <field name="arch" type="xml">
+        <form string="Supply Hours">
+          <sheet>
+            <group>
+              <field name="driver_id"/>
+              <field name="date"/>
+              <field name="seconds"/>
+            </group>
+          </sheet>
+        </form>
+      </field>
+    </record>
+
+    <!-- 3) Window action -->
+    <record id="action_driver_supply_hours" model="ir.actions.act_window">
+      <field name="name">Supply Hours</field>
+      <field name="res_model">x_fleet_driver_supply_hours</field>
+      <field name="view_mode">tree,form</field>
+      <field name="help" type="html">
+        <p class="o_view_nocontent_smiling_face">
+          Record daily online hours per driver.
+        </p>
+      </field>
+    </record>
+  </data>
+</odoo>

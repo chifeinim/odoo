@@ -15,6 +15,7 @@
         'views/product_type_views.xml',
         'views/driver_issue_tag_views.xml',
         'views/driver_dashboard.xml',
+        'views/driver_supply_hours_views.xml',
         'views/menu_views.xml',
     ],
     'assets': {

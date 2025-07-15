@@ -15,6 +15,13 @@
               parent="menu_fleet_dashboard_root"
               action="action_fleet_order"/>
 
+    <!-- Supply Hours -->
+    <menuitem id="menu_driver_supply_hours"
+              name="Supply Hours"
+              parent="menu_fleet_dashboard_root"
+              action="action_driver_supply_hours"
+              sequence="17"/>
+
     <!-- Product Types Menu -->
     <menuitem id="menu_fleet_product_type" name="Product Types"
               parent="menu_fleet_dashboard_root"
