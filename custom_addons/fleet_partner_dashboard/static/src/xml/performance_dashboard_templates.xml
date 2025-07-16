@@ -1,31 +1,141 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
   <t t-name="owl.OwlPerformanceDashboard" owl="1">
-    <!-- one single keyed root -->
-    <div t-key="'owl_performance_dashboard_root'" class="o_fleet_dashboard">
+    <div class="o_fleet_dashboard p-4">
       <t t-if="state.loading">
         <div>Loading…</div>
       </t>
       <t t-else="">
-        <h1>Performance Dashboard</h1>
-        <div class="row">
-          <!-- key each card by driver id -->
-          <t
-            t-foreach="Object.values(state.data)"
-            t-as="drv"
-            t-key="drv.name">
-            <div class="col-md-4 mb-4">
-              <div class="card">
-                <div class="card-body">
-                  <h5 class="card-title"><t t-esc="drv.name"/></h5>
-                  <p class="card-text">Trips: <t t-esc="drv.trips"/></p>
-                  <p class="card-text">Hours: <t t-esc="drv.hours.toFixed(1)"/>h</p>
-                  <p class="card-text">Revenue: <t t-esc="drv.revenue"/></p>
-                </div>
-              </div>
+        <h1 class="mb-4">Performance Dashboard</h1>
+
+        <!-- FILTER BAR -->
+        <div class="d-flex mb-4 flex-wrap">
+
+          <!-- Anda Product -->
+          <div class="dropdown mr-3" t-att-class="{'show': state.showProducts}">
+            <button class="btn btn-outline-secondary dropdown-toggle"
+                    t-on-click="() => toggleDropdown('showProducts')">
+              Products
+              <t t-if="state.selectedProducts.length">
+                (<t t-esc="state.selectedProducts.length"/>)
+              </t>
+            </button>
+            <div class="dropdown-menu p-2"
+                 t-att-class="{'show': state.showProducts}"
+                 style="max-height:200px; overflow:auto;">
+              <t t-foreach="state.productTypes" t-as="pt" t-key="pt.id">
+                <button type="button" class="dropdown-item"
+                        t-att-class="{'active': state.selectedProducts.includes(pt.id)}"
+                        t-on-click="() => toggleFilter('selectedProducts', pt.id)">
+                  <t t-esc="pt.name"/>
+                </button>
+              </t>
             </div>
-          </t>
+          </div>
+
+          <!-- Driver Quality Score -->
+          <div class="dropdown mr-3" t-att-class="{'show': state.showScores}">
+            <button class="btn btn-outline-secondary dropdown-toggle"
+                    t-on-click="() => toggleDropdown('showScores')">
+              Quality
+              <t t-if="state.selectedScores.length">
+                (<t t-esc="state.selectedScores.length"/>)
+              </t>
+            </button>
+            <div class="dropdown-menu p-2"
+                 t-att-class="{'show': state.showScores}">
+              <t t-foreach="state.qualityScores" t-as="qs" t-key="qs.key">
+                <button type="button" class="dropdown-item"
+                        t-att-class="{'active': state.selectedScores.includes(qs.key)}"
+                        t-on-click="() => toggleFilter('selectedScores', qs.key)">
+                  <t t-esc="qs.label"/>
+                </button>
+              </t>
+            </div>
+          </div>
+
+          <!-- Driver Category -->
+          <div class="dropdown mr-3" t-att-class="{'show': state.showCategories}">
+            <button class="btn btn-outline-secondary dropdown-toggle"
+                    t-on-click="() => toggleDropdown('showCategories')">
+              Categories
+              <t t-if="state.selectedCategories.length">
+                (<t t-esc="state.selectedCategories.length"/>)
+              </t>
+            </button>
+            <div class="dropdown-menu p-2"
+                 t-att-class="{'show': state.showCategories}">
+              <t t-foreach="state.categories" t-as="cat" t-key="cat">
+                <button type="button" class="dropdown-item"
+                        t-att-class="{'active': state.selectedCategories.includes(cat)}"
+                        t-on-click="() => toggleFilter('selectedCategories', cat)">
+                  <t t-esc="cat"/>
+                </button>
+              </t>
+            </div>
+          </div>
+
+          <!-- Time Period -->
+          <div class="form-group mb-0">
+            <label class="mr-2" for="period_select">Period:</label>
+            <select id="period_select" class="form-control d-inline-block"
+                    style="width:auto;"
+                    t-model="state.selectedPeriod"
+                    t-on-change="onPeriodChange">
+              <t t-foreach="state.timePeriods" t-as="p" t-key="p">
+                <option t-esc="p"/>
+              </t>
+            </select>
+          </div>
+
         </div>
+
+        <!-- DRIVERS TABLE -->
+        <div class="table-responsive">
+          <table class="table table-striped table-bordered">
+            <thead>
+              <tr>
+                <th>Driver</th>
+                <th>Phone</th>
+                <th>Start Date</th>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Active?</th>
+                <th>Cash</th>
+                <th>Trips</th>
+                <th>Hours</th>
+                <th>Accept %</th>
+                <th>Trips/Hour</th>
+                <th>Money/Hour</th>
+                <th>Eff %</th>
+                <th>Svc Fee</th>
+                <th>Prt Fee</th>
+              </tr>
+            </thead>
+            <tbody>
+              <t t-foreach="Object.values(state.data)" t-as="d" t-key="d.id">
+                <tr>
+                  <td><t t-esc="d.name"/></td>
+                  <td><t t-esc="d.phone"/></td>
+                  <td><t t-esc="d.hire_date"/></td>
+                  <td><t t-esc="d.product_type"/></td>
+                  <td><t t-esc="d.type"/></td>
+                  <td><t t-esc="d.active ? 'Yes' : 'No'"/></td>
+                  <td><t t-esc="d.cash.toFixed(2)"/></td>
+                  <td><t t-esc="d.trips"/></td>
+                  <td><t t-esc="d.hours.toFixed(2)"/></td>
+                  <td><t t-esc="d.acceptance_rate.toFixed(1)"/>%</td>
+                  <td><t t-esc="d.trips_per_hour.toFixed(2)"/></td>
+                  <td><t t-esc="d.money_per_hour.toFixed(2)"/></td>
+                  <td><t t-esc="d.efficiency.toFixed(1)"/>%</td>
+                  <td><t t-esc="d.service_fee.toFixed(2)"/></td>
+                  <td><t t-esc="d.partner_fee.toFixed(2)"/></td>
+                </tr>
+              </t>
+            </tbody>
+          </table>
+        </div>
+
       </t>
     </div>
   </t>
