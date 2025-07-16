@@ -12,7 +12,7 @@
                 <field name="interval_to"   widget="datetime"/>
                 <field name="status"/>
                 <field name="price"/>
-                <field name="driver"/>
+                <field name="driver_id"/>
             </tree>
         </field>
     </record>
@@ -37,8 +37,8 @@
                         <field name="price"/>
                     </group>
                     <group>
-                        <field name="driver"/>
                         <field name="driver_id"/>
+                        <field name="yango_driver_id"/>
                         <field name="driver_name"/>
                     </group>
                     <group>
