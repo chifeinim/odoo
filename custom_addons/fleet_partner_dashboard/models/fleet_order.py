@@ -5,7 +5,9 @@ class FleetOrder(models.Model):
     _description = 'Fleet Order'
 
     name = fields.Char(string="Order ID", required=True) #order_id
-    order_date = fields.Date(string="Order Date", default=fields.Date.today) #booked_at
+    order_date = fields.Datetime(string="Order Date", default=fields.Datetime.now) #booked_at
+    interval_from = fields.Datetime(string="Interval From") #interval_from
+    interval_to   = fields.Datetime(string="Interval To") #interval_to
     status = fields.Selection([
         ('none', 'None'),
         ('driving', 'Driving'),
