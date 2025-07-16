@@ -33,18 +33,20 @@ export class OwlPerformanceDashboard extends Component {
       showScores:         false,
       showCategories:     false,
       showPeriod:         false,
+
+      // **NEW** free‑text search string for drivers
+      search:             '',
     });
 
     onMounted(async () => {
-      // 1) load the two server‐sourced filters:
-      //    product types and driver categories
+      // load filter options
       const { product_types, categories } = await this.env.services.rpc(
         '/fleet_partner_performance/filters', {}
       );
       this.state.productTypes = product_types;
       this.state.categories   = categories;
 
-      // 2) initial data fetch
+      // initial data fetch
       await this._fetchData();
     });
   }
