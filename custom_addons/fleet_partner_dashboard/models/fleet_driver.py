@@ -8,6 +8,11 @@ class FleetDriver(models.Model):
     phone = fields.Char(string="Phone") #phone_number
     yango_driver_id = fields.Char(string="Yango Driver ID") #yango_driver_id
     hire_date = fields.Date(string="Hire Date") #hire_date
+    training_rating = fields.Selection([
+        ('weak', 'Weak'),
+        ('average', 'Average'),
+        ('strong', 'Strong'),
+        ], default='average', string="Training Rating") # Training Rating from Shanil
     work_status = fields.Selection([
         ('not_working', 'Not Working'),
         ('fired', 'Fired'),

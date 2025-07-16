@@ -11,6 +11,7 @@
           <field name="phone"/>
           <field name="yango_driver_id"/>
           <field name="hire_date"/>
+          <field name="training_rating"/>
           <field name="work_status"/>
           <field name="type"/>
           <field name="product_type_id"/>
@@ -30,6 +31,7 @@
               <field name="phone"/>
               <field name="yango_driver_id"/>
               <field name="hire_date"/>
+              <field name="training_rating"/>
             </group>
             <group>
               <field name="work_status"/>
