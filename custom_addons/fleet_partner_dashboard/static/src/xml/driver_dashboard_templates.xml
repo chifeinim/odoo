@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
   <t t-name="owl.OwlDriverDashboard" owl="1">
-    <div class="o_fleet_dashboard">
+    <!-- single root, with a static key -->
+    <div t-key="'owl_driver_dashboard_root'" class="o_fleet_dashboard">
+      <!-- loading / error -->
       <t t-if="state.loading">
         <div>Loading…</div>
       </t>
@@ -10,26 +12,33 @@
           <t t-esc="state.error.message || state.error"/>
         </div>
       </t>
-      <t t-else="">
 
+      <!-- main content -->
+      <t t-else="">
         <!-- TAG-FILTER DROPDOWN -->
         <div class="dropdown mb-3" t-att-class="{'show': state.dropdownOpen}">
-          <button type="button"
-                  class="btn btn-primary dropdown-toggle"
-                  t-on-click="toggleDropdown">
+          <button
+            type="button"
+            class="btn btn-primary dropdown-toggle"
+            t-on-click="toggleDropdown">
             Filter by issue type
             <t t-if="state.selectedTags.length">
               (<t t-esc="state.selectedTags.length"/>)
             </t>
           </button>
-          <div class="dropdown-menu p-2"
-               t-att-class="{'show': state.dropdownOpen}"
-               style="max-height:200px; overflow:auto;">
-            <t t-foreach="state.tagsSummary" t-as="tag" t-key="tag.name">
-              <button type="button"
-                      class="dropdown-item"
-                      t-att-class="{'active': state.selectedTags.includes(tag.name)}"
-                      t-on-click="toggleTag(tag.name)">
+          <div
+            class="dropdown-menu p-2"
+            t-att-class="{'show': state.dropdownOpen}"
+            style="max-height:200px; overflow:auto;">
+            <t
+              t-foreach="state.tagsSummary"
+              t-as="tag"
+              t-key="tag.name">
+              <button
+                type="button"
+                class="dropdown-item"
+                t-att-class="{'active': state.selectedTags.includes(tag.name)}"
+                t-on-click="toggleTag(tag.name)">
                 <t t-esc="tag.name"/>
               </button>
             </t>
@@ -48,7 +57,10 @@
             </tr>
           </thead>
           <tbody>
-            <t t-foreach="state.tagsSummary.filter(tag => !state.selectedTags.length || state.selectedTags.includes(tag.name))" t-as="tag" t-key="tag.name">
+            <t
+              t-foreach="state.tagsSummary.filter(tag => !state.selectedTags.length || state.selectedTags.includes(tag.name))"
+              t-as="tag"
+              t-key="tag.name">
               <tr>
                 <td><t t-esc="tag.name"/></td>
                 <td><t t-esc="tag.counts[0]"/></td>
@@ -59,13 +71,14 @@
           </tbody>
         </table>
 
-        <!-- Search bar -->
+        <!-- SEARCH BAR -->
         <h2>Issues by Driver</h2>
         <div class="form-group mb-3">
-          <input type="text"
-                 class="form-control"
-                 placeholder="Search driver..."
-                 t-model="state.search"/>
+          <input
+            type="text"
+            class="form-control"
+            placeholder="Search driver..."
+            t-model="state.search"/>
         </div>
 
         <!-- DRIVER-SUMMARY TABLE -->
@@ -74,21 +87,33 @@
             <tr>
               <th>Driver</th>
               <th>Phone</th>
-              <t t-foreach="state.windows" t-as="w" t-key="w">
+              <t
+                t-foreach="state.windows"
+                t-as="w"
+                t-key="w">
                 <th><t t-esc="w"/></th>
               </t>
             </tr>
           </thead>
           <tbody>
-            <t t-foreach="state.drivers.filter(d => d.name.toLowerCase().includes(state.search.toLowerCase()))" t-as="d" t-key="d.name">
+            <t
+              t-foreach="state.drivers.filter(d => d.name.toLowerCase().includes(state.search.toLowerCase()))"
+              t-as="d"
+              t-key="d.name">
               <tr>
                 <td><t t-esc="d.name"/></td>
                 <td><t t-esc="d.phone"/></td>
-                <t t-foreach="d.periods" t-as="p" t-key="p.label">
+                <t
+                  t-foreach="d.periods"
+                  t-as="p"
+                  t-key="p.label">
                   <td>
                     <t t-if="p.tags.length">
                       <ul class="o_dashboard_list">
-                        <t t-foreach="p.tags" t-as="tag" t-key="tag">
+                        <t
+                          t-foreach="p.tags"
+                          t-as="tag"
+                          t-key="tag">
                           <li><t t-esc="tag"/></li>
                         </t>
                       </ul>
@@ -102,7 +127,6 @@
             </t>
           </tbody>
         </table>
-
       </t>
     </div>
   </t>

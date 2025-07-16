@@ -1,15 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
   <t t-name="owl.OwlPerformanceDashboard" owl="1">
-    <div t-if="state.loading">Loading…</div>
-    <div t-else="">
-      <h1>Performance Dashboard</h1>
-      <!-- render your KPI cards and tables here, e.g.: -->
-      <t t-foreach="Object.values(state.data)" t-as="drv">
-        <div class="kpi-card">
-          <h2><t t-esc="drv.name"/></h2>
-          <p>Trips: <t t-esc="drv.trips"/></p>
-          <p>Hours: <t t-esc="drv.hours.toFixed(1)"/>h</p>
-          <p>Revenue: <t t-esc="drv.revenue"/></p>
+    <!-- one single keyed root -->
+    <div t-key="'owl_performance_dashboard_root'" class="o_fleet_dashboard">
+      <t t-if="state.loading">
+        <div>Loading…</div>
+      </t>
+      <t t-else="">
+        <h1>Performance Dashboard</h1>
+        <div class="row">
+          <!-- key each card by driver id -->
+          <t
+            t-foreach="Object.values(state.data)"
+            t-as="drv"
+            t-key="drv.name">
+            <div class="col-md-4 mb-4">
+              <div class="card">
+                <div class="card-body">
+                  <h5 class="card-title"><t t-esc="drv.name"/></h5>
+                  <p class="card-text">Trips: <t t-esc="drv.trips"/></p>
+                  <p class="card-text">Hours: <t t-esc="drv.hours.toFixed(1)"/>h</p>
+                  <p class="card-text">Revenue: <t t-esc="drv.revenue"/></p>
+                </div>
+              </div>
+            </div>
+          </t>
         </div>
       </t>
     </div>
