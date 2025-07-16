@@ -8,40 +8,48 @@ import { registry } from "@web/core/registry";
 
 export class OwlPerformanceDashboard extends Component {
   setup() {
-    // reactive state including filters
     this.state = useState({
-      loading: true,
-      data: {},
-      productTypes: [],       // to be filled on mount
-      qualityScores: [        // fixed mapping
-        { key: 'High Performer', label: 'High Performer' },
+      loading:            true,
+      data:               {},
+
+      // the “options” for each filter
+      productTypes:       [],                // [{id,name},…]
+      qualityScores:      [                 // fixed set
+        { key: 'High Performer',   label: 'High Performer'   },
         { key: 'Average Performer', label: 'Average Performer' },
-        { key: 'Low Performer', label: 'Low Performer' },
+        { key: 'Low Performer',     label: 'Low Performer'     },
       ],
-      categories: [],         // driver.type options
-      timePeriods: ['Last Week', 'Last Month', 'All Time'],
-      // selected filters
-      selectedProducts: [],
-      selectedScores: [],
+      categories:         [],                // ['new','active',…]
+      timePeriods:        ['Last Week','Last Month','All Time'],
+
+      // what’s currently selected
+      selectedProducts:   [],
+      selectedScores:     [],
       selectedCategories: [],
-      selectedPeriod: 'Last Week',
-      // control dropdown visibility
-      showProducts: false,
-      showScores: false,
-      showCategories: false,
+      selectedPeriod:     'Last Week',
+
+      // dropdown open/closed flags
+      showProducts:       false,
+      showScores:         false,
+      showCategories:     false,
+      showPeriod:         false,
     });
 
     onMounted(async () => {
-      // 1) fetch filter options (product types & driver categories)
-      const res = await this.env.services.rpc('/fleet_partner_performance/filters', {});
-      this.state.productTypes = res.product_types;   // [{id,name},…]
-      this.state.categories   = res.categories;      // ['new','active',…]
-      // 2) fetch table data
+      // 1) load the two server‐sourced filters:
+      //    product types and driver categories
+      const { product_types, categories } = await this.env.services.rpc(
+        '/fleet_partner_performance/filters', {}
+      );
+      this.state.productTypes = product_types;
+      this.state.categories   = categories;
+
+      // 2) initial data fetch
       await this._fetchData();
     });
   }
 
-  // fetch or re‑fetch with current filter state
+  // fetch (or re‐fetch) the main table + KPI data
   async _fetchData() {
     this.state.loading = true;
     const params = {
@@ -51,29 +59,34 @@ export class OwlPerformanceDashboard extends Component {
       categories: this.state.selectedCategories,
     };
     this.state.data = await this.env.services.rpc(
-      '/fleet_partner_performance/data', params
+      '/fleet_partner_performance/data',
+      params
     );
     this.state.loading = false;
   }
 
-  // generic toggle for multi‑select dropdowns
+  // toggle a value in any of the multi‑select lists
   toggleFilter(listName, value) {
-    const sel = this.state[listName];
-    const i = sel.indexOf(value);
-    if (i === -1) sel.push(value);
-    else sel.splice(i, 1);
+    const list = this.state[listName];
+    const idx = list.indexOf(value);
+    if (idx === -1) {
+      list.push(value);
+    } else {
+      list.splice(idx, 1);
+    }
     this._fetchData();
   }
 
-  // change period
-  onPeriodChange(ev) {
-    this.state.selectedPeriod = ev.target.value;
+  // change the time period (single‑select)
+  changePeriod(period) {
+    this.state.selectedPeriod = period;
+    this.state.showPeriod = false;
     this._fetchData();
   }
 
-  // toggle dropdown visibility
-  toggleDropdown(name) {
-    this.state[name] = !this.state[name];
+  // toggle any of the dropdown menus by its flag name
+  toggleDropdown(flagName) {
+    this.state[flagName] = !this.state[flagName];
   }
 }
 
