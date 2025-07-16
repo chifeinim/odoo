@@ -72,3 +72,32 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_partner_dashboard', type='http', auth='user')
     def dashboard(self, **kw):
         return request.render('fleet_partner_dashboard.dashboard_template')
+    
+    @http.route('/fleet_partner_performance/data', type='json', auth='user')
+    def performance_data(self):
+        today = date.today()
+        # your KPI windows, e.g. same 7/30/90 days
+        windows = [(7, '7 Days'), (30, '30 Days'), (None, 'All Time')]
+        drivers = request.env['x_fleet_driver'].sudo().search([])
+        data = {}
+        for drv in drivers:
+            # 1) count completed trips
+            completed = drv.order_ids.filtered(lambda o: o.status == 'complete')
+            # 2) sum of online hours
+            hours = request.env['x_fleet_driver_supply_hours']\
+                       .sudo()\
+                       .search([('driver_id','=',drv.id)])\
+                       .mapped('seconds')
+            total_hours = sum(hours) / 3600.0
+            # 3) revenue
+            revenue = sum(o.price for o in completed)
+            # 4) acceptance rate etc...
+            #    your logic here
+            data[drv.id] = {
+               'trips':      len(completed),
+               'hours':      total_hours,
+               'revenue':    revenue,
+               # … any other metrics …
+            }
+        return data
+

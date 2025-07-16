@@ -6,5 +6,12 @@
       <field name="tag">owl.driver_dashboard</field>
       <field name="target">main</field>
     </record>
+
+    <record id="action_performance_dashboard" model="ir.actions.client">
+      <field name="name">Performance Dashboard</field>
+      <field name="tag">owl.performance_dashboard</field>
+      <field name="target">main</field>
+    </record>
+
   </data>
 </odoo>

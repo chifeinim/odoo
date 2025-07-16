@@ -67,4 +67,11 @@
           sequence="10"
           action="action_owl_driver_dashboard"/>
 
+    <menuitem id="menu_performance_dashboard"
+          name="Performance Dashboard"
+          parent="menu_fleet_dashboard_page"
+          action="action_performance_dashboard"
+          sequence="20"/>
+
+
 </odoo>

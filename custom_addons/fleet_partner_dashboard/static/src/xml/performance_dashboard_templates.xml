@@ -1,0 +1,17 @@
+<templates xml:space="preserve">
+  <t t-name="owl.OwlPerformanceDashboard" owl="1">
+    <div t-if="state.loading">Loading…</div>
+    <div t-else="">
+      <h1>Performance Dashboard</h1>
+      <!-- render your KPI cards and tables here, e.g.: -->
+      <t t-foreach="Object.values(state.data)" t-as="drv">
+        <div class="kpi-card">
+          <h2><t t-esc="drv.name"/></h2>
+          <p>Trips: <t t-esc="drv.trips"/></p>
+          <p>Hours: <t t-esc="drv.hours.toFixed(1)"/>h</p>
+          <p>Revenue: <t t-esc="drv.revenue"/></p>
+        </div>
+      </t>
+    </div>
+  </t>
+</templates>
