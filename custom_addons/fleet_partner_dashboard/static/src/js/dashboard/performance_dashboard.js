@@ -10,27 +10,33 @@ export class OwlPerformanceDashboard extends Component {
   setup() {
     this.state = useState({
       loading:          true,
+      metrics:          { activeDrivers: 0, prevActiveDrivers: 0 },
       data:             {},
+
       productTypes:     [],
       qualityScores: [
         { key: "High Performer",   label: "High Performer"   },
         { key: "Average Performer", label: "Average Performer" },
-        { key: "Low Performer",     label: "Low Performer"     }
+        { key: "Low Performer",     label: "Low Performer"     },
       ],
       categories:       [],
       timePeriods:      ["Last Week", "Last Month", "All Time"],
+
       selectedProducts:   [],
       selectedScores:     [],
       selectedCategories: [],
       selectedPeriod:     "Last Week",
-      // ← our new date fields
+
+      // new date‑range fields
       startDate:        "",
       endDate:          "",
+
       showProducts:     false,
       showScores:       false,
       showCategories:   false,
       showPeriod:       false,
-      search:           ""
+
+      search:           "",
     });
 
     onMounted(async () => {
@@ -50,12 +56,13 @@ export class OwlPerformanceDashboard extends Component {
       scores:     this.state.selectedScores,
       categories: this.state.selectedCategories,
       start_date: this.state.startDate || undefined,
-      end_date:   this.state.endDate   || undefined
+      end_date:   this.state.endDate   || undefined,
     };
-    this.state.data = await this.env.services.rpc(
-      "/fleet_partner_performance/data",
-      params
+    const resp = await this.env.services.rpc(
+      "/fleet_partner_performance/data", params
     );
+    this.state.metrics = resp.metrics;
+    this.state.data    = resp.data;
     this.state.loading = false;
   }
 

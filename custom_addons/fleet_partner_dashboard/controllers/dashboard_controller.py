@@ -7,7 +7,7 @@ class FleetDashboardController(http.Controller):
 
     @http.route('/fleet_partner_dashboard/data', type='json', auth='user')
     def dashboard_data(self):
-        # Define your time windows and labels
+        # (unchanged support‑dashboard code)
         windows = [
             (7,   'Last 7 Days'),
             (30,  'Last Month'),
@@ -20,7 +20,6 @@ class FleetDashboardController(http.Controller):
         result = []
         for drv in drivers:
             issues = drv.issue_ids.filtered('date_reported')
-            # add phone into the row dict
             row = {
                 'name': drv.name,
                 'phone': drv.phone or '',
@@ -39,13 +38,12 @@ class FleetDashboardController(http.Controller):
                 })
             result.append(row)
 
-        # New: build tag summary
         Tag = request.env['x_fleet_driver_issue_tag'].sudo()
         tags = Tag.search([], order='name')
         tags_summary = []
         for tag in tags:
             counts = []
-            for days, _ in windows[:3][::-1]:  # reversed: 90,30,7
+            for days, _ in windows[:3][::-1]:
                 if days is not None:
                     cutoff = today - timedelta(days=days)
                     domain = [
@@ -56,19 +54,16 @@ class FleetDashboardController(http.Controller):
                     domain = [('tag_ids', 'in', tag.id)]
                 counts.append(request.env['x_fleet_driver_issue']
                               .sudo().search_count(domain))
-            # counts = [90d_count, 30d_count, 7d_count]
             tags_summary.append({'name': tag.name, 'counts': counts})
-        # sort by counts[0] (90d), then counts[1] (30d), then counts[2] (7d)
         tags_summary.sort(key=lambda x: (-x['counts'][0],
                                         -x['counts'][1],
                                         -x['counts'][2]))
 
         return {
-            'windows': [lbl for _, lbl in windows],
-            'drivers': result,
+            'windows':      [lbl for _, lbl in windows],
+            'drivers':      result,
             'tags_summary': tags_summary,
         }
-
 
     @http.route('/fleet_partner_dashboard', type='http', auth='user')
     def dashboard(self, **kw):
@@ -91,57 +86,97 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_partner_performance/data', type='json', auth='user')
     def performance_data(self, period=None, products=None, scores=None,
                          categories=None, start_date=None, end_date=None):
-        # 1) compute window either by named period or explicit dates
+        # 1) determine current & previous windows
+        today = date.today()
         if start_date and end_date:
-            df = datetime.strptime(start_date, '%Y-%m-%d').date()
-            dt = datetime.strptime(end_date,   '%Y-%m-%d').date()
+            df      = datetime.strptime(start_date, '%Y-%m-%d').date()
+            dt      = datetime.strptime(end_date,   '%Y-%m-%d').date()
+            prev_df = prev_dt = None
         else:
-            today = date.today()
-            mapping = {'Last Week':7,'Last Month':30,'All Time':None}
+            mapping = {'Last Week':7, 'Last Month':30, 'All Time':None}
             days = mapping.get(period, 7)
-            df = (today - timedelta(days=days)) if days else None
-            dt = None
+            if days is None:
+                df = dt = prev_df = prev_dt = None
+            else:
+                df      = today - timedelta(days=days)
+                dt      = None
+                prev_df = today - timedelta(days=2*days)
+                prev_dt = today - timedelta(days=days)
 
+        # 2) fast KPI: count of active drivers this period vs last period
+        #    (active = at least one order in window)
+        Order = request.env['x_fleet_order'].sudo()
+        domain_cur = []
+        if df:
+            domain_cur.append(('order_date', '>=', df))
+        groups_cur = Order.read_group(domain_cur, ['driver_id'], ['driver_id'])
+        active_current = len(groups_cur)
+
+        active_previous = 0
+        if prev_df and prev_dt:
+            domain_prev = [
+                ('order_date', '>=', prev_df),
+                ('order_date', '<',  prev_dt),
+            ]
+            groups_prev = Order.read_group(domain_prev, ['driver_id'], ['driver_id'])
+            active_previous = len(groups_prev)
+
+        metrics = {
+            'activeDrivers':     active_current,
+            'prevActiveDrivers': active_previous,
+        }
+
+        # 3) per‑driver rows (unchanged)
         products   = products   or []
         scores     = scores     or []
         categories = categories or []
 
-        score_map = {'weak':'Low Performer',
-                     'average':'Average Performer',
-                     'strong':'High Performer'}
+        score_map = {
+            'weak':    'Low Performer',
+            'average': 'Average Performer',
+            'strong':  'High Performer',
+        }
 
         drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
         data = {}
         for drv in drivers:
-            if products   and drv.product_type_id.id not in products:   continue
+            if products   and drv.product_type_id.id not in products: continue
             sc = score_map.get(drv.training_rating)
-            if scores     and sc not in scores:                         continue
-            if categories and drv.type not in categories:               continue
+            if scores     and sc not in scores:                       continue
+            if categories and drv.type not in categories:             continue
 
             orders = drv.order_ids
-            if df: orders = orders.filtered(lambda o: o.order_date and o.order_date.date() >= df)
-            if dt: orders = orders.filtered(lambda o: o.order_date and o.order_date.date() <= dt)
+            if df:
+                orders = orders.filtered(
+                    lambda o: o.order_date and o.order_date.date() >= df
+                )
+            if dt:
+                orders = orders.filtered(
+                    lambda o: o.order_date and o.order_date.date() <= dt
+                )
 
             total    = len(orders)
             complete = orders.filtered(lambda o: o.status == 'complete')
             trips    = len(complete)
-            active   = total > 0
             cash     = sum(o.price for o in complete)
 
             sh_dom = [('driver_id','=',drv.id)]
             if df: sh_dom.append(('date','>=', df))
             if dt: sh_dom.append(('date','<=', dt))
-            secs = request.env['x_fleet_driver_supply_hours'] \
-                       .sudo().search(sh_dom).mapped('seconds')
+            secs = request.env['x_fleet_driver_supply_hours']\
+                         .sudo()\
+                         .search(sh_dom)\
+                         .mapped('seconds')
             hours = sum(secs) / 3600.0
 
             ar  = (trips/total*100.0) if total else 0.0
             tph = (trips/hours)        if hours else 0.0
             mph = (cash/hours)         if hours else 0.0
 
-            dur = sum((o.interval_to - o.interval_from).total_seconds()
-                      for o in complete
-                      if o.interval_from and o.interval_to)
+            dur = sum(
+                (o.interval_to - o.interval_from).total_seconds()
+                for o in complete if o.interval_from and o.interval_to
+            )
             eff = (dur/3600.0)/hours*100.0 if hours else 0.0
 
             svc = cash * 0.10
@@ -154,7 +189,7 @@ class FleetDashboardController(http.Controller):
                 'hire_date':       drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
                 'product_type':    drv.product_type_id.name or '',
                 'type':            drv.type,
-                'active':          active,
+                'active':          total > 0,
                 'cash':            cash,
                 'trips':           trips,
                 'hours':           hours,
@@ -165,5 +200,8 @@ class FleetDashboardController(http.Controller):
                 'service_fee':     svc,
                 'partner_fee':     prt,
             }
-        return data
 
+        return {
+            'metrics': metrics,
+            'data':    data,
+        }

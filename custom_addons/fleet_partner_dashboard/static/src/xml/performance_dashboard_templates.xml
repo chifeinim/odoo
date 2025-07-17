@@ -12,6 +12,30 @@
       <t t-else="">
         <h1 class="mb-4">Performance Dashboard</h1>
 
+        <!-- AGGREGATE KPI CARD -->
+        <div class="row mb-4">
+          <div class="col-md-4">
+            <div class="card text-center">
+              <div class="card-body">
+                <h5 class="card-title">Active Drivers</h5>
+                <h2><t t-esc="state.metrics.activeDrivers"/></h2>
+                <p class="card-text">
+                  <t t-set="prev"  t-value="state.metrics.prevActiveDrivers"/>
+                  <t t-set="curr"  t-value="state.metrics.activeDrivers"/>
+                  <t t-set="delta" t-value="prev ? ((curr - prev) / prev * 100) : 0"/>
+                  <t t-if="delta &gt;= 0">
+                    <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                  </t>
+                  <t t-else="">
+                    <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                  </t>
+                  from last period
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- FILTER BAR -->
         <div class="mb-4 p-3 bg-light rounded d-flex gap-2">
           <!-- Anda Product -->
@@ -92,7 +116,7 @@
                  t-att-class="{'show': state.showPeriod}">
               <t t-foreach="state.timePeriods" t-as="pw" t-key="pw">
                 <button class="dropdown-item"
-                        t-att-class="{'active': state.selectedPeriod===pw}"
+                        t-att-class="{'active': state.selectedPeriod === pw}"
                         t-on-click="() => changePeriod(pw)">
                   <t t-esc="pw"/>
                 </button>
