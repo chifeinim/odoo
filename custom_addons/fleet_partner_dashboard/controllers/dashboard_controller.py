@@ -89,9 +89,8 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_partner_performance/data', type='json', auth='user')
     def performance_data(self, period=None, products=None, scores=None,
                          categories=None, start_date=None, end_date=None):
-        # 1) compute current & previous window based on named period or explicit dates
+        # 1) compute current & previous windows
         if start_date and end_date:
-            # explicit date range
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
             dt = datetime.strptime(end_date,   '%Y-%m-%d').date()
             span = dt - df
@@ -102,7 +101,6 @@ class FleetDashboardController(http.Controller):
             mapping = {'Last Week':7, 'Last Month':30, 'All Time':None}
             days = mapping.get(period, 7)
             if days is None:
-                # all time: no previous window
                 df = dt = prev_df = prev_dt = None
             else:
                 df      = today - timedelta(days=days)
@@ -110,33 +108,43 @@ class FleetDashboardController(http.Controller):
                 prev_df = today - timedelta(days=2*days)
                 prev_dt = today - timedelta(days=days)
 
-        # --- compute aggregate active‑driver metrics ---
-        all_drivers     = request.env['x_fleet_driver'].sudo().search([])
-        active_current  = 0
-        active_previous = 0
+        # --- compute aggregate Active‐Drivers and Trips‐Completed metrics ---
+        all_drivers      = request.env['x_fleet_driver'].sudo().search([])
+        active_current   = 0
+        active_previous  = 0
+        trips_current    = 0
+        trips_previous   = 0
+
         for drv in all_drivers:
-            # current period
+            # current‐period orders
             if df:
                 cur_orders = drv.order_ids.filtered(
                     lambda o: o.order_date and df <= o.order_date.date() <= dt
                 )
-                if cur_orders:
-                    active_current += 1
             else:
-                # all‑time: everyone counts as “active”
-                active_current = len(all_drivers)
-                break
-            # previous period
+                # all–time: all orders
+                cur_orders = drv.order_ids
+            if cur_orders:
+                active_current += 1
+            # count only completed
+            complete_cur = cur_orders.filtered(lambda o: o.status == 'complete')
+            trips_current += len(complete_cur)
+
+            # previous‐period
             if prev_df and prev_dt:
                 prev_orders = drv.order_ids.filtered(
                     lambda o: o.order_date and prev_df <= o.order_date.date() < prev_dt
                 )
                 if prev_orders:
                     active_previous += 1
+                complete_prev = prev_orders.filtered(lambda o: o.status == 'complete')
+                trips_previous += len(complete_prev)
 
         metrics = {
             'activeDrivers':     active_current,
             'prevActiveDrivers': active_previous,
+            'tripsCompleted':    trips_current,
+            'prevTripsCompleted': trips_previous,
         }
         # --------------------------------------------------
 
