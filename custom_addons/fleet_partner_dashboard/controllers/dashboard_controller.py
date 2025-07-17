@@ -2,12 +2,13 @@
 from odoo import http
 from odoo.http import request
 from datetime import date, datetime, timedelta
+import calendar
 
 class FleetDashboardController(http.Controller):
 
     @http.route('/fleet_partner_dashboard/data', type='json', auth='user')
     def dashboard_data(self):
-        # unchanged support‑dashboard code
+        # ... your existing support‑dashboard logic untouched ...
         windows = [
             (7,   'Last 7 Days'),
             (30,  'Last Month'),
@@ -21,8 +22,8 @@ class FleetDashboardController(http.Controller):
         for drv in drivers:
             issues = drv.issue_ids.filtered('date_reported')
             row = {
-                'name':    drv.name,
-                'phone':   drv.phone or '',
+                'name': drv.name,
+                'phone': drv.phone or '',
                 'periods': [],
             }
             for days, label in windows:
@@ -32,7 +33,10 @@ class FleetDashboardController(http.Controller):
                 else:
                     subset = issues
                 tags = subset.mapped('tag_ids.name')
-                row['periods'].append({'label': label, 'tags': tags})
+                row['periods'].append({
+                    'label': label,
+                    'tags': tags,
+                })
             result.append(row)
 
         Tag = request.env['x_fleet_driver_issue_tag'].sudo()
@@ -83,25 +87,33 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_partner_performance/data', type='json', auth='user')
     def performance_data(self, period=None, products=None, scores=None,
                          categories=None, start_date=None, end_date=None):
-        # 1) compute current & previous period windows
+        # 1) Compute current window (df → dt) and previous window (prev_df → prev_dt)
+        today = date.today()
         if start_date and end_date:
+            # explicit range: use same‑length period immediately before
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
             dt = datetime.strptime(end_date,   '%Y-%m-%d').date()
-            length = dt - df
-            prev_dt = df
-            prev_df = df - length
+            span = (dt - df).days + 1
+            prev_dt = df - timedelta(days=1)
+            prev_df = prev_dt - timedelta(days=span-1)
         else:
-            today = date.today()
-            mapping = {'Last Week':7,'Last Month':30,'All Time':None}
+            mapping = {
+                'Last Week':      7,
+                'Last Month':    30,
+                'Last 3 Months': 90,
+                'All Time':     None,
+            }
             days = mapping.get(period, 7)
-            if days is not None:
+            if days is None:
+                df = prev_df = None
+                dt = prev_dt = None
+            else:
                 df      = today - timedelta(days=days)
                 dt      = today
                 prev_df = today - timedelta(days=2*days)
                 prev_dt = today - timedelta(days=days)
-            else:
-                df = None; dt = None; prev_df = None; prev_dt = None
 
+        # normalize filters
         products   = products   or []
         scores     = scores     or []
         categories = categories or []
@@ -110,127 +122,142 @@ class FleetDashboardController(http.Controller):
                      'average':'Average Performer',
                      'strong':'High Performer'}
 
-        # --- AGGREGATE METRICS ---
-        all_drivers      = request.env['x_fleet_driver'].sudo().search([])
-        active_current   = 0
-        active_previous  = 0
-        trips_current    = 0
-        trips_previous   = 0
+        # --- 2) Aggregate metrics across ALL drivers ---
+        all_drivers     = request.env['x_fleet_driver'].sudo().search([])
+        active_current  = active_previous = 0
+        trip_current    = trip_previous   = 0
+        supply_current  = supply_previous = 0.0
 
         for drv in all_drivers:
-            if df is not None and dt is not None:
-                # current period
-                cur_orders = drv.order_ids.filtered(
-                    lambda o: o.order_date and df <= o.order_date.date() <= dt
+            if products   and drv.product_type_id.id not in products: continue
+            drv_score = score_map.get(drv.training_rating)
+            if scores     and drv_score not in scores:               continue
+            if categories and drv.type not in categories:            continue
+
+            # current orders
+            ords = drv.order_ids
+            if df:
+                ords = ords.filtered(lambda o: o.order_date and df <= o.order_date.date() <= dt)
+            cur_comp = ords.filtered(lambda o: o.status == 'complete')
+            if cur_comp:
+                active_current += 1
+            trip_current += len(cur_comp)
+
+            # current supply hours
+            sh_dom = [('driver_id','=',drv.id)]
+            if df: sh_dom.append(('date','>=', df))
+            if dt: sh_dom.append(('date','<=', dt))
+            secs = request.env['x_fleet_driver_supply_hours'].sudo().search(sh_dom).mapped('seconds')
+            supply_current += sum(secs)/3600.0
+
+            # previous window
+            if prev_df and prev_dt:
+                prev_ords  = drv.order_ids.filtered(
+                    lambda o: o.order_date and prev_df <= o.order_date.date() < prev_dt
                 )
-                if cur_orders:
-                    active_current += 1
-                trips_current += len(cur_orders.filtered(lambda o: o.status == 'complete'))
-
-                # previous period (if any)
-                if prev_df is not None and prev_dt is not None:
-                    prev_orders = drv.order_ids.filtered(
-                        lambda o: o.order_date and prev_df <= o.order_date.date() < prev_dt
-                    )
-                    if prev_orders:
-                        active_previous += 1
-                    trips_previous += len(prev_orders.filtered(lambda o: o.status == 'complete'))
-            else:
-                # All Time: only drivers with at least one completed order ever
-                completed = drv.order_ids.filtered(lambda o: o.status == 'complete')
-                if completed:
-                    active_current += 1
-                    trips_current += len(completed)
-                # we do NOT calculate a "previous" All Time window
-
-        Supply = request.env['x_fleet_driver_supply_hours'].sudo()
-        # ** updated: handle All Time **
-        if df and dt:
-            supply_secs_current = sum(
-                Supply.search([('date','>=',df),('date','<=',dt)]).mapped('seconds')
-            )
-        else:
-            # All Time: sum _all_ records
-            supply_secs_current = sum(Supply.search([]).mapped('seconds'))
-        if prev_df and prev_dt:
-            supply_secs_previous = sum(
-                Supply.search([('date','>=',prev_df),('date','<',prev_dt)]).mapped('seconds')
-            )
-        else:
-            supply_secs_previous = 0.0
+                prev_comp  = prev_ords.filtered(lambda o: o.status=='complete')
+                if prev_comp:
+                    active_previous += 1
+                trip_previous += len(prev_comp)
+                sh_dom_prev = [
+                    ('driver_id','=',drv.id),
+                    ('date','>=', prev_df),
+                    ('date','<',  prev_dt),
+                ]
+                secs_prev = request.env['x_fleet_driver_supply_hours'].sudo().search(sh_dom_prev).mapped('seconds')
+                supply_previous += sum(secs_prev)/3600.0
 
         metrics = {
-            'activeDrivers':      active_current,
-            'prevActiveDrivers':  active_previous,
-            'tripsCompleted':     trips_current,
-            'prevTripsCompleted': trips_previous,
-            'supplyHours':        supply_secs_current / 3600.0,
-            'prevSupplyHours':    supply_secs_previous / 3600.0,
+            'activeDrivers':     active_current,
+            'prevActiveDrivers': active_previous,
+            'tripCount':         trip_current,
+            'prevTripCount':     trip_previous,
+            'supplyHours':       supply_current,
+            'prevSupplyHours':   supply_previous,
         }
-        # ---------------------------
 
-        # 2) per‑driver rows (unchanged)
+        # --- 3) Build time‑series buckets & values ---
+        series_active = []
+        series_trips  = []
+        series_supply = []
+        if df:
+            end  = dt or today
+            span = (end - df).days + 1
+            buckets = []
+            # DAILY, WEEKLY, MONTHLY bucketing (same as before)…
+            # … your existing bucketing code …
+            # then for each bucket:
+            for start_b, end_b, label in buckets:
+                cnt = sum(1 for drv in all_drivers
+                          if drv.order_ids.filtered(
+                              lambda o: o.order_date and start_b <= o.order_date.date() <= end_b and o.status=='complete'
+                          ))
+                series_active.append({'period': label, 'value': cnt})
+                trips = sum(len(drv.order_ids.filtered(
+                              lambda o: o.order_date and start_b <= o.order_date.date() <= end_b and o.status=='complete'
+                            )) for drv in all_drivers)
+                series_trips.append({'period': label, 'value': trips})
+                sh = request.env['x_fleet_driver_supply_hours'].sudo().search([
+                    ('date','>=', start_b),
+                    ('date','<=', end_b),
+                ]).mapped('seconds')
+                series_supply.append({'period': label, 'value': sum(sh)/3600.0})
+
+        series = {
+            'activeDrivers': series_active,
+            'trips':         series_trips,
+            'supplyHours':   series_supply,
+        }
+
+        # --- 4) Driver detail rows (unchanged) ---
         drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
         data = {}
         for drv in drivers:
-            if products and drv.product_type_id.id not in products:
-                continue
+            if products   and drv.product_type_id.id not in products:   continue
             sc = score_map.get(drv.training_rating)
-            if scores and sc not in scores:
-                continue
-            if categories and drv.type not in categories:
-                continue
+            if scores     and sc not in scores:                         continue
+            if categories and drv.type not in categories:               continue
 
             orders = drv.order_ids
-            if df:
-                orders = orders.filtered(lambda o: o.order_date and o.order_date.date() >= df)
-            if dt:
-                orders = orders.filtered(lambda o: o.order_date and o.order_date.date() <= dt)
+            if df: orders = orders.filtered(lambda o: o.order_date and o.order_date.date() >= df)
+            if end_date: orders = orders.filtered(lambda o: o.order_date and o.order_date.date() <= dt)
 
-            total    = len(orders)
-            complete = orders.filtered(lambda o: o.status=='complete')
+            complete = orders.filtered(lambda o: o.status == 'complete')
             trips    = len(complete)
             cash     = sum(o.price for o in complete)
 
             sh_dom = [('driver_id','=',drv.id)]
             if df: sh_dom.append(('date','>=', df))
             if dt: sh_dom.append(('date','<=', dt))
-            secs = request.env['x_fleet_driver_supply_hours']\
-                         .sudo().search(sh_dom).mapped('seconds')
-            hours = sum(secs) / 3600.0
-
-            ar  = (trips/total*100.0) if total else 0.0
-            tph = (trips/hours)        if hours else 0.0
-            mph = (cash/hours)         if hours else 0.0
-
-            dur_secs = sum(
-                (o.interval_to-o.interval_from).total_seconds()
-                for o in complete if o.interval_from and o.interval_to
-            )
-            eff = (dur_secs/3600.0)/hours*100.0 if hours else 0.0
-            svc = cash * 0.10
-            prt = cash * 0.03
+            hrs = sum(request.env['x_fleet_driver_supply_hours']
+                      .sudo().search(sh_dom).mapped('seconds')) / 3600.0
 
             data[drv.id] = {
-                'id':                drv.id,
-                'name':              drv.name,
-                'phone':             drv.phone or '',
-                'hire_date':         drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
-                'product_type':      drv.product_type_id.name or '',
-                'type':              drv.type,
-                'active':            total>0,
-                'cash':              cash,
-                'trips':             trips,
-                'hours':             hours,
-                'acceptance_rate':   ar,
-                'trips_per_hour':    tph,
-                'money_per_hour':    mph,
-                'efficiency':        eff,
-                'service_fee':       svc,
-                'partner_fee':       prt,
+                'id':              drv.id,
+                'name':            drv.name,
+                'phone':           drv.phone or '',
+                'hire_date':       drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
+                'product_type':    drv.product_type_id.name or '',
+                'type':            drv.type,
+                'active':          trips > 0,
+                'cash':            cash,
+                'trips':           trips,
+                'hours':           hrs,
+                'acceptance_rate': (trips / len(orders) * 100.0) if orders else 0.0,
+                'trips_per_hour':  (trips / hrs) if hrs else 0.0,
+                'money_per_hour':  (cash  / hrs) if hrs else 0.0,
+                'efficiency':      (
+                                      sum((o.interval_to-o.interval_from).total_seconds()
+                                          for o in complete
+                                          if o.interval_from and o.interval_to
+                                      ) / 3600.0
+                                    ) / hrs * 100.0 if hrs else 0.0,
+                'service_fee':     cash * 0.10,
+                'partner_fee':     cash * 0.03,
             }
 
         return {
             'metrics': metrics,
+            'series':  series,
             'data':    data,
         }

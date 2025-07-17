@@ -1,44 +1,47 @@
 /** @odoo-module **/
 
-console.log("✅ OwlPerformanceDashboard JS is loaded!");
-
 const { Component, hooks } = owl;
-const { useState, onMounted } = hooks;
-import { registry } from "@web/core/registry";
+const { onMounted, onPatched, useState, useRef } = hooks;
+import { registry } from '@web/core/registry';
 
 export class OwlPerformanceDashboard extends Component {
   setup() {
     this.state = useState({
-      loading:            true,
-      metrics:            {},
-      data:               {},
-      productTypes:       [],
-      qualityScores:      [
-        { key: "High Performer",   label: "High Performer"   },
-        { key: "Average Performer", label: "Average Performer" },
-        { key: "Low Performer",     label: "Low Performer"     },
+      loading: true,
+      metrics: {},
+      series: { activeDrivers: [], trips: [], supplyHours: [] },
+      productTypes: [],
+      qualityScores: [
+        { key: 'Low Performer',     label: 'Low Performer' },
+        { key: 'Average Performer', label: 'Average Performer' },
+        { key: 'High Performer',    label: 'High Performer' },
       ],
-      categories:         [],
-      timePeriods:        ["Last Week", "Last Month", "All Time"],
-      selectedProducts:   [],
-      selectedScores:     [],
-      selectedCategories: [],
-      selectedPeriod:     "Last Week",
-      startDate:          "",
-      endDate:            "",
-      showProducts:       false,
-      showScores:         false,
-      showCategories:     false,
-      showPeriod:         false,
-      search:             "",
+      categories: [],
+      timePeriods: ['Last Week','Last Month','Last 3 Months','All Time'],
+      selectedProducts: [], selectedScores: [], selectedCategories: [], selectedPeriod: 'Last Week',
+      startDate: '', endDate: '',
+      showProducts: false, showScores: false, showCategories: false, showPeriod: false,
+      showCharts: false, search: '',
     });
+    this.chartActive = useRef('chartActive');
+    this.chartTrips  = useRef('chartTrips');
+    this.chartSupply = useRef('chartSupply');
+    this._charts     = {};
 
     onMounted(async () => {
-      const { product_types, categories } =
-        await this.env.services.rpc("/fleet_partner_performance/filters", {});
+      const { product_types, categories } = await this.env.services.rpc(
+        '/fleet_partner_performance/filters', {}
+      );
       this.state.productTypes = product_types;
       this.state.categories   = categories;
       await this._fetchData();
+    });
+
+    // whenever the DOM updates, if we're in chart mode, draw the charts
+    onPatched(() => {
+      if (this.state.showCharts && !this.state.loading) {
+        this._renderCharts();
+      }
     });
   }
 
@@ -53,12 +56,40 @@ export class OwlPerformanceDashboard extends Component {
       end_date:   this.state.endDate   || undefined,
     };
     const resp = await this.env.services.rpc(
-      "/fleet_partner_performance/data",
-      params
+      '/fleet_partner_performance/data', params
     );
     this.state.metrics = resp.metrics;
+    this.state.series  = resp.series;
     this.state.data    = resp.data;
     this.state.loading = false;
+    // onPatched() will run next and draw charts if needed
+  }
+
+  _renderCharts() {
+    const cfg = (label, data) => ({
+      type: 'line',
+      data: {
+        labels: data.map(pt => pt.period),
+        datasets: [{ label, data: data.map(pt => pt.value), fill: false }],
+      },
+      options: {
+        scales: { x: { display: true }, y: { display: true } },
+        plugins: {
+          title: { display: true, text: label },
+          legend: { display: false },
+        },
+      },
+    });
+    const ctxA = this.chartActive.el.getContext('2d');
+    const ctxT = this.chartTrips.el.getContext('2d');
+    const ctxS = this.chartSupply.el.getContext('2d');
+
+    ['active','trips','supply'].forEach(k => {
+      if (this._charts[k]) { this._charts[k].destroy(); }
+    });
+    this._charts.active = new Chart(ctxA, cfg('Active Drivers', this.state.series.activeDrivers));
+    this._charts.trips  = new Chart(ctxT, cfg('Total Trips',    this.state.series.trips));
+    this._charts.supply = new Chart(ctxS, cfg('Supply Hours',   this.state.series.supplyHours));
   }
 
   toggleFilter(listName, value) {
@@ -68,32 +99,23 @@ export class OwlPerformanceDashboard extends Component {
     else            list.splice(idx, 1);
     this._fetchData();
   }
-
   changePeriod(p) {
     this.state.selectedPeriod = p;
     this.state.showPeriod    = false;
     this._fetchData();
   }
-
-  toggleDropdown(flag) {
-    this.state[flag] = !this.state[flag];
-  }
-
+  toggleDropdown(f) { this.state[f] = !this.state[f]; }
+  toggleView()      { this.state.showCharts = !this.state.showCharts; }
   onStartDateChange(ev) {
     this.state.startDate = ev.target.value;
-    if (this.state.startDate && this.state.endDate) {
-      this._fetchData();
-    }
+    if (this.state.startDate && this.state.endDate) this._fetchData();
   }
   onEndDateChange(ev) {
     this.state.endDate = ev.target.value;
-    if (this.state.startDate && this.state.endDate) {
-      this._fetchData();
-    }
+    if (this.state.startDate && this.state.endDate) this._fetchData();
   }
 }
 
-OwlPerformanceDashboard.template = "owl.OwlPerformanceDashboard";
-registry
-  .category("actions")
-  .add("owl.performance_dashboard", OwlPerformanceDashboard);
+OwlPerformanceDashboard.template = 'owl.OwlPerformanceDashboard';
+registry.category('actions')
+        .add('owl.performance_dashboard', OwlPerformanceDashboard);

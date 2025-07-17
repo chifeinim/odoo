@@ -20,6 +20,7 @@
     ],
     'assets': {
         'web.assets_backend': [
+            'fleet_partner_dashboard/static/src/lib/chart.umd.min.js',
             'fleet_partner_dashboard/static/src/js/dashboard/driver_dashboard.js',
             'fleet_partner_dashboard/static/src/js/dashboard/performance_dashboard.js',
         ],
