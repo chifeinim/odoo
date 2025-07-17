@@ -9,49 +9,39 @@ import { registry } from "@web/core/registry";
 export class OwlPerformanceDashboard extends Component {
   setup() {
     this.state = useState({
-      loading:            true,
-      data:               {},
-
-      // the “options” for each filter
-      productTypes:       [],                // [{id,name},…]
-      qualityScores:      [                 // fixed set
-        { key: 'High Performer',   label: 'High Performer'   },
-        { key: 'Average Performer', label: 'Average Performer' },
-        { key: 'Low Performer',     label: 'Low Performer'     },
+      loading:          true,
+      data:             {},
+      productTypes:     [],
+      qualityScores: [
+        { key: "High Performer",   label: "High Performer"   },
+        { key: "Average Performer", label: "Average Performer" },
+        { key: "Low Performer",     label: "Low Performer"     }
       ],
-      categories:         [],                // ['new','active',…]
-      timePeriods:        ['Last Week','Last Month','All Time'],
-
-      // what’s currently selected
+      categories:       [],
+      timePeriods:      ["Last Week", "Last Month", "All Time"],
       selectedProducts:   [],
       selectedScores:     [],
       selectedCategories: [],
-      selectedPeriod:     'Last Week',
-
-      // dropdown open/closed flags
-      showProducts:       false,
-      showScores:         false,
-      showCategories:     false,
-      showPeriod:         false,
-
-      // **NEW** free‑text search string for drivers
-      search:             '',
+      selectedPeriod:     "Last Week",
+      // ← our new date fields
+      startDate:        "",
+      endDate:          "",
+      showProducts:     false,
+      showScores:       false,
+      showCategories:   false,
+      showPeriod:       false,
+      search:           ""
     });
 
     onMounted(async () => {
-      // load filter options
-      const { product_types, categories } = await this.env.services.rpc(
-        '/fleet_partner_performance/filters', {}
-      );
+      const { product_types, categories } =
+        await this.env.services.rpc("/fleet_partner_performance/filters", {});
       this.state.productTypes = product_types;
       this.state.categories   = categories;
-
-      // initial data fetch
       await this._fetchData();
     });
   }
 
-  // fetch (or re‐fetch) the main table + KPI data
   async _fetchData() {
     this.state.loading = true;
     const params = {
@@ -59,36 +49,45 @@ export class OwlPerformanceDashboard extends Component {
       products:   this.state.selectedProducts,
       scores:     this.state.selectedScores,
       categories: this.state.selectedCategories,
+      start_date: this.state.startDate || undefined,
+      end_date:   this.state.endDate   || undefined
     };
     this.state.data = await this.env.services.rpc(
-      '/fleet_partner_performance/data',
+      "/fleet_partner_performance/data",
       params
     );
     this.state.loading = false;
   }
 
-  // toggle a value in any of the multi‑select lists
   toggleFilter(listName, value) {
     const list = this.state[listName];
     const idx = list.indexOf(value);
-    if (idx === -1) {
-      list.push(value);
-    } else {
-      list.splice(idx, 1);
+    if (idx === -1) list.push(value);
+    else            list.splice(idx, 1);
+    this._fetchData();
+  }
+
+  changePeriod(p) {
+    this.state.selectedPeriod = p;
+    this.state.showPeriod    = false;
+    this._fetchData();
+  }
+
+  toggleDropdown(flag) {
+    this.state[flag] = !this.state[flag];
+  }
+
+  onStartDateChange(ev) {
+    this.state.startDate = ev.target.value;
+    if (this.state.startDate && this.state.endDate) {
+      this._fetchData();
     }
-    this._fetchData();
   }
-
-  // change the time period (single‑select)
-  changePeriod(period) {
-    this.state.selectedPeriod = period;
-    this.state.showPeriod = false;
-    this._fetchData();
-  }
-
-  // toggle any of the dropdown menus by its flag name
-  toggleDropdown(flagName) {
-    this.state[flagName] = !this.state[flagName];
+  onEndDateChange(ev) {
+    this.state.endDate = ev.target.value;
+    if (this.state.startDate && this.state.endDate) {
+      this._fetchData();
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 {
     'name': 'Fleet Partner Dashboard',
-    'version': '15.0.1.0.0',
+    'version': '15.0.1.0.1',
     'summary': 'Manage fleet drivers, orders, issues, and product types',
     'category': 'Fleet',
     'author': 'Chi Fei Nim',
