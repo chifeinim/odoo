@@ -17,14 +17,11 @@ class FleetDashboardController(http.Controller):
         today = date.today()
         drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
 
+        # … your existing support‑dashboard logic …
         result = []
         for drv in drivers:
             issues = drv.issue_ids.filtered('date_reported')
-            row = {
-                'name':    drv.name,
-                'phone':   drv.phone or '',
-                'periods': [],
-            }
+            row = {'name': drv.name, 'phone': drv.phone or '', 'periods': []}
             for days, label in windows:
                 if days is not None:
                     cutoff = today - timedelta(days=days)
@@ -43,21 +40,16 @@ class FleetDashboardController(http.Controller):
             for days, _ in windows[:3][::-1]:
                 if days is not None:
                     cutoff = today - timedelta(days=days)
-                    domain = [
-                        ('tag_ids', 'in', tag.id),
-                        ('date_reported', '>=', cutoff),
-                    ]
+                    domain = [('tag_ids', 'in', tag.id), ('date_reported', '>=', cutoff)]
                 else:
                     domain = [('tag_ids', 'in', tag.id)]
-                counts.append(request.env['x_fleet_driver_issue']\
-                                      .sudo().search_count(domain))
+                counts.append(request.env['x_fleet_driver_issue']
+                                  .sudo().search_count(domain))
             tags_summary.append({'name': tag.name, 'counts': counts})
-        tags_summary.sort(key=lambda x: (-x['counts'][0],
-                                        -x['counts'][1],
-                                        -x['counts'][2]))
+        tags_summary.sort(key=lambda x: (-x['counts'][0], -x['counts'][1], -x['counts'][2]))
 
         return {
-            'windows':      [label for _, label in windows],
+            'windows':      [lbl for _, lbl in windows],
             'drivers':      result,
             'tags_summary': tags_summary,
         }
@@ -83,7 +75,7 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_partner_performance/data', type='json', auth='user')
     def performance_data(self, period=None, products=None, scores=None,
                          categories=None, start_date=None, end_date=None):
-        # 1) Compute current window (df → dt) and previous window (prev_df → prev_dt)
+        # 1) Compute current window (df → dt) and previous window
         today = date.today()
         if start_date and end_date:
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
@@ -108,7 +100,7 @@ class FleetDashboardController(http.Controller):
                 prev_df = today - timedelta(days=2*days)
                 prev_dt = today - timedelta(days=days)
 
-        # normalize filters
+        # normalize multi‑select filters
         products   = products   or []
         scores     = scores     or []
         categories = categories or []
@@ -126,7 +118,6 @@ class FleetDashboardController(http.Controller):
         supply_current  = supply_previous = 0.0
 
         for drv in all_drivers:
-            # apply multi‑select filters at driver level
             if products and drv.product_type_id.id not in products:
                 continue
             drv_score = score_map.get(drv.training_rating)
@@ -135,7 +126,7 @@ class FleetDashboardController(http.Controller):
             if categories and drv.type not in categories:
                 continue
 
-            # ORDERS in current window
+            # current orders
             ords = drv.order_ids
             if df:
                 ords = ords.filtered(lambda o:
@@ -146,7 +137,7 @@ class FleetDashboardController(http.Controller):
                 active_current += 1
             trip_current += len(cur_comp)
 
-            # SUPPLY HOURS in current window
+            # current supply hours
             sh_dom = [('driver_id','=',drv.id)]
             if df: sh_dom.append(('date','>=', df))
             if dt: sh_dom.append(('date','<=', dt))
@@ -154,7 +145,7 @@ class FleetDashboardController(http.Controller):
                          .sudo().search(sh_dom).mapped('seconds')
             supply_current += sum(secs) / 3600.0
 
-            # ORDERS in previous window
+            # previous window
             if prev_df and prev_dt:
                 prev_ords = drv.order_ids.filtered(lambda o:
                     o.order_date and prev_df <= o.order_date.date() < prev_dt
@@ -174,20 +165,28 @@ class FleetDashboardController(http.Controller):
                 supply_previous += sum(secs_prev) / 3600.0
 
         metrics = {
-            'activeDrivers':    active_current,
-            'prevActiveDrivers':active_previous,
-            'tripCount':        trip_current,
-            'prevTripCount':    trip_previous,
-            'supplyHours':      supply_current,
-            'prevSupplyHours':  supply_previous,
+            'activeDrivers':     active_current,
+            'prevActiveDrivers': active_previous,
+            'tripCount':         trip_current,
+            'prevTripCount':     trip_previous,
+            'supplyHours':       supply_current,
+            'prevSupplyHours':   supply_previous,
         }
 
         # --- 3) Build time‑series buckets & values ---
+        # If “All Time” (df/dt are None), derive df from the earliest order_date across all_drivers
+        if df is None and dt is None:
+            dates = all_drivers.mapped('order_ids.order_date')
+            dates = [d.date() for d in dates if d]
+            if dates:
+                df = min(dates)
+            dt = today
+
         series_active = []
         series_trips  = []
         series_supply = []
 
-        if df:
+        if df is not None:
             end  = dt or today
             span = (end - df).days + 1
             buckets = []
@@ -222,9 +221,8 @@ class FleetDashboardController(http.Controller):
                     label     = start_day.strftime('%Y-%m')
                     buckets.append((start_day, min(last_day, end), label))
 
-            # Compute series values
+            # compute each series
             for start_b, end_b, label in buckets:
-                # Active drivers
                 cnt = sum(1 for drv in all_drivers
                           if drv.order_ids.filtered(
                               lambda o: o.order_date
@@ -233,7 +231,6 @@ class FleetDashboardController(http.Controller):
                           ))
                 series_active.append({'period': label, 'value': cnt})
 
-                # Total trips
                 trips = sum(len(drv.order_ids.filtered(
                               lambda o: o.order_date
                                         and start_b <= o.order_date.date() <= end_b
@@ -241,7 +238,6 @@ class FleetDashboardController(http.Controller):
                             )) for drv in all_drivers)
                 series_trips.append({'period': label, 'value': trips})
 
-                # Supply hours
                 secs = request.env['x_fleet_driver_supply_hours']\
                              .sudo().search([
                                  ('date','>=', start_b),
@@ -255,7 +251,7 @@ class FleetDashboardController(http.Controller):
             'supplyHours':   series_supply,
         }
 
-        # --- 4) Build per-driver detail rows ---
+        # --- 4) Build per‑driver detail rows (unchanged) ---
         drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
         data = {}
         for drv in drivers:
