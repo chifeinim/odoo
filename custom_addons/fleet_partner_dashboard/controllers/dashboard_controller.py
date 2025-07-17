@@ -7,7 +7,7 @@ class FleetDashboardController(http.Controller):
 
     @http.route('/fleet_partner_dashboard/data', type='json', auth='user')
     def dashboard_data(self):
-        # Define your time windows and labels
+        # UNCHANGED support‑dashboard code
         windows = [
             (7,   'Last 7 Days'),
             (30,  'Last Month'),
@@ -21,8 +21,8 @@ class FleetDashboardController(http.Controller):
         for drv in drivers:
             issues = drv.issue_ids.filtered('date_reported')
             row = {
-                'name': drv.name,
-                'phone': drv.phone or '',
+                'name':    drv.name,
+                'phone':   drv.phone or '',
                 'periods': [],
             }
             for days, label in windows:
@@ -32,19 +32,15 @@ class FleetDashboardController(http.Controller):
                 else:
                     subset = issues
                 tags = subset.mapped('tag_ids.name')
-                row['periods'].append({
-                    'label': label,
-                    'tags': tags,
-                })
+                row['periods'].append({'label': label, 'tags': tags})
             result.append(row)
 
-        # Build tag summary
         Tag = request.env['x_fleet_driver_issue_tag'].sudo()
         tags = Tag.search([], order='name')
         tags_summary = []
         for tag in tags:
             counts = []
-            for days, _ in windows[:3][::-1]:  # reversed: 90,30,7
+            for days, _ in windows[:3][::-1]:
                 if days is not None:
                     cutoff = today - timedelta(days=days)
                     domain = [
@@ -61,8 +57,8 @@ class FleetDashboardController(http.Controller):
                                         -x['counts'][2]))
 
         return {
-            'windows': [lbl for _, lbl in windows],
-            'drivers': result,
+            'windows':     [lbl for _, lbl in windows],
+            'drivers':     result,
             'tags_summary': tags_summary,
         }
 
@@ -72,12 +68,10 @@ class FleetDashboardController(http.Controller):
 
     @http.route('/fleet_partner_performance/filters', type='json', auth='user')
     def performance_filters(self):
-        # all product types for the Anda Product dropdown
         Product = request.env['x_fleet_product_type'].sudo()
         pts = Product.search([], order='name')
         product_types = [{'id': p.id, 'name': p.name} for p in pts]
 
-        # all driver.type values for the Driver Category dropdown
         Driver = request.env['x_fleet_driver'].sudo()
         categories = [k for k, _ in Driver._fields['type'].selection]
 
@@ -89,66 +83,25 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_partner_performance/data', type='json', auth='user')
     def performance_data(self, period=None, products=None, scores=None,
                          categories=None, start_date=None, end_date=None):
-        # 1) compute current & previous windows
+        # 1) determine current & previous period windows
         if start_date and end_date:
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
             dt = datetime.strptime(end_date,   '%Y-%m-%d').date()
-            span = dt - df
+            length = (dt - df)
             prev_dt = df
-            prev_df = df - span
+            prev_df = df - length
         else:
             today = date.today()
-            mapping = {'Last Week':7, 'Last Month':30, 'All Time':None}
+            mapping = {'Last Week':7,'Last Month':30,'All Time':None}
             days = mapping.get(period, 7)
-            if days is None:
-                df = dt = prev_df = prev_dt = None
-            else:
+            if days is not None:
                 df      = today - timedelta(days=days)
                 dt      = today
                 prev_df = today - timedelta(days=2*days)
                 prev_dt = today - timedelta(days=days)
-
-        # --- compute aggregate Active‐Drivers and Trips‐Completed metrics ---
-        all_drivers      = request.env['x_fleet_driver'].sudo().search([])
-        active_current   = 0
-        active_previous  = 0
-        trips_current    = 0
-        trips_previous   = 0
-
-        for drv in all_drivers:
-            # current‐period orders
-            if df:
-                cur_orders = drv.order_ids.filtered(
-                    lambda o: o.order_date and df <= o.order_date.date() <= dt
-                )
             else:
-                # all–time: all orders
-                cur_orders = drv.order_ids
-            if cur_orders:
-                active_current += 1
-            # count only completed
-            complete_cur = cur_orders.filtered(lambda o: o.status == 'complete')
-            trips_current += len(complete_cur)
+                df = None; dt = None; prev_df = None; prev_dt = None
 
-            # previous‐period
-            if prev_df and prev_dt:
-                prev_orders = drv.order_ids.filtered(
-                    lambda o: o.order_date and prev_df <= o.order_date.date() < prev_dt
-                )
-                if prev_orders:
-                    active_previous += 1
-                complete_prev = prev_orders.filtered(lambda o: o.status == 'complete')
-                trips_previous += len(complete_prev)
-
-        metrics = {
-            'activeDrivers':     active_current,
-            'prevActiveDrivers': active_previous,
-            'tripsCompleted':    trips_current,
-            'prevTripsCompleted': trips_previous,
-        }
-        # --------------------------------------------------
-
-        # Now build the per‑driver rows with your existing filters
         products   = products   or []
         scores     = scores     or []
         categories = categories or []
@@ -157,6 +110,60 @@ class FleetDashboardController(http.Controller):
                      'average':'Average Performer',
                      'strong':'High Performer'}
 
+        # --- AGGREGATE METRICS ---
+        all_drivers = request.env['x_fleet_driver'].sudo().search([])
+        active_current = 0
+        active_previous = 0
+        trips_current = 0
+        trips_previous = 0
+
+        for drv in all_drivers:
+            # current
+            if df and dt:
+                cur_orders = drv.order_ids.filtered(
+                    lambda o: o.order_date and df <= o.order_date.date() <= dt
+                )
+                if cur_orders:
+                    active_current += 1
+                trips_current += len(cur_orders.filtered(lambda o: o.status=='complete'))
+            else:
+                active_current = len(all_drivers)
+                for d in all_drivers:
+                    trips_current += len(d.order_ids.filtered(lambda o: o.status=='complete'))
+                break
+
+            # previous
+            if prev_df and prev_dt:
+                prev_orders = drv.order_ids.filtered(
+                    lambda o: o.order_date and prev_df <= o.order_date.date() < prev_dt
+                )
+                if prev_orders:
+                    active_previous += 1
+                trips_previous += len(prev_orders.filtered(lambda o: o.status=='complete'))
+
+        Supply = request.env['x_fleet_driver_supply_hours'].sudo()
+        supply_secs_current = 0
+        supply_secs_previous = 0
+        if df and dt:
+            supply_secs_current = sum(
+                Supply.search([('date','>=',df),('date','<=',dt)]).mapped('seconds')
+            )
+        if prev_df and prev_dt:
+            supply_secs_previous = sum(
+                Supply.search([('date','>=',prev_df),('date','<',prev_dt)]).mapped('seconds')
+            )
+
+        metrics = {
+            'activeDrivers':      active_current,
+            'prevActiveDrivers':  active_previous,
+            'tripsCompleted':     trips_current,
+            'prevTripsCompleted': trips_previous,
+            'supplyHours':        supply_secs_current / 3600.0,
+            'prevSupplyHours':    supply_secs_previous / 3600.0,
+        }
+        # ---------------------------
+
+        # 2) per‑driver data (unchanged)...
         drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
         data = {}
         for drv in drivers:
@@ -170,19 +177,18 @@ class FleetDashboardController(http.Controller):
 
             orders = drv.order_ids
             if df:
-                orders = orders.filtered(
-                    lambda o: o.order_date and df <= o.order_date.date() <= dt
-                )
+                orders = orders.filtered(lambda o: o.order_date and o.order_date.date() >= df)
+            if dt:
+                orders = orders.filtered(lambda o: o.order_date and o.order_date.date() <= dt)
 
             total    = len(orders)
             complete = orders.filtered(lambda o: o.status=='complete')
             trips    = len(complete)
             cash     = sum(o.price for o in complete)
 
-            # supply‑hours
             sh_dom = [('driver_id','=',drv.id)]
-            if df:   sh_dom.append(('date','>=', df))
-            if dt:   sh_dom.append(('date','<=', dt))
+            if df: sh_dom.append(('date','>=', df))
+            if dt: sh_dom.append(('date','<=', dt))
             secs = request.env['x_fleet_driver_supply_hours']\
                          .sudo().search(sh_dom).mapped('seconds')
             hours = sum(secs) / 3600.0
@@ -191,32 +197,31 @@ class FleetDashboardController(http.Controller):
             tph = (trips/hours)        if hours else 0.0
             mph = (cash/hours)         if hours else 0.0
 
-            dur = sum(
-                (o.interval_to - o.interval_from).total_seconds()
+            dur_secs = sum(
+                (o.interval_to-o.interval_from).total_seconds()
                 for o in complete if o.interval_from and o.interval_to
             )
-            eff = (dur/3600.0)/hours*100.0 if hours else 0.0
-
+            eff = (dur_secs/3600.0)/hours*100.0 if hours else 0.0
             svc = cash * 0.10
             prt = cash * 0.03
 
             data[drv.id] = {
-                'id':              drv.id,
-                'name':            drv.name,
-                'phone':           drv.phone or '',
-                'hire_date':       drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
-                'product_type':    drv.product_type_id.name or '',
-                'type':            drv.type,
-                'active':          total > 0,
-                'cash':            cash,
-                'trips':           trips,
-                'hours':           hours,
-                'acceptance_rate': ar,
-                'trips_per_hour':  tph,
-                'money_per_hour':  mph,
-                'efficiency':      eff,
-                'service_fee':     svc,
-                'partner_fee':     prt,
+                'id':                drv.id,
+                'name':              drv.name,
+                'phone':             drv.phone or '',
+                'hire_date':         drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
+                'product_type':      drv.product_type_id.name or '',
+                'type':              drv.type,
+                'active':            total>0,
+                'cash':              cash,
+                'trips':             trips,
+                'hours':             hours,
+                'acceptance_rate':   ar,
+                'trips_per_hour':    tph,
+                'money_per_hour':    mph,
+                'efficiency':        eff,
+                'service_fee':       svc,
+                'partner_fee':       prt,
             }
 
         return {

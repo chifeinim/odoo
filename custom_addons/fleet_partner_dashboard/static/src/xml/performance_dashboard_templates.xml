@@ -89,14 +89,14 @@
                  t-att-class="{'show': state.showPeriod}">
               <t t-foreach="state.timePeriods" t-as="pw" t-key="pw">
                 <button class="dropdown-item"
-                        t-att-class="{'active': state.selectedPeriod === pw}"
+                        t-att-class="{'active': state.selectedPeriod===pw}"
                         t-on-click="() => changePeriod(pw)">
                   <t t-esc="pw"/>
                 </button>
               </t>
             </div>
           </div>
-          <!-- Explicit Date Range -->
+          <!-- Date Pickers -->
           <div class="d-flex align-items-center gap-1">
             <label class="mb-0">From:</label>
             <input type="date" class="form-control"
@@ -111,10 +111,10 @@
           </div>
         </div>
 
-        <!-- AGGREGATE KPI CARDS -->
+        <!-- KPI CARDS (up to 3 per row) -->
         <div class="row mb-4">
           <!-- Active Drivers -->
-          <div class="col-md-6 mb-3">
+          <div class="col-md-4 mb-3">
             <div class="card text-center h-100">
               <div class="card-body">
                 <h5 class="card-title">Active Drivers</h5>
@@ -137,7 +137,7 @@
             </div>
           </div>
           <!-- Trips Completed -->
-          <div class="col-md-6 mb-3">
+          <div class="col-md-4 mb-3">
             <div class="card text-center h-100">
               <div class="card-body">
                 <h5 class="card-title">Trips Completed</h5>
@@ -147,6 +147,29 @@
                 <p class="card-text">
                   <t t-set="prev"  t-value="state.metrics.prevTripsCompleted"/>
                   <t t-set="curr"  t-value="state.metrics.tripsCompleted"/>
+                  <t t-set="delta" t-value="prev ? ((curr - prev) / prev * 100) : 0"/>
+                  <t t-if="delta &gt;= 0">
+                    <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                  </t>
+                  <t t-else="">
+                    <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                  </t>
+                  &#160;from last period
+                </p>
+              </div>
+            </div>
+          </div>
+          <!-- Supply Hours -->
+          <div class="col-md-4 mb-3">
+            <div class="card text-center h-100">
+              <div class="card-body">
+                <h5 class="card-title">Supply Hours</h5>
+                <h2 class="card-text">
+                  <t t-esc="state.metrics.supplyHours.toFixed(1)"/>h
+                </h2>
+                <p class="card-text">
+                  <t t-set="prev"  t-value="state.metrics.prevSupplyHours"/>
+                  <t t-set="curr"  t-value="state.metrics.supplyHours"/>
                   <t t-set="delta" t-value="prev ? ((curr - prev) / prev * 100) : 0"/>
                   <t t-if="delta &gt;= 0">
                     <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
@@ -172,21 +195,11 @@
         <table class="table table-striped table-hover mb-0">
           <thead class="table-light">
             <tr>
-              <th>Driver</th>
-              <th>Phone</th>
-              <th>Start Date</th>
-              <th>Anda Product</th>
-              <th>Category</th>
-              <th>Active?</th>
-              <th>Cash</th>
-              <th>Trips</th>
-              <th>Hours</th>
-              <th>Accept.&#160;%</th>
-              <th>Trips/hr</th>
-              <th>Money/hr</th>
-              <th>Efficiency&#160;%</th>
-              <th>Svc Fee</th>
-              <th>Partner Fee</th>
+              <th>Driver</th><th>Phone</th><th>Start Date</th>
+              <th>Anda Product</th><th>Category</th><th>Active?</th>
+              <th>Cash</th><th>Trips</th><th>Hours</th>
+              <th>Accept.&#160;%</th><th>Trips/hr</th><th>Money/hr</th>
+              <th>Efficiency&#160;%</th><th>Svc Fee</th><th>Partner Fee</th>
             </tr>
           </thead>
           <tbody>

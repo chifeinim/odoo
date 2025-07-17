@@ -9,34 +9,28 @@ import { registry } from "@web/core/registry";
 export class OwlPerformanceDashboard extends Component {
   setup() {
     this.state = useState({
-      loading:          true,
-      metrics:          { activeDrivers: 0, prevActiveDrivers: 0 },
-      data:             {},
-
-      productTypes:     [],
-      qualityScores: [
+      loading:            true,
+      metrics:            {},
+      data:               {},
+      productTypes:       [],
+      qualityScores:      [
         { key: "High Performer",   label: "High Performer"   },
         { key: "Average Performer", label: "Average Performer" },
         { key: "Low Performer",     label: "Low Performer"     },
       ],
-      categories:       [],
-      timePeriods:      ["Last Week", "Last Month", "All Time"],
-
+      categories:         [],
+      timePeriods:        ["Last Week", "Last Month", "All Time"],
       selectedProducts:   [],
       selectedScores:     [],
       selectedCategories: [],
       selectedPeriod:     "Last Week",
-
-      // new date‑range fields
-      startDate:        "",
-      endDate:          "",
-
-      showProducts:     false,
-      showScores:       false,
-      showCategories:   false,
-      showPeriod:       false,
-
-      search:           "",
+      startDate:          "",
+      endDate:            "",
+      showProducts:       false,
+      showScores:         false,
+      showCategories:     false,
+      showPeriod:         false,
+      search:             "",
     });
 
     onMounted(async () => {
@@ -59,7 +53,8 @@ export class OwlPerformanceDashboard extends Component {
       end_date:   this.state.endDate   || undefined,
     };
     const resp = await this.env.services.rpc(
-      "/fleet_partner_performance/data", params
+      "/fleet_partner_performance/data",
+      params
     );
     this.state.metrics = resp.metrics;
     this.state.data    = resp.data;
