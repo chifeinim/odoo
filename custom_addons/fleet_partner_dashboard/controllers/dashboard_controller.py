@@ -7,7 +7,7 @@ class FleetDashboardController(http.Controller):
 
     @http.route('/fleet_partner_dashboard/data', type='json', auth='user')
     def dashboard_data(self):
-        # UNCHANGED support‑dashboard code
+        # unchanged support‑dashboard code
         windows = [
             (7,   'Last 7 Days'),
             (30,  'Last Month'),
@@ -57,8 +57,8 @@ class FleetDashboardController(http.Controller):
                                         -x['counts'][2]))
 
         return {
-            'windows':     [lbl for _, lbl in windows],
-            'drivers':     result,
+            'windows':      [lbl for _, lbl in windows],
+            'drivers':      result,
             'tags_summary': tags_summary,
         }
 
@@ -83,11 +83,11 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_partner_performance/data', type='json', auth='user')
     def performance_data(self, period=None, products=None, scores=None,
                          categories=None, start_date=None, end_date=None):
-        # 1) determine current & previous period windows
+        # 1) compute current & previous period windows
         if start_date and end_date:
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
             dt = datetime.strptime(end_date,   '%Y-%m-%d').date()
-            length = (dt - df)
+            length = dt - df
             prev_dt = df
             prev_df = df - length
         else:
@@ -111,47 +111,53 @@ class FleetDashboardController(http.Controller):
                      'strong':'High Performer'}
 
         # --- AGGREGATE METRICS ---
-        all_drivers = request.env['x_fleet_driver'].sudo().search([])
-        active_current = 0
-        active_previous = 0
-        trips_current = 0
-        trips_previous = 0
+        all_drivers      = request.env['x_fleet_driver'].sudo().search([])
+        active_current   = 0
+        active_previous  = 0
+        trips_current    = 0
+        trips_previous   = 0
 
         for drv in all_drivers:
-            # current
-            if df and dt:
+            if df is not None and dt is not None:
+                # current period
                 cur_orders = drv.order_ids.filtered(
                     lambda o: o.order_date and df <= o.order_date.date() <= dt
                 )
                 if cur_orders:
                     active_current += 1
-                trips_current += len(cur_orders.filtered(lambda o: o.status=='complete'))
-            else:
-                active_current = len(all_drivers)
-                for d in all_drivers:
-                    trips_current += len(d.order_ids.filtered(lambda o: o.status=='complete'))
-                break
+                trips_current += len(cur_orders.filtered(lambda o: o.status == 'complete'))
 
-            # previous
-            if prev_df and prev_dt:
-                prev_orders = drv.order_ids.filtered(
-                    lambda o: o.order_date and prev_df <= o.order_date.date() < prev_dt
-                )
-                if prev_orders:
-                    active_previous += 1
-                trips_previous += len(prev_orders.filtered(lambda o: o.status=='complete'))
+                # previous period (if any)
+                if prev_df is not None and prev_dt is not None:
+                    prev_orders = drv.order_ids.filtered(
+                        lambda o: o.order_date and prev_df <= o.order_date.date() < prev_dt
+                    )
+                    if prev_orders:
+                        active_previous += 1
+                    trips_previous += len(prev_orders.filtered(lambda o: o.status == 'complete'))
+            else:
+                # All Time: only drivers with at least one completed order ever
+                completed = drv.order_ids.filtered(lambda o: o.status == 'complete')
+                if completed:
+                    active_current += 1
+                    trips_current += len(completed)
+                # we do NOT calculate a "previous" All Time window
 
         Supply = request.env['x_fleet_driver_supply_hours'].sudo()
-        supply_secs_current = 0
-        supply_secs_previous = 0
+        # ** updated: handle All Time **
         if df and dt:
             supply_secs_current = sum(
                 Supply.search([('date','>=',df),('date','<=',dt)]).mapped('seconds')
             )
+        else:
+            # All Time: sum _all_ records
+            supply_secs_current = sum(Supply.search([]).mapped('seconds'))
         if prev_df and prev_dt:
             supply_secs_previous = sum(
                 Supply.search([('date','>=',prev_df),('date','<',prev_dt)]).mapped('seconds')
             )
+        else:
+            supply_secs_previous = 0.0
 
         metrics = {
             'activeDrivers':      active_current,
@@ -163,7 +169,7 @@ class FleetDashboardController(http.Controller):
         }
         # ---------------------------
 
-        # 2) per‑driver data (unchanged)...
+        # 2) per‑driver rows (unchanged)
         drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
         data = {}
         for drv in drivers:
