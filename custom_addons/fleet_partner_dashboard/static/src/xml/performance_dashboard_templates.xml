@@ -214,7 +214,7 @@
             <tr>
               <th>Driver</th><th>Phone</th><th>Hire Date</th>
               <th>Product</th><th>Category</th><th>Trips</th>
-              <th>Supply Hours</th><th>Acceptance %</th><th>Trips/Hour</th>
+              <th>Supply Hours</th><th>Completed to Request %</th><th>Trips/Hour</th>
               <th>Money/Hour</th><th>Utilisation %</th><th>Efficiency %</th>
               <th>Service Fee</th><th>Partner Fee</th>
             </tr>
@@ -232,7 +232,7 @@
                 <td><t t-esc="d.type"/></td>
                 <td><t t-esc="d.trips"/></td>
                 <td><t t-esc="d.hours.toFixed(1)"/>h</td>
-                <td><t t-esc="d.acceptance_rate.toFixed(1)"/>%</td>
+                <td><t t-esc="d.completed_to_request.toFixed(1)"/>%</td>
                 <td><t t-esc="d.trips_per_hour.toFixed(2)"/></td>
                 <td><t t-esc="d.money_per_hour.toFixed(2)"/></td>
                 <td><t t-esc="d.utilisation.toFixed(1)"/>%</td>

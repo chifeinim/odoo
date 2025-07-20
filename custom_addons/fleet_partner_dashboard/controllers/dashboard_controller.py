@@ -285,19 +285,19 @@ class FleetDashboardController(http.Controller):
             hours = sum(secs) / 3600.0
 
             data[drv.id] = {
-                'id':              drv.id,
-                'name':            drv.name,
-                'phone':           drv.phone or '',
-                'hire_date':       drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
-                'product_type':    drv.product_type_id.name or '',
-                'type':            drv.type,
-                'active':          trips > 0,
-                'cash':            cash,
-                'trips':           trips,
-                'hours':           hours,
-                'acceptance_rate': (trips / len(orders) * 100.0) if orders else 0.0,
-                'trips_per_hour':  (trips / hours) if hours else 0.0,
-                'money_per_hour':  (cash  / hours) if hours else 0.0,
+                'id':                   drv.id,
+                'name':                 drv.name,
+                'phone':                drv.phone or '',
+                'hire_date':            drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
+                'product_type':         drv.product_type_id.name or '',
+                'type':                 drv.type,
+                'active':               trips > 0,
+                'cash':                 cash,
+                'trips':                trips,
+                'hours':                hours,
+                'completed_to_request': (trips / len(orders) * 100.0) if orders else 0.0,
+                'trips_per_hour':       (trips / hours) if hours else 0.0,
+                'money_per_hour':       (cash  / hours) if hours else 0.0,
                 'utilisation':      (
                                       sum((o.interval_to - o.interval_from).total_seconds()
                                           for o in complete
