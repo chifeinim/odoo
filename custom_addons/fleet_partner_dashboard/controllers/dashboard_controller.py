@@ -298,8 +298,14 @@ class FleetDashboardController(http.Controller):
                 'acceptance_rate': (trips / len(orders) * 100.0) if orders else 0.0,
                 'trips_per_hour':  (trips / hours) if hours else 0.0,
                 'money_per_hour':  (cash  / hours) if hours else 0.0,
-                'efficiency':      (
+                'utilisation':      (
                                       sum((o.interval_to - o.interval_from).total_seconds()
+                                          for o in complete
+                                          if o.interval_from and o.interval_to
+                                      ) / 3600.0
+                                    ) / hours * 100.0 if hours else 0.0,
+                'efficiency':      (
+                                      sum((o.interval_to - o.order_date).total_seconds()
                                           for o in complete
                                           if o.interval_from and o.interval_to
                                       ) / 3600.0
