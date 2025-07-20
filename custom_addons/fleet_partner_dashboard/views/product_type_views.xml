@@ -7,6 +7,9 @@
         <field name="arch" type="xml">
             <tree>
                 <field name="name"/>
+                <field name="kpi_type"/>
+                <field name="lower_kpi"/>
+                <field name="upper_kpi"/>
                 <field name="active"/>
             </tree>
         </field>
@@ -21,6 +24,9 @@
                 <sheet>
                     <group>
                         <field name="name"/>
+                        <field name="kpi_type"/>
+                        <field name="lower_kpi"/>
+                        <field name="upper_kpi"/>
                         <field name="description"/>
                         <field name="active"/>
                     </group>

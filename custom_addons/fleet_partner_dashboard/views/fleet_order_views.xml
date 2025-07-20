@@ -26,8 +26,6 @@
                 <sheet>
                     <group>
                         <field name="name"/>
-                        <field name="order_date"/>
-                        <field name="name"/>
                         <field name="order_date" widget="datetime"/>
                         <field name="interval_from" widget="datetime"/>
                         <field name="interval_to"   widget="datetime"/>
