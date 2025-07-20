@@ -105,22 +105,73 @@ class FleetDashboardController(http.Controller):
         scores     = scores     or []
         categories = categories or []
 
-        score_map = {
-            'weak':    'Low Performer',
-            'average': 'Average Performer',
-            'strong':  'High Performer',
-        }
-
         # --- 2) Aggregate metrics across ALL drivers ---
         all_drivers     = request.env['x_fleet_driver'].sudo().search([])
+
+        # Precompute Driver Quality Score (DQS) for filtering & display
+        dqs_matrix = {
+            'strong':  {'strong': 'High Performer',   'average': 'Average Performer', 'weak': 'Low Performer'},
+            'average': {'strong': 'High Performer',   'average': 'Average Performer', 'weak': 'Low Performer'},
+            'weak':    {'strong': 'Average Performer','average': 'Low Performer',      'weak': 'Low Performer'},
+        }
+        dqs_map = {}
+        for drv in all_drivers:
+            # Determine On‑the‑Road score
+            prod      = drv.product_type_id
+            kpi_type  = prod.kpi_type or 'none'
+            lower_kpi = prod.lower_kpi
+            upper_kpi = prod.upper_kpi
+            onroad    = 'Average'
+            if kpi_type != 'none':
+                # days since first order
+                dates = [o.order_date.date() for o in drv.order_ids if o.order_date]
+                if dates:
+                    first = min(dates)
+                    days  = max((today - first).days + 1, 1)
+                    if kpi_type == 'avg_hours_online':
+                        secs = request.env['x_fleet_driver_supply_hours'].sudo().search([
+                                         ('driver_id','=',drv.id),
+                                         ('date','>=', first),
+                                         ('date','<=', today),
+                                     ]).mapped('seconds')
+                        value = sum(secs)/3600.0/days
+                    elif kpi_type == 'avg_trips_completed':
+                        comp = drv.order_ids.filtered(
+                            lambda o: o.status=='complete'
+                                      and o.order_date
+                                      and first <= o.order_date.date() <= today
+                        )
+                        value = len(comp)/days
+                    elif kpi_type == 'avg_cash':
+                        comp = drv.order_ids.filtered(
+                            lambda o: o.status=='complete'
+                                      and o.order_date
+                                      and first <= o.order_date.date() <= today
+                        )
+                        value = sum(o.price for o in comp)/days
+                    else:
+                        value = None
+                    if value is not None:
+                        if lower_kpi is not None and value < lower_kpi:
+                            onroad = 'Weak'
+                        elif upper_kpi is not None and value > upper_kpi:
+                            onroad = 'Strong'
+                        else:
+                            onroad = 'Average'
+            # Combine with training rating
+            training = (drv.training_rating or 'average').lower()
+            dqs      = dqs_matrix.get(training, {}).get(onroad.lower(), 'Average Performer')
+            dqs_map[drv.id] = dqs
+
         active_current  = active_previous = 0
         trip_current    = trip_previous   = 0
         supply_current  = supply_previous = 0.0
 
         for drv in all_drivers:
+            # apply filters (products, DQS, categories)
             if products and drv.product_type_id.id not in products:
                 continue
-            drv_score = score_map.get(drv.training_rating)
+            drv_score = dqs_map.get(drv.id)
             if scores and drv_score not in scores:
                 continue
             if categories and drv.type not in categories:
@@ -129,9 +180,7 @@ class FleetDashboardController(http.Controller):
             # current orders
             ords = drv.order_ids
             if df:
-                ords = ords.filtered(lambda o:
-                    o.order_date and df <= o.order_date.date() <= dt
-                )
+                ords = ords.filtered(lambda o: o.order_date and df <= o.order_date.date() <= dt)
             cur_comp = ords.filtered(lambda o: o.status == 'complete')
             if cur_comp:
                 active_current += 1
@@ -173,8 +222,7 @@ class FleetDashboardController(http.Controller):
             'prevSupplyHours':   supply_previous,
         }
 
-        # --- 3) Build time‑series buckets & values ---
-        # If “All Time” (df/dt are None), derive df from the earliest order_date across all_drivers
+        # --- series generation unchanged ---
         if df is None and dt is None:
             dates = all_drivers.mapped('order_ids.order_date')
             dates = [d.date() for d in dates if d]
@@ -221,7 +269,6 @@ class FleetDashboardController(http.Controller):
                     label     = start_day.strftime('%Y-%m')
                     buckets.append((start_day, min(last_day, end), label))
 
-            # compute each series
             for start_b, end_b, label in buckets:
                 cnt = sum(1 for drv in all_drivers
                           if drv.order_ids.filtered(
@@ -251,27 +298,23 @@ class FleetDashboardController(http.Controller):
             'supplyHours':   series_supply,
         }
 
-        # --- 4) Build per‑driver detail rows (unchanged) ---
+        # --- 4) Build per‑driver detail rows ---
         drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
         data = {}
         for drv in drivers:
-            if products   and drv.product_type_id.id not in products:
+            if products and drv.product_type_id.id not in products:
                 continue
-            sc = score_map.get(drv.training_rating)
-            if scores     and sc not in scores:
+            sc = dqs_map.get(drv.id)
+            if scores and sc not in scores:
                 continue
             if categories and drv.type not in categories:
                 continue
 
             orders = drv.order_ids
             if df:
-                orders = orders.filtered(lambda o:
-                    o.order_date and o.order_date.date() >= df
-                )
+                orders = orders.filtered(lambda o: o.order_date and o.order_date.date() >= df)
             if end_date:
-                orders = orders.filtered(lambda o:
-                    o.order_date and o.order_date.date() <= dt
-                )
+                orders = orders.filtered(lambda o: o.order_date and o.order_date.date() <= dt)
 
             complete = orders.filtered(lambda o: o.status == 'complete')
             trips    = len(complete)
@@ -285,33 +328,34 @@ class FleetDashboardController(http.Controller):
             hours = sum(secs) / 3600.0
 
             data[drv.id] = {
-                'id':                   drv.id,
-                'name':                 drv.name,
-                'phone':                drv.phone or '',
-                'hire_date':            drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
-                'product_type':         drv.product_type_id.name or '',
-                'type':                 drv.type,
-                'active':               trips > 0,
-                'cash':                 cash,
-                'trips':                trips,
-                'hours':                hours,
+                'id':             drv.id,
+                'name':           drv.name,
+                'phone':          drv.phone or '',
+                'hire_date':      drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
+                'product_type':   drv.product_type_id.name or '',
+                'type':           drv.type,
+                'quality_score':  sc,
+                'active':         trips > 0,
+                'cash':           cash,
+                'trips':          trips,
+                'hours':          hours,
                 'completed_to_request': (trips / len(orders) * 100.0) if orders else 0.0,
-                'trips_per_hour':       (trips / hours) if hours else 0.0,
-                'money_per_hour':       (cash  / hours) if hours else 0.0,
-                'utilisation':      (
-                                      sum((o.interval_to - o.interval_from).total_seconds()
-                                          for o in complete
-                                          if o.interval_from and o.interval_to
-                                      ) / 3600.0
-                                    ) / hours * 100.0 if hours else 0.0,
-                'efficiency':      (
-                                      sum((o.interval_to - o.order_date).total_seconds()
-                                          for o in complete
-                                          if o.interval_from and o.interval_to
-                                      ) / 3600.0
-                                    ) / hours * 100.0 if hours else 0.0,
-                'service_fee':     cash * 0.10,
-                'partner_fee':     cash * 0.03,
+                'trips_per_hour': (trips / hours) if hours else 0.0,
+                'money_per_hour': (cash  / hours) if hours else 0.0,
+                'utilisation':    (
+                                  sum((o.interval_to - o.interval_from).total_seconds()
+                                      for o in complete
+                                      if o.interval_from and o.interval_to
+                                  ) / 3600.0
+                                ) / hours * 100.0 if hours else 0.0,
+                'efficiency':     (
+                                  sum((o.interval_to - o.order_date).total_seconds()
+                                      for o in complete
+                                      if o.interval_from and o.interval_to
+                                  ) / 3600.0
+                                ) / hours * 100.0 if hours else 0.0,
+                'service_fee':    cash * 0.10,
+                'partner_fee':    cash * 0.03,
             }
 
         return {

@@ -1,5 +1,5 @@
 # models/driver_supply_hours.py
-from odoo import models, fields
+from odoo import models, fields, api
 
 class DriverSupplyHours(models.Model):
     _name = 'x_fleet_driver_supply_hours'
@@ -8,6 +8,13 @@ class DriverSupplyHours(models.Model):
     driver_id = fields.Many2one('x_fleet_driver',string='Driver',required=True,ondelete='cascade')
     date = fields.Date(string='Date',required=True,default=fields.Date.context_today)
     seconds = fields.Integer(string='Online Seconds',required=True,default=0)
+    hours = fields.Float(string='Hours',compute='_compute_hours',readonly=True)
+    
+    @api.depends('seconds')
+    def _compute_hours(self):
+        for rec in self:
+            # divide total seconds by 3600 to get hours
+            rec.hours = rec.seconds / 3600.0
 
     _sql_constraints = [
         ('unique_driver_date',
