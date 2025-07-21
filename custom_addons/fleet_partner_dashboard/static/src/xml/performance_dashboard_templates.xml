@@ -204,7 +204,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Cash Earned</h5>
-                  <h2>$<t t-esc="state.metrics.cashEarned.toFixed(2)"/></h2>
+                  <h2>Kz <t t-esc="state.metrics.cashEarned.toFixed(2)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevCashEarned"/>
                     <t t-set="curr"  t-value="state.metrics.cashEarned"/>
@@ -256,10 +256,10 @@
           <thead class="table-light">
             <tr>
               <th>Driver</th><th>Phone</th><th>Hire Date</th>
-              <th>Product</th><th>Category</th><th>Quality</th><th>Trips</th>
+              <th>Product</th><th>Category</th><th>Quality</th><th>Cash Kz</th><th>Trips</th>
               <th>Supply Hours</th><th>Completed to Request %</th><th>Trips/Hour</th>
               <th>Money/Hour</th><th>Utilisation %</th><th>Efficiency %</th>
-              <th>Service Fee</th><th>Partner Fee</th>
+              <th>Service Fee Kz</th><th>Partner Fee Kz</th>
             </tr>
           </thead>
           <tbody>
@@ -274,6 +274,7 @@
                 <td><t t-esc="d.product_type"/></td>
                 <td><t t-esc="d.type"/></td>
                 <td><t t-esc="d.quality_score"/></td>
+                <td><t t-esc="d.cash.toFixed(2)"/></td>
                 <td><t t-esc="d.trips"/></td>
                 <td><t t-esc="d.hours.toFixed(1)"/>h</td>
                 <td><t t-esc="d.completed_to_request.toFixed(1)"/>%</td>
@@ -281,8 +282,8 @@
                 <td><t t-esc="d.money_per_hour.toFixed(2)"/></td>
                 <td><t t-esc="d.utilisation.toFixed(1)"/>%</td>
                 <td><t t-esc="d.efficiency.toFixed(1)"/>%</td>
-                <td>$<t t-esc="d.service_fee.toFixed(2)"/></td>
-                <td>$<t t-esc="d.partner_fee.toFixed(2)"/></td>
+                <td><t t-esc="d.service_fee.toFixed(2)"/></td>
+                <td><t t-esc="d.partner_fee.toFixed(2)"/></td>
               </tr>
             </t>
           </tbody>
