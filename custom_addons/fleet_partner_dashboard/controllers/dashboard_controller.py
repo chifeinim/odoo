@@ -114,50 +114,58 @@ class FleetDashboardController(http.Controller):
         }
         dqs_map = {}
         for drv in all_drivers:
-            # --- your On‑Road logic unchanged ---
+            # Determine On‑the‑Road score using hire_date → today
             prod      = drv.product_type_id
             kpi_type  = prod.kpi_type or 'none'
             lower_kpi = prod.lower_kpi
             upper_kpi = prod.upper_kpi
             onroad    = 'Average'
-            if kpi_type != 'none':
-                dates = [o.order_date.date() for o in drv.order_ids if o.order_date]
-                if dates:
-                    first = min(dates)
-                    days  = max((today - first).days + 1, 1)
-                    if kpi_type == 'avg_hours_online':
-                        secs = request.env['x_fleet_driver_supply_hours'].sudo().search([
-                                   ('driver_id','=',drv.id),
-                                   ('date','>=', first),
-                                   ('date','<=', today),
-                               ]).mapped('seconds')
-                        value = sum(secs)/3600.0/days
-                    elif kpi_type == 'avg_trips_completed':
-                        comp = drv.order_ids.filtered(
-                            lambda o: o.status=='complete'
-                                      and o.order_date
-                                      and first <= o.order_date.date() <= today
-                        )
-                        value = len(comp)/days
-                    elif kpi_type == 'avg_cash':
-                        comp = drv.order_ids.filtered(
-                            lambda o: o.status=='complete'
-                                      and o.order_date
-                                      and first <= o.order_date.date() <= today
-                        )
-                        value = sum(o.price for o in comp)/days
+
+            # only compute if we have both a KPI type and a hire_date
+            if kpi_type != 'none' and drv.hire_date:
+                first = drv.hire_date                # ← use hire_date now
+                days  = max((today - first).days + 1, 1)
+
+                if kpi_type == 'avg_hours_online':
+                    secs = request.env['x_fleet_driver_supply_hours'].sudo().search([
+                        ('driver_id', '=', drv.id),
+                        ('date',      '>=', first),
+                        ('date',      '<=', today),
+                    ]).mapped('seconds')
+                    value = sum(secs) / 3600.0 / days
+
+                elif kpi_type == 'avg_trips_completed':
+                    comp = drv.order_ids.filtered(lambda o:
+                        o.status == 'complete'
+                        and o.order_date
+                        and first <= o.order_date.date() <= today
+                    )
+                    value = len(comp) / days
+
+                elif kpi_type == 'avg_cash':
+                    comp = drv.order_ids.filtered(lambda o:
+                        o.status == 'complete'
+                        and o.order_date
+                        and first <= o.order_date.date() <= today
+                    )
+                    value = sum(o.price for o in comp) / days
+
+                else:
+                    value = None
+
+                # compare against bounds
+                if value is not None:
+                    if lower_kpi is not None and value < lower_kpi:
+                        onroad = 'Weak'
+                    elif upper_kpi is not None and value > upper_kpi:
+                        onroad = 'Strong'
                     else:
-                        value = None
-                    if value is not None:
-                        if lower_kpi is not None and value < lower_kpi:
-                            onroad = 'Weak'
-                        elif upper_kpi is not None and value > upper_kpi:
-                            onroad = 'Strong'
-                        else:
-                            onroad = 'Average'
+                        onroad = 'Average'
+
+            # combine with training rating via your existing matrix
             training = (drv.training_rating or 'average').lower()
-            dqs_map[drv.id] = dqs_matrix.get(training, {}).get(onroad.lower(),
-                                                               'Average Performer')
+            dqs_map[drv.id] = dqs_matrix.get(training, {}) \
+                                    .get(onroad.lower(), 'Average Performer')
 
         # --- build filtered_drivers once for both metrics + series ---
         filtered_drivers = [
