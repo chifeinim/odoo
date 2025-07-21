@@ -118,8 +118,9 @@
           </button>
         </div>
 
-        <!-- KPI CARDS -->
+        <!-- KPI CARDS: always 3 per row -->
         <t t-if="!state.showCharts">
+          <!-- first row: Active, Trips, Supply -->
           <div class="row mb-4">
             <!-- Active Drivers -->
             <div class="col-md-4 mb-3">
@@ -128,14 +129,18 @@
                   <h5 class="card-title">Active Drivers</h5>
                   <h2><t t-esc="state.metrics.activeDrivers"/></h2>
                   <p class="card-text">
-                    <t t-set="prev" t-value="state.metrics.prevActiveDrivers"/>
-                    <t t-set="curr" t-value="state.metrics.activeDrivers"/>
+                    <t t-set="prev"  t-value="state.metrics.prevActiveDrivers"/>
+                    <t t-set="curr"  t-value="state.metrics.activeDrivers"/>
                     <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
                     <t t-if="delta >= 0">
-                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                      <span class="text-success">
+                        &#9650; <t t-esc="delta.toFixed(1)"/>%
+                      </span>
                     </t>
                     <t t-else="">
-                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                      <span class="text-danger">
+                        &#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%
+                      </span>
                     </t>
                     &#160;from last period
                   </p>
@@ -149,14 +154,18 @@
                   <h5 class="card-title">Total Trips</h5>
                   <h2><t t-esc="state.metrics.tripCount"/></h2>
                   <p class="card-text">
-                    <t t-set="prev" t-value="state.metrics.prevTripCount"/>
-                    <t t-set="curr" t-value="state.metrics.tripCount"/>
+                    <t t-set="prev"  t-value="state.metrics.prevTripCount"/>
+                    <t t-set="curr"  t-value="state.metrics.tripCount"/>
                     <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
                     <t t-if="delta >= 0">
-                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                      <span class="text-success">
+                        &#9650; <t t-esc="delta.toFixed(1)"/>%
+                      </span>
                     </t>
                     <t t-else="">
-                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                      <span class="text-danger">
+                        &#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%
+                      </span>
                     </t>
                     &#160;from last period
                   </p>
@@ -170,14 +179,45 @@
                   <h5 class="card-title">Supply Hours</h5>
                   <h2><t t-esc="state.metrics.supplyHours.toFixed(1)"/>h</h2>
                   <p class="card-text">
-                    <t t-set="prev" t-value="state.metrics.prevSupplyHours"/>
-                    <t t-set="curr" t-value="state.metrics.supplyHours"/>
+                    <t t-set="prev"  t-value="state.metrics.prevSupplyHours"/>
+                    <t t-set="curr"  t-value="state.metrics.supplyHours"/>
                     <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
                     <t t-if="delta >= 0">
-                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                      <span class="text-success">
+                        &#9650; <t t-esc="delta.toFixed(1)"/>%
+                      </span>
                     </t>
                     <t t-else="">
-                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                      <span class="text-danger">
+                        &#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%
+                      </span>
+                    </t>
+                    &#160;from last period
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- second row: Total Cash Earned -->
+          <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Cash Earned</h5>
+                  <h2>$<t t-esc="state.metrics.cashEarned.toFixed(2)"/></h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevCashEarned"/>
+                    <t t-set="curr"  t-value="state.metrics.cashEarned"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-success">
+                        &#9650; <t t-esc="delta.toFixed(1)"/>%
+                      </span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-danger">
+                        &#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%
+                      </span>
                     </t>
                     &#160;from last period
                   </p>
@@ -198,6 +238,9 @@
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartSupply" style="height:200px"></canvas>
+            </div>
+            <div class="col-md-4">
+              <canvas t-ref="chartCash"   style="height:200px"></canvas>
             </div>
           </div>
         </t>

@@ -171,6 +171,7 @@ class FleetDashboardController(http.Controller):
         active_current = active_previous = 0
         trip_current   = trip_previous   = 0
         supply_current = supply_previous = 0.0
+        cash_current = cash_previous = 0.0
 
         for drv in filtered_drivers:
             # current orders
@@ -183,6 +184,8 @@ class FleetDashboardController(http.Controller):
             if cur_comp:
                 active_current += 1
             trip_current += len(cur_comp)
+            
+            cash_current += sum(o.price for o in cur_comp)
 
             # current supply
             sh_dom = [('driver_id','=',drv.id)]
@@ -201,6 +204,8 @@ class FleetDashboardController(http.Controller):
                 if prev_comp:
                     active_previous += 1
                 trip_previous += len(prev_comp)
+                
+                cash_previous += sum(o.price for o in prev_comp)
 
                 sh_dom_prev = [
                     ('driver_id','=',drv.id),
@@ -218,6 +223,8 @@ class FleetDashboardController(http.Controller):
             'prevTripCount':     trip_previous,
             'supplyHours':       supply_current,
             'prevSupplyHours':   supply_previous,
+            'cashEarned':        cash_current,
+            'prevCashEarned':    cash_previous,
         }
 
         # --- 3) Time‑series over the SAME filtered_drivers ---
@@ -232,6 +239,7 @@ class FleetDashboardController(http.Controller):
         series_active = []
         series_trips  = []
         series_supply = []
+        series_cash   = []
 
         if df is not None:
             end  = dt or today
@@ -293,11 +301,23 @@ class FleetDashboardController(http.Controller):
                     ('date','<=', end_b),
                 ]).mapped('seconds')
                 series_supply.append({'period': label, 'value': sum(secs) / 3600.0})
+                
+                # Cash Earned
+                cash_sum = sum(
+                    sum(o.price for o in drv.order_ids.filtered(
+                        lambda o: o.status=='complete'
+                                  and o.order_date
+                                  and start_b <= o.order_date.date() <= end_b
+                    ))
+                    for drv in filtered_drivers
+                )
+                series_cash.append({'period': label, 'value': cash_sum})
 
         series = {
             'activeDrivers': series_active,
             'trips':         series_trips,
             'supplyHours':   series_supply,
+            'cashEarned':    series_cash,
         }
 
         # --- 4) Build per‑driver detail rows ---

@@ -9,7 +9,7 @@ export class OwlPerformanceDashboard extends Component {
     this.state = useState({
       loading: true,
       metrics: {},
-      series: { activeDrivers: [], trips: [], supplyHours: [] },
+      series: { activeDrivers: [], trips: [], supplyHours: [], cashEarned: [] },
       productTypes: [],
       qualityScores: [
         { key: 'Low Performer',     label: 'Low Performer' },
@@ -26,6 +26,7 @@ export class OwlPerformanceDashboard extends Component {
     this.chartActive = useRef('chartActive');
     this.chartTrips  = useRef('chartTrips');
     this.chartSupply = useRef('chartSupply');
+    this.chartCash   = useRef('chartCash');
     this._charts     = {};
 
     onMounted(async () => {
@@ -83,13 +84,15 @@ export class OwlPerformanceDashboard extends Component {
     const ctxA = this.chartActive.el.getContext('2d');
     const ctxT = this.chartTrips.el.getContext('2d');
     const ctxS = this.chartSupply.el.getContext('2d');
+    const ctxC = this.chartCash.el.getContext('2d');
 
-    ['active','trips','supply'].forEach(k => {
+    ['active','trips','supply','cash'].forEach(k => {
       if (this._charts[k]) { this._charts[k].destroy(); }
     });
     this._charts.active = new Chart(ctxA, cfg('Active Drivers', this.state.series.activeDrivers));
     this._charts.trips  = new Chart(ctxT, cfg('Total Trips',    this.state.series.trips));
     this._charts.supply = new Chart(ctxS, cfg('Supply Hours',   this.state.series.supplyHours));
+    this._charts.cash   = new Chart(ctxC, cfg('Cash Earned',   this.state.series.cashEarned));
   }
 
   toggleFilter(listName, value) {
