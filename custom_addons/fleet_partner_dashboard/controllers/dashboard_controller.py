@@ -75,7 +75,7 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_partner_performance/data', type='json', auth='user')
     def performance_data(self, period=None, products=None, scores=None,
                          categories=None, start_date=None, end_date=None):
-        # 1) Compute current window (df → dt) and previous window
+        # --- 1) Build df, dt, prev_df, prev_dt exactly as before ---
         today = date.today()
         if start_date and end_date:
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
@@ -92,48 +92,45 @@ class FleetDashboardController(http.Controller):
             }
             days = mapping.get(period, 7)
             if days is None:
-                df = prev_df = None
-                dt = prev_dt = None
+                df = prev_df = dt = prev_dt = None
             else:
                 df      = today - timedelta(days=days)
                 dt      = today
                 prev_df = today - timedelta(days=2*days)
                 prev_dt = today - timedelta(days=days)
 
-        # normalize multi‑select filters
+        # normalize filters
         products   = products   or []
         scores     = scores     or []
         categories = categories or []
 
-        # --- 2) Aggregate metrics across ALL drivers ---
-        all_drivers     = request.env['x_fleet_driver'].sudo().search([])
+        # fetch all drivers & compute DQS map
+        all_drivers = request.env['x_fleet_driver'].sudo().search([])
 
-        # Precompute Driver Quality Score (DQS) for filtering & display
         dqs_matrix = {
-            'strong':  {'strong': 'High Performer',   'average': 'Average Performer', 'weak': 'Low Performer'},
-            'average': {'strong': 'High Performer',   'average': 'Average Performer', 'weak': 'Low Performer'},
-            'weak':    {'strong': 'Average Performer','average': 'Low Performer',      'weak': 'Low Performer'},
+            'strong':  {'strong': 'High Performer',    'average': 'Average Performer', 'weak': 'Low Performer'},
+            'average': {'strong': 'High Performer',    'average': 'Average Performer', 'weak': 'Low Performer'},
+            'weak':    {'strong': 'Average Performer', 'average': 'Low Performer',      'weak': 'Low Performer'},
         }
         dqs_map = {}
         for drv in all_drivers:
-            # Determine On‑the‑Road score
+            # --- your On‑Road logic unchanged ---
             prod      = drv.product_type_id
             kpi_type  = prod.kpi_type or 'none'
             lower_kpi = prod.lower_kpi
             upper_kpi = prod.upper_kpi
             onroad    = 'Average'
             if kpi_type != 'none':
-                # days since first order
                 dates = [o.order_date.date() for o in drv.order_ids if o.order_date]
                 if dates:
                     first = min(dates)
                     days  = max((today - first).days + 1, 1)
                     if kpi_type == 'avg_hours_online':
                         secs = request.env['x_fleet_driver_supply_hours'].sudo().search([
-                                         ('driver_id','=',drv.id),
-                                         ('date','>=', first),
-                                         ('date','<=', today),
-                                     ]).mapped('seconds')
+                                   ('driver_id','=',drv.id),
+                                   ('date','>=', first),
+                                   ('date','<=', today),
+                               ]).mapped('seconds')
                         value = sum(secs)/3600.0/days
                     elif kpi_type == 'avg_trips_completed':
                         comp = drv.order_ids.filtered(
@@ -158,35 +155,36 @@ class FleetDashboardController(http.Controller):
                             onroad = 'Strong'
                         else:
                             onroad = 'Average'
-            # Combine with training rating
             training = (drv.training_rating or 'average').lower()
-            dqs      = dqs_matrix.get(training, {}).get(onroad.lower(), 'Average Performer')
-            dqs_map[drv.id] = dqs
+            dqs_map[drv.id] = dqs_matrix.get(training, {}).get(onroad.lower(),
+                                                               'Average Performer')
 
-        active_current  = active_previous = 0
-        trip_current    = trip_previous   = 0
-        supply_current  = supply_previous = 0.0
+        # --- build filtered_drivers once for both metrics + series ---
+        filtered_drivers = [
+            drv for drv in all_drivers
+            if (not products   or drv.product_type_id.id in products)
+            and (not scores     or dqs_map.get(drv.id) in scores)
+            and (not categories or drv.type in categories)
+        ]
 
-        for drv in all_drivers:
-            # apply filters (products, DQS, categories)
-            if products and drv.product_type_id.id not in products:
-                continue
-            drv_score = dqs_map.get(drv.id)
-            if scores and drv_score not in scores:
-                continue
-            if categories and drv.type not in categories:
-                continue
+        # --- 2) Metrics over filtered_drivers ---
+        active_current = active_previous = 0
+        trip_current   = trip_previous   = 0
+        supply_current = supply_previous = 0.0
 
+        for drv in filtered_drivers:
             # current orders
             ords = drv.order_ids
             if df:
-                ords = ords.filtered(lambda o: o.order_date and df <= o.order_date.date() <= dt)
+                ords = ords.filtered(lambda o:
+                    o.order_date and df <= o.order_date.date() <= dt
+                )
             cur_comp = ords.filtered(lambda o: o.status == 'complete')
             if cur_comp:
                 active_current += 1
             trip_current += len(cur_comp)
 
-            # current supply hours
+            # current supply
             sh_dom = [('driver_id','=',drv.id)]
             if df: sh_dom.append(('date','>=', df))
             if dt: sh_dom.append(('date','<=', dt))
@@ -194,7 +192,7 @@ class FleetDashboardController(http.Controller):
                          .sudo().search(sh_dom).mapped('seconds')
             supply_current += sum(secs) / 3600.0
 
-            # previous window
+            # previous window (same as before) …
             if prev_df and prev_dt:
                 prev_ords = drv.order_ids.filtered(lambda o:
                     o.order_date and prev_df <= o.order_date.date() < prev_dt
@@ -222,7 +220,8 @@ class FleetDashboardController(http.Controller):
             'prevSupplyHours':   supply_previous,
         }
 
-        # --- series generation unchanged ---
+        # --- 3) Time‑series over the SAME filtered_drivers ---
+        # (first ensure df/dt for “All Time”)
         if df is None and dt is None:
             dates = all_drivers.mapped('order_ids.order_date')
             dates = [d.date() for d in dates if d]
@@ -239,14 +238,13 @@ class FleetDashboardController(http.Controller):
             span = (end - df).days + 1
             buckets = []
 
-            # DAILY
+            # DAILY / WEEKLY / MONTHLY exactly as before…
             if span <= 30:
                 cur = df
                 while cur <= end:
                     buckets.append((cur, cur, cur.strftime('%Y-%m-%d')))
                     cur += timedelta(days=1)
 
-            # WEEKLY
             elif span < 90:
                 start = df - timedelta(days=df.weekday())
                 cur = start
@@ -255,7 +253,6 @@ class FleetDashboardController(http.Controller):
                     buckets.append((cur, min(nxt, end), cur.strftime('%Y-%m-%d')))
                     cur += timedelta(days=7)
 
-            # MONTHLY
             else:
                 y0, m0 = df.year, df.month
                 y1, m1 = end.year, end.month
@@ -269,8 +266,11 @@ class FleetDashboardController(http.Controller):
                     label     = start_day.strftime('%Y-%m')
                     buckets.append((start_day, min(last_day, end), label))
 
+            # now compute each series using filtered_drivers
+            f_ids = [d.id for d in filtered_drivers]
             for start_b, end_b, label in buckets:
-                cnt = sum(1 for drv in all_drivers
+                # Active Drivers
+                cnt = sum(1 for drv in filtered_drivers
                           if drv.order_ids.filtered(
                               lambda o: o.order_date
                                         and start_b <= o.order_date.date() <= end_b
@@ -278,18 +278,20 @@ class FleetDashboardController(http.Controller):
                           ))
                 series_active.append({'period': label, 'value': cnt})
 
+                # Trips
                 trips = sum(len(drv.order_ids.filtered(
                               lambda o: o.order_date
                                         and start_b <= o.order_date.date() <= end_b
                                         and o.status == 'complete'
-                            )) for drv in all_drivers)
+                            )) for drv in filtered_drivers)
                 series_trips.append({'period': label, 'value': trips})
 
-                secs = request.env['x_fleet_driver_supply_hours']\
-                             .sudo().search([
-                                 ('date','>=', start_b),
-                                 ('date','<=', end_b),
-                             ]).mapped('seconds')
+                # Supply Hours
+                secs = request.env['x_fleet_driver_supply_hours'].sudo().search([
+                    ('driver_id', 'in', f_ids),
+                    ('date','>=', start_b),
+                    ('date','<=', end_b),
+                ]).mapped('seconds')
                 series_supply.append({'period': label, 'value': sum(secs) / 3600.0})
 
         series = {
