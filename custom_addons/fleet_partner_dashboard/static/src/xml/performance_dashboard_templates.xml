@@ -224,7 +224,29 @@
                 </div>
               </div>
             </div>
+            <!-- Avg Money per Hour card -->
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Avg Money / Hour</h5>
+                  <h2>Kz <t t-esc="state.metrics.moneyPerHour.toFixed(2)"/></h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevMoneyPerHour"/>
+                    <t t-set="curr"  t-value="state.metrics.moneyPerHour"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                    </t>
+                    &#160;from last period
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
+
         </t>
 
         <!-- LINE CHARTS -->
@@ -241,6 +263,9 @@
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartCash"   style="height:200px"></canvas>
+            </div>
+            <div class="col-md-4">
+              <canvas t-ref="chartMoneyPerHour" style="height:200px"></canvas>
             </div>
           </div>
         </t>

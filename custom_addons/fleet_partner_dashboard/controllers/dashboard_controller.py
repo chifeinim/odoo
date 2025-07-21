@@ -233,6 +233,8 @@ class FleetDashboardController(http.Controller):
             'prevSupplyHours':   supply_previous,
             'cashEarned':        cash_current,
             'prevCashEarned':    cash_previous,
+            'moneyPerHour':     (cash_current / supply_current) if supply_current else 0.0,
+            'prevMoneyPerHour': (cash_previous / supply_previous) if supply_previous else 0.0,
         }
 
         # --- 3) Time‑series over the SAME filtered_drivers ---
@@ -248,6 +250,7 @@ class FleetDashboardController(http.Controller):
         series_trips  = []
         series_supply = []
         series_cash   = []
+        series_mph  = []
 
         if df is not None:
             end  = dt or today
@@ -320,12 +323,23 @@ class FleetDashboardController(http.Controller):
                     for drv in filtered_drivers
                 )
                 series_cash.append({'period': label, 'value': cash_sum})
+                
+                # Money per hour
+                hours = sum(request.env['x_fleet_driver_supply_hours']
+                              .sudo().search([
+                                ('driver_id', 'in', f_ids),
+                                ('date',     '>=', start_b),
+                                ('date',     '<=', end_b),
+                              ]).mapped('seconds')) / 3600.0
+                avg_money = (cash_sum / hours) if hours else 0.0
+                series_mph.append({'period': label, 'value': avg_money})
 
         series = {
             'activeDrivers': series_active,
             'trips':         series_trips,
             'supplyHours':   series_supply,
             'cashEarned':    series_cash,
+            'moneyPerHour':  series_mph,
         }
 
         # --- 4) Build per‑driver detail rows ---
