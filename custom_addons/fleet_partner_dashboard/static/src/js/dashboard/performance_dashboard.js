@@ -12,7 +12,7 @@ export class OwlPerformanceDashboard extends Component {
       series: {
         activeDrivers: [], trips: [], supplyHours: [],
         cashEarned: [], moneyPerHour: [], tripsPerHour: [],
-        avgSupplyHoursPerDriver: [],
+        avgSupplyHoursPerDriver: [], utilisation: [], efficiency: [],
       },
       productTypes: [],
       qualityScores: [
@@ -34,6 +34,8 @@ export class OwlPerformanceDashboard extends Component {
     this.chartMoneyPerHour = useRef('chartMoneyPerHour');
     this.chartTripsPerHour = useRef('chartTripsPerHour');
     this.chartAvgSupply = useRef('chartAvgSupply');
+    this.chartUtilisation = useRef('chartUtilisation');
+    this.chartEfficiency = useRef('chartEfficiency');
     this._charts     = {};
 
     onMounted(async () => {
@@ -95,8 +97,10 @@ export class OwlPerformanceDashboard extends Component {
     const ctxM = this.chartMoneyPerHour.el.getContext('2d');
     const ctxTP = this.chartTripsPerHour.el.getContext('2d');
     const ctxAS = this.chartAvgSupply.el.getContext('2d');
+    const ctxU = this.chartUtilisation.el.getContext('2d');
+    const ctxE = this.chartEfficiency.el.getContext('2d');
 
-    ['active','trips','supply','cash','moneyPerHour','tripsPerHour','avgSupplyHoursPerDriver'].forEach(k => {
+    ['active','trips','supply','cash','moneyPerHour','tripsPerHour','avgSupplyHoursPerDriver', 'utilisation', 'efficiency',].forEach(k => {
       if (this._charts[k]) { this._charts[k].destroy(); }
     });
     this._charts.active = new Chart(ctxA, cfg('Active Drivers', this.state.series.activeDrivers));
@@ -105,7 +109,9 @@ export class OwlPerformanceDashboard extends Component {
     this._charts.cash   = new Chart(ctxC, cfg('Cash Earned',   this.state.series.cashEarned));
     this._charts.moneyPerHour = new Chart(ctxM, cfg('Avg Money / Hour',   this.state.series.moneyPerHour));
     this._charts.tripsPerHour = new Chart(ctxTP, cfg('Avg Trips / Hour', this.state.series.tripsPerHour));
-    this._charts.avgSupplyHoursPerDriver = new Chart(ctxAS,cfg('Avg SH per Active Driver', this.state.series.avgSupplyHoursPerDriver));
+    this._charts.avgSupplyHoursPerDriver = new Chart(ctxAS, cfg('Avg SH per Active Driver', this.state.series.avgSupplyHoursPerDriver));
+    this._charts.utilisation = new Chart(ctxU ,cfg('Average Utilisation %', this.state.series.utilisation));
+    this._charts.efficiency = new Chart(ctxE ,cfg('Average Efficiency %', this.state.series.efficiency));
   }
 
   toggleFilter(listName, value) {

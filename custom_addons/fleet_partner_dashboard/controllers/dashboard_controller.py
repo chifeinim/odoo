@@ -180,6 +180,8 @@ class FleetDashboardController(http.Controller):
         trip_current   = trip_previous   = 0
         supply_current = supply_previous = 0.0
         cash_current = cash_previous = 0.0
+        util_secs_current = util_secs_previous = 0.0
+        eff_secs_current = eff_secs_previous = 0.0
 
         for drv in filtered_drivers:
             # current orders
@@ -202,6 +204,20 @@ class FleetDashboardController(http.Controller):
             secs = request.env['x_fleet_driver_supply_hours']\
                          .sudo().search(sh_dom).mapped('seconds')
             supply_current += sum(secs) / 3600.0
+            
+            # current utilisation seconds
+            util_secs_current += sum(
+                (o.interval_to - o.interval_from).total_seconds()
+                for o in ords
+                if o.interval_from and o.interval_to
+            )
+            
+            # current efficiency seconds
+            eff_secs_current += sum(
+                (o.interval_to - o.order_date).total_seconds()
+                for o in ords
+                if o.order_date and o.interval_to
+            )
 
             # previous window (same as before) …
             if prev_df and prev_dt:
@@ -224,8 +240,30 @@ class FleetDashboardController(http.Controller):
                                   .sudo().search(sh_dom_prev).mapped('seconds')
                 supply_previous += sum(secs_prev) / 3600.0
                 
+                util_secs_previous += sum(
+                    (o.interval_to - o.interval_from).total_seconds()
+                    for o in prev_ords
+                )
+                
+                eff_secs_previous += sum(
+                    (o.interval_to - o.order_date).total_seconds()
+                    for o in prev_ords
+                )
+                
         avg_supply = (supply_current / active_current) if active_current else 0.0
         prev_avg_supply = (supply_previous / active_previous) if active_previous else 0.0
+        
+        # compute % utilisation
+        avg_util_current = (util_secs_current / 3600.0 / supply_current * 100.0) \
+                            if supply_current else 0.0
+        avg_util_previous = (util_secs_previous / 3600.0 / supply_previous * 100.0) \
+                             if supply_previous else 0.0
+                             
+        # compute % efficiency
+        avg_eff_current = (eff_secs_current / 3600.0 / supply_current * 100.0) \
+                            if supply_current else 0.0
+        avg_eff_previous = (eff_secs_previous / 3600.0 / supply_previous * 100.0) \
+                             if supply_previous else 0.0
 
         metrics = {
             'activeDrivers':     active_current,
@@ -242,6 +280,10 @@ class FleetDashboardController(http.Controller):
             'prevTripsPerHour':  (trip_previous  / supply_previous) if supply_previous else 0.0,
             'avgSupplyHoursPerDriver':     avg_supply,
             'prevAvgSupplyHoursPerDriver': prev_avg_supply,
+            'avgUtilisation':     avg_util_current,
+            'prevAvgUtilisation': avg_util_previous,
+            'avgEfficiency':      avg_eff_current,
+            'prevAvgEfficiency':  avg_eff_previous,
         }
 
         # --- 3) Time‑series over the SAME filtered_drivers ---
@@ -260,6 +302,8 @@ class FleetDashboardController(http.Controller):
         series_mph  = []
         series_trph  = []
         series_avg_supply = []
+        series_utilisation = []
+        series_efficiency = []
 
         if df is not None:
             end  = dt or today
@@ -359,6 +403,36 @@ class FleetDashboardController(http.Controller):
                     series_supply[-1]['value'] / cnt if cnt else 0.0
                 ) or 0.0
                 series_avg_supply.append({'period': label, 'value': avg_supply_bucket})
+                
+                # Utilisation %
+                bucket_util_secs = sum(
+                    (o.interval_to - o.interval_from).total_seconds()
+                    for drv in filtered_drivers
+                    for o in drv.order_ids.filtered(
+                        lambda o:
+                            o.interval_from and o.interval_to
+                            and start_b <= o.interval_from.date() <= end_b
+                    )
+                )
+                bucket_supply_h = series_supply[-1]['value']
+                util_pct = (bucket_util_secs/3600.0 / bucket_supply_h * 100.0) \
+                            if bucket_supply_h else 0.0
+                series_utilisation.append({'period': label, 'value': util_pct})
+                
+                # Efficiency %
+                bucket_eff_secs = sum(
+                    (o.interval_to - o.order_date).total_seconds()
+                    for drv in filtered_drivers
+                    for o in drv.order_ids.filtered(
+                        lambda o:
+                            o.order_date and o.interval_to
+                            and start_b <= o.order_date.date() <= end_b
+                    )
+                )
+                bucket_supply_h = series_supply[-1]['value']
+                eff_pct = (bucket_eff_secs/3600.0 / bucket_supply_h * 100.0) \
+                            if bucket_supply_h else 0.0
+                series_efficiency.append({'period': label, 'value': eff_pct})
 
         series = {
             'activeDrivers': series_active,
@@ -368,6 +442,8 @@ class FleetDashboardController(http.Controller):
             'moneyPerHour':  series_mph,
             'tripsPerHour':  series_trph,
             'avgSupplyHoursPerDriver': series_avg_supply,
+            'utilisation': series_utilisation,
+            'efficiency':  series_efficiency,
         }
 
         # --- 4) Build per‑driver detail rows ---
@@ -416,13 +492,13 @@ class FleetDashboardController(http.Controller):
                 'money_per_hour': (cash  / hours) if hours else 0.0,
                 'utilisation':    (
                                   sum((o.interval_to - o.interval_from).total_seconds()
-                                      for o in complete
+                                      for o in orders
                                       if o.interval_from and o.interval_to
                                   ) / 3600.0
                                 ) / hours * 100.0 if hours else 0.0,
                 'efficiency':     (
                                   sum((o.interval_to - o.order_date).total_seconds()
-                                      for o in complete
+                                      for o in orders
                                       if o.interval_from and o.interval_to
                                   ) / 3600.0
                                 ) / hours * 100.0 if hours else 0.0,
