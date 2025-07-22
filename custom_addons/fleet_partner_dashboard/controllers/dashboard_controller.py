@@ -180,7 +180,6 @@ class FleetDashboardController(http.Controller):
         trip_current   = trip_previous   = 0
         supply_current = supply_previous = 0.0
         cash_current = cash_previous = 0.0
-        tripsPerHour_current = tripsPerHour_previous = 0.0
 
         for drv in filtered_drivers:
             # current orders
@@ -224,6 +223,9 @@ class FleetDashboardController(http.Controller):
                 secs_prev = request.env['x_fleet_driver_supply_hours']\
                                   .sudo().search(sh_dom_prev).mapped('seconds')
                 supply_previous += sum(secs_prev) / 3600.0
+                
+        avg_supply = (supply_current / active_current) if active_current else 0.0
+        prev_avg_supply = (supply_previous / active_previous) if active_previous else 0.0
 
         metrics = {
             'activeDrivers':     active_current,
@@ -238,6 +240,8 @@ class FleetDashboardController(http.Controller):
             'prevMoneyPerHour': (cash_previous / supply_previous) if supply_previous else 0.0,
             'tripsPerHour':      (trip_current   / supply_current) if supply_current else 0.0,
             'prevTripsPerHour':  (trip_previous  / supply_previous) if supply_previous else 0.0,
+            'avgSupplyHoursPerDriver':     avg_supply,
+            'prevAvgSupplyHoursPerDriver': prev_avg_supply,
         }
 
         # --- 3) Time‑series over the SAME filtered_drivers ---
@@ -255,6 +259,7 @@ class FleetDashboardController(http.Controller):
         series_cash   = []
         series_mph  = []
         series_trph  = []
+        series_avg_supply = []
 
         if df is not None:
             end  = dt or today
@@ -348,6 +353,12 @@ class FleetDashboardController(http.Controller):
                 bucket_trips = trips  # as you already summed
                 avg_trph = (bucket_trips / bucket_hours) if bucket_hours else 0.0
                 series_trph.append({'period': label, 'value': avg_trph})
+                
+                # SH per active driver
+                avg_supply_bucket = (bucket_hours and bucket_hours > 0) and (
+                    series_supply[-1]['value'] / cnt if cnt else 0.0
+                ) or 0.0
+                series_avg_supply.append({'period': label, 'value': avg_supply_bucket})
 
         series = {
             'activeDrivers': series_active,
@@ -356,6 +367,7 @@ class FleetDashboardController(http.Controller):
             'cashEarned':    series_cash,
             'moneyPerHour':  series_mph,
             'tripsPerHour':  series_trph,
+            'avgSupplyHoursPerDriver': series_avg_supply,
         }
 
         # --- 4) Build per‑driver detail rows ---

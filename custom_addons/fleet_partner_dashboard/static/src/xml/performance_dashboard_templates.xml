@@ -267,6 +267,29 @@
               </div>
             </div>
           </div>
+          <!-- third row: Avg Supply Hours per Active Driver -->
+          <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Avg SH per Active Driver</h5>
+                  <h2><t t-esc="state.metrics.avgSupplyHoursPerDriver.toFixed(1)"/>h</h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevAvgSupplyHoursPerDriver"/>
+                    <t t-set="curr"  t-value="state.metrics.avgSupplyHoursPerDriver"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                    </t>
+                     from last period
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>          
 
         </t>
 
@@ -290,6 +313,9 @@
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartTripsPerHour" style="height:200px"/>
+            </div>
+            <div class="col-md-4">
+              <canvas t-ref="chartAvgSupply" style="height:200px"></canvas>
             </div>
           </div>
         </t>
