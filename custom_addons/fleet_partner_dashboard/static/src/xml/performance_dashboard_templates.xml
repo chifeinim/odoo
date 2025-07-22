@@ -293,7 +293,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Average Utilisation %</h5>
+                  <h5 class="card-title">Average Utilisation</h5>
                   <h2><t t-esc="state.metrics.avgUtilisation.toFixed(1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevAvgUtilisation"/>
@@ -314,7 +314,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Average Efficiency %</h5>
+                  <h5 class="card-title">Average Efficiency</h5>
                   <h2><t t-esc="state.metrics.avgEfficiency.toFixed(1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevAvgEfficiency"/>
