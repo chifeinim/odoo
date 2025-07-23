@@ -285,7 +285,7 @@ class FleetDashboardController(http.Controller):
                 
         # compute supply hours per active driver
         avg_supply = (supply_current / active_current) if active_current else 0.0
-        prev_avg_supply = (supply_previous / active_previous) if active_previous else 0.0
+        avg_supply_prev = (supply_previous / active_previous) if active_previous else 0.0
         
         # compute % utilisation
         avg_util_current = (util_secs_current / 3600.0 / supply_current * 100.0) \
@@ -325,7 +325,7 @@ class FleetDashboardController(http.Controller):
             'tripsPerHour':      (trip_current   / supply_current) if supply_current else 0.0,
             'prevTripsPerHour':  (trip_previous  / supply_previous) if supply_previous else 0.0,
             'avgSupplyHoursPerDriver':     avg_supply,
-            'prevAvgSupplyHoursPerDriver': prev_avg_supply,
+            'prevAvgSupplyHoursPerDriver': avg_supply_prev,
             'avgUtilisation':     avg_util_current,
             'prevAvgUtilisation': avg_util_previous,
             'avgEfficiency':      avg_eff_current,
@@ -334,6 +334,10 @@ class FleetDashboardController(http.Controller):
             'prevAcceptanceRate':  accept_rate_previous,
             'completedToRequest': completed_to_request_current,
             'prevCompletedToRequest': completed_to_request_previous,
+            'serviceFee': cash_current * 0.1,
+            'prevServiceFee': cash_previous * 0.1,
+            'partnerFee': cash_current * 0.03,
+            'prevPartnerFee': cash_previous * 0.03,
         }
 
         # --- 3) Time‑series over the SAME filtered_drivers ---
@@ -356,6 +360,8 @@ class FleetDashboardController(http.Controller):
         series_efficiency = []
         series_acceptanceRate = []
         series_completedToRequest = []
+        series_serviceFee = []
+        series_partnerFee = []
 
         if df is not None:
             end  = dt or today
@@ -418,7 +424,7 @@ class FleetDashboardController(http.Controller):
                 ]).mapped('seconds')
                 series_supply.append({'period': label, 'value': sum(secs) / 3600.0})
                 
-                # Cash Earned
+                # Cash Earned / service + partner fees
                 cash_sum = sum(
                     sum(o.price for o in drv.order_ids.filtered(
                         lambda o: o.status=='complete'
@@ -428,6 +434,8 @@ class FleetDashboardController(http.Controller):
                     for drv in filtered_drivers
                 )
                 series_cash.append({'period': label, 'value': cash_sum})
+                series_serviceFee.append({'period': label, 'value': cash_sum * 0.1})
+                series_partnerFee.append({'period': label, 'value': cash_sum * 0.03})
                 
                 # Money per hour
                 hours = sum(request.env['x_fleet_driver_supply_hours']
@@ -522,7 +530,9 @@ class FleetDashboardController(http.Controller):
             'utilisation': series_utilisation,
             'efficiency':  series_efficiency,
             'acceptanceRate': series_acceptanceRate,
-            'completedToRequest': series_completedToRequest
+            'completedToRequest': series_completedToRequest,
+            'serviceFee': series_serviceFee,
+            'partnerFee': series_partnerFee,
         }
 
         # --- 4) Build per‑driver detail rows ---

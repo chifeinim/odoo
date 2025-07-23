@@ -375,6 +375,58 @@
                 </div>
               </div>
             </div>
+            <!-- Service Fee -->
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Service Fee</h5>
+                  <h2>Kz <t t-esc="state.metrics.serviceFee.toFixed(2)"/></h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevServiceFee"/>
+                    <t t-set="curr"  t-value="state.metrics.serviceFee"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-success">
+                        &#9650; <t t-esc="delta.toFixed(1)"/>%
+                      </span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-danger">
+                        &#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%
+                      </span>
+                    </t>
+                    &#160;from last period
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- fifth row: Partner Fee -->
+          <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Partner Fee</h5>
+                  <h2>Kz <t t-esc="state.metrics.partnerFee.toFixed(2)"/></h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevPartnerFee"/>
+                    <t t-set="curr"  t-value="state.metrics.partnerFee"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-success">
+                        &#9650; <t t-esc="delta.toFixed(1)"/>%
+                      </span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-danger">
+                        &#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%
+                      </span>
+                    </t>
+                    &#160;from last period
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
 
@@ -415,6 +467,12 @@
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartCompletedToRequest" style="height:200px"></canvas>
+            </div>
+            <div class="col-md-4">
+              <canvas t-ref="chartServiceFee" style="height:200px"></canvas>
+            </div>
+            <div class="col-md-4">
+              <canvas t-ref="chartPartnerFee" style="height:200px"></canvas>
             </div>
           </div>
         </t>
