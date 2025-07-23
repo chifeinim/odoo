@@ -13,7 +13,7 @@ export class OwlPerformanceDashboard extends Component {
         activeDrivers: [], trips: [], supplyHours: [],
         cashEarned: [], moneyPerHour: [], tripsPerHour: [],
         avgSupplyHoursPerDriver: [], utilisation: [], efficiency: [],
-        acceptanceRate: [],
+        acceptanceRate: [], completedToRequest: [],
       },
       productTypes: [],
       qualityScores: [
@@ -38,6 +38,7 @@ export class OwlPerformanceDashboard extends Component {
     this.chartUtilisation = useRef('chartUtilisation');
     this.chartEfficiency = useRef('chartEfficiency');
     this.chartAcceptance = useRef('chartAcceptance');
+    this.chartCompletedToRequest = useRef('chartCompletedToRequest');
     this._charts     = {};
 
     onMounted(async () => {
@@ -102,8 +103,9 @@ export class OwlPerformanceDashboard extends Component {
     const ctxU = this.chartUtilisation.el.getContext('2d');
     const ctxE = this.chartEfficiency.el.getContext('2d');
     const ctxAcc = this.chartAcceptance.el.getContext('2d');
+    const ctxCTR = this.chartCompletedToRequest.el.getContext('2d');
 
-    ['active','trips','supply','cash','moneyPerHour','tripsPerHour','avgSupplyHoursPerDriver', 'utilisation', 'efficiency','acceptanceRate'].forEach(k => {
+    ['active','trips','supply','cash','moneyPerHour','tripsPerHour','avgSupplyHoursPerDriver', 'utilisation', 'efficiency','acceptanceRate','completedToRequest'].forEach(k => {
       if (this._charts[k]) { this._charts[k].destroy(); }
     });
     this._charts.active = new Chart(ctxA, cfg('Active Drivers', this.state.series.activeDrivers));
@@ -116,6 +118,7 @@ export class OwlPerformanceDashboard extends Component {
     this._charts.utilisation = new Chart(ctxU ,cfg('Average Utilisation %', this.state.series.utilisation));
     this._charts.efficiency = new Chart(ctxE ,cfg('Average Efficiency %', this.state.series.efficiency));
     this._charts.acceptanceRate = new Chart(ctxAcc,cfg('Average Acceptance Rate %', this.state.series.acceptanceRate));
+    this._charts.completedToRequest = new Chart(ctxCTR,cfg('Average Completed to Request %', this.state.series.completedToRequest));
   }
 
   toggleFilter(listName, value) {

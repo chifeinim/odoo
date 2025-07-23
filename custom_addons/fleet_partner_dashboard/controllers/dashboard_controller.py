@@ -306,6 +306,10 @@ class FleetDashboardController(http.Controller):
         accept_rate_previous = (
             (accept_num_previous / order_num_previous) * 100.0
         ) if order_num_previous else 0.0
+        
+        # compute completed to request %
+        completed_to_request_current = (trip_current / order_num_current * 100.0) if order_num_current else 0.0
+        completed_to_request_previous = (trip_previous / order_num_previous * 100.0) if order_num_previous else 0.0
 
         metrics = {
             'activeDrivers':     active_current,
@@ -328,6 +332,8 @@ class FleetDashboardController(http.Controller):
             'prevAvgEfficiency':  avg_eff_previous,
             'acceptanceRate':      accept_rate_current,
             'prevAcceptanceRate':  accept_rate_previous,
+            'completedToRequest': completed_to_request_current,
+            'prevCompletedToRequest': completed_to_request_previous,
         }
 
         # --- 3) Time‑series over the SAME filtered_drivers ---
@@ -349,6 +355,7 @@ class FleetDashboardController(http.Controller):
         series_utilisation = []
         series_efficiency = []
         series_acceptanceRate = []
+        series_completedToRequest = []
 
         if df is not None:
             end  = dt or today
@@ -499,6 +506,10 @@ class FleetDashboardController(http.Controller):
                 )
                 rate = (bucket_accepts / bucket_orders * 100.0) if bucket_orders else 0.0
                 series_acceptanceRate.append({'period': label, 'value': rate})
+                
+                # Completed to Request %
+                completed_to_request = (trips / bucket_orders * 100) if bucket_orders else 0.0
+                series_completedToRequest.append({'period': label, 'value': completed_to_request})
 
         series = {
             'activeDrivers': series_active,
@@ -511,6 +522,7 @@ class FleetDashboardController(http.Controller):
             'utilisation': series_utilisation,
             'efficiency':  series_efficiency,
             'acceptanceRate': series_acceptanceRate,
+            'completedToRequest': series_completedToRequest
         }
 
         # --- 4) Build per‑driver detail rows ---
