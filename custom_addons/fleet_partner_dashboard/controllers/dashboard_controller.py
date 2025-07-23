@@ -182,6 +182,8 @@ class FleetDashboardController(http.Controller):
         cash_current = cash_previous = 0.0
         util_secs_current = util_secs_previous = 0.0
         eff_secs_current = eff_secs_previous = 0.0
+        accept_num_current = accept_num_previous = 0
+        order_num_current  = order_num_previous  = 0
 
         for drv in filtered_drivers:
             # current orders
@@ -190,11 +192,24 @@ class FleetDashboardController(http.Controller):
                 ords = ords.filtered(lambda o:
                     o.order_date and df <= o.order_date.date() <= dt
                 )
+            
+            # current complete orders (trips)    
             cur_comp = ords.filtered(lambda o: o.status == 'complete')
             if cur_comp:
                 active_current += 1
             trip_current += len(cur_comp)
             
+             # current no. of accepted
+            order_num_current += len(ords)
+            accept_num_current += (
+                len(cur_comp) +
+                len(ords.filtered(lambda o:
+                    o.status == 'cancelled'
+                    and o.cancellation_description == 'user'
+                ))
+            )
+            
+            # current cash
             cash_current += sum(o.price for o in cur_comp)
 
             # current supply
@@ -224,13 +239,29 @@ class FleetDashboardController(http.Controller):
                 prev_ords = drv.order_ids.filtered(lambda o:
                     o.order_date and prev_df <= o.order_date.date() < prev_dt
                 )
+                
+                # previous complete orders
                 prev_comp = prev_ords.filtered(lambda o: o.status == 'complete')
                 if prev_comp:
                     active_previous += 1
+                
+                # previous no. of accepted
+                order_num_previous += len(prev_ords)
+                accept_num_previous += (
+                    len(prev_comp) +
+                    len(prev_ords.filtered(lambda o:
+                        o.status == 'cancelled'
+                        and o.cancellation_description == 'user'
+                    ))
+                )
+                
+                # previous no. of completed trips
                 trip_previous += len(prev_comp)
                 
+                # previous cash
                 cash_previous += sum(o.price for o in prev_comp)
 
+                # previous supply hours
                 sh_dom_prev = [
                     ('driver_id','=',drv.id),
                     ('date','>=', prev_df),
@@ -240,16 +271,19 @@ class FleetDashboardController(http.Controller):
                                   .sudo().search(sh_dom_prev).mapped('seconds')
                 supply_previous += sum(secs_prev) / 3600.0
                 
+                # previous utilisation
                 util_secs_previous += sum(
                     (o.interval_to - o.interval_from).total_seconds()
                     for o in prev_ords
                 )
                 
+                # previous efficiency
                 eff_secs_previous += sum(
                     (o.interval_to - o.order_date).total_seconds()
                     for o in prev_ords
                 )
                 
+        # compute supply hours per active driver
         avg_supply = (supply_current / active_current) if active_current else 0.0
         prev_avg_supply = (supply_previous / active_previous) if active_previous else 0.0
         
@@ -264,6 +298,14 @@ class FleetDashboardController(http.Controller):
                             if supply_current else 0.0
         avg_eff_previous = (eff_secs_previous / 3600.0 / supply_previous * 100.0) \
                              if supply_previous else 0.0
+        
+        # compute acceptance rate %                     
+        accept_rate_current = (
+            (accept_num_current / order_num_current) * 100.0
+        ) if order_num_current else 0.0
+        accept_rate_previous = (
+            (accept_num_previous / order_num_previous) * 100.0
+        ) if order_num_previous else 0.0
 
         metrics = {
             'activeDrivers':     active_current,
@@ -284,6 +326,8 @@ class FleetDashboardController(http.Controller):
             'prevAvgUtilisation': avg_util_previous,
             'avgEfficiency':      avg_eff_current,
             'prevAvgEfficiency':  avg_eff_previous,
+            'acceptanceRate':      accept_rate_current,
+            'prevAcceptanceRate':  accept_rate_previous,
         }
 
         # --- 3) Time‑series over the SAME filtered_drivers ---
@@ -304,6 +348,7 @@ class FleetDashboardController(http.Controller):
         series_avg_supply = []
         series_utilisation = []
         series_efficiency = []
+        series_acceptanceRate = []
 
         if df is not None:
             end  = dt or today
@@ -433,6 +478,27 @@ class FleetDashboardController(http.Controller):
                 eff_pct = (bucket_eff_secs/3600.0 / bucket_supply_h * 100.0) \
                             if bucket_supply_h else 0.0
                 series_efficiency.append({'period': label, 'value': eff_pct})
+                
+                # Acceptance %
+                bucket_orders = sum(
+                    len(drv.order_ids.filtered(lambda o:
+                        o.order_date
+                        and start_b <= o.order_date.date() <= end_b
+                    ))
+                    for drv in filtered_drivers
+                )
+                bucket_accepts = sum(
+                    len(drv.order_ids.filtered(lambda o:
+                        o.order_date
+                        and start_b <= o.order_date.date() <= end_b
+                        and (o.status == 'complete'
+                            or (o.status == 'cancelled'
+                                and o.cancellation_description == 'user'))
+                    ))
+                    for drv in filtered_drivers
+                )
+                rate = (bucket_accepts / bucket_orders * 100.0) if bucket_orders else 0.0
+                series_acceptanceRate.append({'period': label, 'value': rate})
 
         series = {
             'activeDrivers': series_active,
@@ -444,6 +510,7 @@ class FleetDashboardController(http.Controller):
             'avgSupplyHoursPerDriver': series_avg_supply,
             'utilisation': series_utilisation,
             'efficiency':  series_efficiency,
+            'acceptanceRate': series_acceptanceRate,
         }
 
         # --- 4) Build per‑driver detail rows ---
@@ -474,6 +541,15 @@ class FleetDashboardController(http.Controller):
             secs = request.env['x_fleet_driver_supply_hours']\
                          .sudo().search(sh_dom).mapped('seconds')
             hours = sum(secs) / 3600.0
+            
+            all_orders = orders
+            user_cancels = all_orders.filtered(lambda o:
+                o.status == 'cancelled'
+                and o.cancellation_description == 'user'
+            )
+            accept_rate = (
+                (len(complete) + len(user_cancels)) / len(all_orders) * 100.0
+            ) if all_orders else 0.0
 
             data[drv.id] = {
                 'id':             drv.id,
@@ -487,7 +563,7 @@ class FleetDashboardController(http.Controller):
                 'cash':           cash,
                 'trips':          trips,
                 'hours':          hours,
-                'completed_to_request': (trips / len(orders) * 100.0) if orders else 0.0,
+                'acceptance_rate': accept_rate,
                 'trips_per_hour': (trips / hours) if hours else 0.0,
                 'money_per_hour': (cash  / hours) if hours else 0.0,
                 'utilisation':    (
@@ -502,6 +578,7 @@ class FleetDashboardController(http.Controller):
                                       if o.interval_from and o.interval_to
                                   ) / 3600.0
                                 ) / hours * 100.0 if hours else 0.0,
+                'completed_to_request': (trips / len(orders) * 100.0) if orders else 0.0,
                 'service_fee':    cash * 0.10,
                 'partner_fee':    cash * 0.03,
             }

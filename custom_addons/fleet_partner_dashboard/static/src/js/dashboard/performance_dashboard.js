@@ -13,6 +13,7 @@ export class OwlPerformanceDashboard extends Component {
         activeDrivers: [], trips: [], supplyHours: [],
         cashEarned: [], moneyPerHour: [], tripsPerHour: [],
         avgSupplyHoursPerDriver: [], utilisation: [], efficiency: [],
+        acceptanceRate: [],
       },
       productTypes: [],
       qualityScores: [
@@ -36,6 +37,7 @@ export class OwlPerformanceDashboard extends Component {
     this.chartAvgSupply = useRef('chartAvgSupply');
     this.chartUtilisation = useRef('chartUtilisation');
     this.chartEfficiency = useRef('chartEfficiency');
+    this.chartAcceptance = useRef('chartAcceptance');
     this._charts     = {};
 
     onMounted(async () => {
@@ -99,8 +101,9 @@ export class OwlPerformanceDashboard extends Component {
     const ctxAS = this.chartAvgSupply.el.getContext('2d');
     const ctxU = this.chartUtilisation.el.getContext('2d');
     const ctxE = this.chartEfficiency.el.getContext('2d');
+    const ctxAcc = this.chartAcceptance.el.getContext('2d');
 
-    ['active','trips','supply','cash','moneyPerHour','tripsPerHour','avgSupplyHoursPerDriver', 'utilisation', 'efficiency',].forEach(k => {
+    ['active','trips','supply','cash','moneyPerHour','tripsPerHour','avgSupplyHoursPerDriver', 'utilisation', 'efficiency','acceptanceRate'].forEach(k => {
       if (this._charts[k]) { this._charts[k].destroy(); }
     });
     this._charts.active = new Chart(ctxA, cfg('Active Drivers', this.state.series.activeDrivers));
@@ -110,8 +113,9 @@ export class OwlPerformanceDashboard extends Component {
     this._charts.moneyPerHour = new Chart(ctxM, cfg('Avg Money / Hour',   this.state.series.moneyPerHour));
     this._charts.tripsPerHour = new Chart(ctxTP, cfg('Avg Trips / Hour', this.state.series.tripsPerHour));
     this._charts.avgSupplyHoursPerDriver = new Chart(ctxAS, cfg('Avg SH per Active Driver', this.state.series.avgSupplyHoursPerDriver));
-    this._charts.utilisation = new Chart(ctxU ,cfg('Average Utilisation %', this.state.series.utilisation));
-    this._charts.efficiency = new Chart(ctxE ,cfg('Average Efficiency %', this.state.series.efficiency));
+    this._charts.utilisation = new Chart(ctxU ,cfg('Average Utilisation %', this.state.series.utilisation));
+    this._charts.efficiency = new Chart(ctxE ,cfg('Average Efficiency %', this.state.series.efficiency));
+    this._charts.acceptanceRate = new Chart(ctxAcc,cfg('Average Acceptance Rate %', this.state.series.acceptanceRate));
   }
 
   toggleFilter(listName, value) {
