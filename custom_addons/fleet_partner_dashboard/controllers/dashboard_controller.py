@@ -106,6 +106,7 @@ class FleetDashboardController(http.Controller):
 
         # fetch all drivers & compute DQS map
         all_drivers = request.env['x_fleet_driver'].sudo().search([])
+        total_drivers = len(all_drivers)
 
         dqs_matrix = {
             'strong':  {'strong': 'High Performer',    'average': 'Average Performer', 'weak': 'Low Performer'},
@@ -113,7 +114,11 @@ class FleetDashboardController(http.Controller):
             'weak':    {'strong': 'Average Performer', 'average': 'Low Performer',      'weak': 'Low Performer'},
         }
         dqs_map = {}
+        prod_counts = {}
+        qual_counts = {}
+        cat_counts = {}
         for drv in all_drivers:
+            
             # Determine On‑the‑Road score using hire_date → today
             prod      = drv.product_type_id
             kpi_type  = prod.kpi_type or 'none'
@@ -166,6 +171,21 @@ class FleetDashboardController(http.Controller):
             training = (drv.training_rating or 'average').lower()
             dqs_map[drv.id] = dqs_matrix.get(training, {}) \
                                     .get(onroad.lower(), 'Average Performer')
+                                    
+            # Determine distribution of drivers by Product, Quality Score, Category
+            key = drv.product_type_id.name or 'Unspecified'
+            prod_counts[key] = prod_counts.get(key, 0) + 1
+            
+            qs = dqs_map.get(drv.id, 'Average Performer')
+            qual_counts[qs] = qual_counts.get(qs, 0) + 1
+            
+            cat = drv.type or 'Unspecified'
+            cat_counts[cat] = cat_counts.get(cat, 0) + 1
+
+        # Map distribution of drivers
+        prod_dist = [{'label': k, 'value': v} for k, v in prod_counts.items()]
+        qual_dist = [{'label': k, 'value': v} for k, v in qual_counts.items()]
+        cat_dist = [{'label': k, 'value': v} for k, v in cat_counts.items()]
 
         # --- build filtered_drivers once for both metrics + series ---
         filtered_drivers = [
@@ -609,4 +629,10 @@ class FleetDashboardController(http.Controller):
             'metrics': metrics,
             'series':  series,
             'data':    data,
+            'allDrivers': total_drivers,
+            'distributions': {
+                'product':  prod_dist,
+                'quality':  qual_dist,
+                'category': cat_dist,
+            },
         }

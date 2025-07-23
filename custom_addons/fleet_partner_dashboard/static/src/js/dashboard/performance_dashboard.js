@@ -16,6 +16,8 @@ export class OwlPerformanceDashboard extends Component {
         acceptanceRate: [], completedToRequest: [], serviceFee: [],
         partnerFee: [],
       },
+      allDrivers: 0,
+      distributions: { product: [], quality: [], category: [] },
       productTypes: [],
       qualityScores: [
         { key: 'Low Performer',     label: 'Low Performer' },
@@ -42,6 +44,7 @@ export class OwlPerformanceDashboard extends Component {
     this.chartCompletedToRequest = useRef('chartCompletedToRequest');
     this.chartServiceFee = useRef('chartServiceFee');
     this.chartPartnerFee = useRef('chartPartnerFee');
+    this.chartAllDrivers = useRef('chartAllDrivers');
     this._charts     = {};
 
     onMounted(async () => {
@@ -56,6 +59,7 @@ export class OwlPerformanceDashboard extends Component {
     // whenever the DOM updates, if we're in chart mode, draw the charts
     onPatched(() => {
       if (this.state.showCharts && !this.state.loading) {
+        this._renderAllDriversChart();
         this._renderCharts();
       }
     });
@@ -74,12 +78,127 @@ export class OwlPerformanceDashboard extends Component {
     const resp = await this.env.services.rpc(
       '/fleet_partner_performance/data', params
     );
-    this.state.metrics = resp.metrics;
-    this.state.series  = resp.series;
-    this.state.data    = resp.data;
-    this.state.loading = false;
+    this.state.metrics       = resp.metrics;
+    this.state.series        = resp.series;
+    this.state.data          = resp.data;
+    this.state.allDrivers    = resp.allDrivers;
+    this.state.distributions = resp.distributions;
+    this.state.loading       = false;
     // onPatched() will run next and draw charts if needed
   }
+
+  _renderAllDriversChart() {
+    const ctx = this.chartAllDrivers.el.getContext('2d');
+    if (this._charts.allDrivers) {
+      this._charts.allDrivers.destroy();
+    }
+
+    // ── 1) grab your raw distributions ───────────────────────
+    const prodDist = this.state.distributions.product;   // [{label,value},…]
+    const qualDist = this.state.distributions.quality;
+    const catDist  = this.state.distributions.category;
+
+    // ── 2) unified labels (so everything lines up) ──────────
+    const labels = Array.from(new Set([
+      ...prodDist.map(d => d.label),
+      ...qualDist.map(d => d.label),
+      ...catDist.map(d => d.label),
+    ]));
+
+    // ── 3) map label → value (0 if missing) ────────────────
+    const prodData = labels.map(l => {
+      const x = prodDist.find(d => d.label === l);
+      return x ? x.value : 0;
+    });
+    const qualData = labels.map(l => {
+      const x = qualDist.find(d => d.label === l);
+      return x ? x.value : 0;
+    });
+    const catData  = labels.map(l => {
+      const x = catDist.find(d => d.label === l);
+      return x ? x.value : 0;
+    });
+
+    // ── 4) choose exactly one color per label ───────────────
+    // (these arrays must match prodDist.length, qualDist.length, catDist.length)
+    const prodColors = ['#FF6384','#36A2EB','#FFCE56','#8E44AD'];
+    const qualColors = ['#4BC0C0','#9966FF','#FF9F40'];
+    const catColors  = ['#E7E9ED','#3CBA9F','#F7464A','#46F0F0'];
+
+    // build a lookup so legend can pick the right slice‑color:
+    const labelColorMap = {};
+    prodDist.forEach((d,i)=> labelColorMap[d.label] = prodColors[i]);
+    qualDist.forEach((d,i)=> labelColorMap[d.label] = qualColors[i]);
+    catDist .forEach((d,i)=> labelColorMap[d.label] = catColors[i]);
+
+    // ── 5) now finally spin up the doughnut ─────────────────
+    this._charts.allDrivers = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels,    // for tooltips and for our custom legend
+        datasets: [
+          { label: 'By Product',  data: prodData, backgroundColor: prodColors },
+          { label: 'By Quality',  data: qualData, backgroundColor: qualColors },
+          { label: 'By Category', data: catData,  backgroundColor: catColors },
+        ],
+      },
+      options: {
+        maintainAspectRatio: false,
+        layout: {
+           padding: {
+            top: 12,
+            bottom: 6,
+            left: 0,
+            right: 0,
+           }
+          },
+        cutout: '10%',
+        plugins: {
+          title: {
+            display: true,
+            text: 'Distribution of Drivers by Product, Quality and Category',
+            padding: { top:6, bottom:6 },
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const ds    = ctx.dataset;
+                const lbl   = ctx.chart.data.labels[ctx.dataIndex];
+                const val   = ds.data[ctx.dataIndex];
+                const total = ds.data.reduce((a,b)=>a+b,0);
+                const pct   = ((val/total)*100).toFixed(1);
+                return `${lbl}: ${val} (${pct}%)`;
+              }
+            }
+          },
+          legend: {
+            position: 'right',
+            align: 'center',
+            maxHeight: 180,
+            labels: {
+              boxWidth: 12,
+              padding: 12,
+              // Emit exactly one legend‐item per `labels[i]`
+              generateLabels: chart => {
+                return chart.data.labels.map((lbl, i) => ({
+                  text:      lbl,
+                  fillStyle: labelColorMap[lbl],
+                  hidden:    false,
+                  // so clicking toggles the correct slice in its correct ring:
+                  datasetIndex:
+                    prodData[i]  ? 0 :
+                    qualData[i]  ? 1 :
+                    /* else */     2,
+                  index: i,
+                }));
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
 
   _renderCharts() {
     const cfg = (label, data) => ({

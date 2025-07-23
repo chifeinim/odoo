@@ -427,6 +427,15 @@
                 </div>
               </div>
             </div>
+            <!-- All Drivers -->
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">All Drivers on Yango</h5>
+                  <h2><t t-esc="state.allDrivers"/></h2>
+                </div>
+              </div>
+            </div>
           </div>
 
 
@@ -434,7 +443,7 @@
 
         <!-- LINE CHARTS -->
         <t t-if="state.showCharts">
-          <div class="row mb-4">
+          <div class="row g-1 mb-1">
             <div class="col-md-4">
               <canvas t-ref="chartActive" style="height:200px"></canvas>
             </div>
@@ -473,6 +482,9 @@
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartPartnerFee" style="height:200px"></canvas>
+            </div>
+            <div class="col-md-4 mb-1" style="padding: 0;">
+                <canvas t-ref="chartAllDrivers" style="position:absolute; top:0; left:0; width:100%; height:100%;"></canvas>
             </div>
           </div>
         </t>
