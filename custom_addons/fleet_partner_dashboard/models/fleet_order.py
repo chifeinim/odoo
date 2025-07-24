@@ -27,3 +27,8 @@ class FleetOrder(models.Model):
     driver_name = fields.Char(string="Driver Name") #driver_name
     pick_latitude = fields.Float(string="Pickup Latitude") #pickup_latitude
     pick_longitude = fields.Float(string="Pickup Longitude") #pickup_longitude
+    events = fields.Text(
+        string="Events",
+        default='[]',
+        help="JSON array of {event_at, order_status} objects"
+    )
