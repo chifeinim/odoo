@@ -5,7 +5,7 @@
     'category': 'Fleet',
     'author': 'Chi Fei Nim',
     'website': 'https://github.com/chifeinim',
-    'depends': ['base', 'mail', 'web', 'board'],
+    'depends': ['base', 'mail', 'web',],
     'data': [
         'data/sequence.xml',
         'security/ir.model.access.csv',
