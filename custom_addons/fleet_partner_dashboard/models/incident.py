@@ -6,10 +6,9 @@ class FleetIncident(models.Model):
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'id desc'
 
-    name = fields.Char(
-        string="Incident ID", copy=False, readonly=True, default='New')
-    date_reported = fields.Datetime(
-        string="Incident Date", default=fields.Datetime.now, readonly=True)
+    name = fields.Char(string="Incident ID", copy=False, readonly=True, default='New')
+    date_reported = fields.Datetime(string="Incident Date", default=fields.Datetime.now, readonly=True)
+    driver_id = fields.Many2one('x_fleet_driver', string="Driver", required=True)
 
     issue_ids = fields.One2many(
         'x_fleet_incident_issue', 'incident_id',
@@ -17,17 +16,15 @@ class FleetIncident(models.Model):
 
     status = fields.Selection([
         ('unresolved', 'Unresolved'),
-        ('resolved', 'Resolved'),
-    ], string="Status", compute='_compute_status', store=True, tracking=True)
+        ('resolved',   'Resolved'),
+    ], compute='_compute_status', store=True, tracking=True)
 
     severity = fields.Selection([
         ('can_work', "Can Work"),
-        ('cant_work', "Can't Work"),
-    ], string="Severity", compute='_compute_severity', store=True, tracking=True)
+        ('cant_work',"Can't Work"),
+    ], compute='_compute_severity', store=True, tracking=True)
 
-    color = fields.Integer(
-        compute='_compute_color', store=True,
-        help="Record color based on severity")
+    color = fields.Integer(compute='_compute_color', store=True)
 
     @api.model
     def create(self, vals):
@@ -38,14 +35,14 @@ class FleetIncident(models.Model):
     @api.depends('issue_ids.status')
     def _compute_status(self):
         for rec in self:
-            rec.status = 'unresolved' if any(i.status == 'unresolved' for i in rec.issue_ids) else 'resolved'
+            rec.status = 'unresolved' if any(i.status=='unresolved' for i in rec.issue_ids) else 'resolved'
 
     @api.depends('issue_ids.severity')
     def _compute_severity(self):
         for rec in self:
-            rec.severity = 'cant_work' if any(i.severity == 'cant_work' for i in rec.issue_ids) else 'can_work'
+            rec.severity = 'cant_work' if any(i.severity=='cant_work' for i in rec.issue_ids) else 'can_work'
 
     @api.depends('severity')
     def _compute_color(self):
         for rec in self:
-            rec.color = 1 if rec.severity == 'can_work' else 2
+            rec.color = 1 if rec.severity=='can_work' else 2

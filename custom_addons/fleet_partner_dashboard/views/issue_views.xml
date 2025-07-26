@@ -5,10 +5,7 @@
     <field name="model">x_fleet_incident_issue</field>
     <field name="arch" type="xml">
       <tree string="Issues">
-        <field name="incident_id"/>
-        <field name="category_id"/>
-        <field name="subcategory_id"/>
-        <field name="subsub_id"/>
+        <field name="display_name"/>
         <field name="status"/>
         <field name="severity"/>
       </tree>
@@ -28,20 +25,19 @@
             <field name="subcategory_id"/>
             <field name="subsub_id"/>
           </group>
-          <group>
-            <field name="description"/>
-          </group>
+          <field name="description"/>
           <group>
             <field name="status"/>
             <field name="severity"/>
           </group>
         </sheet>
+        <!-- This is the chatter panel -->
         <div class="oe_chatter"/>
       </form>
     </field>
   </record>
-
-  <!-- Action to expose Issues -->
+  
+  <!-- Action -->
   <record id="action_x_fleet_incident_issue" model="ir.actions.act_window">
     <field name="name">Issues</field>
     <field name="res_model">x_fleet_incident_issue</field>

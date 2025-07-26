@@ -10,6 +10,7 @@
           <group>
             <field name="name" string="Incident ID"/>
             <field name="date_reported" string="Reported On"/>
+            <field name="driver_id"/>
             <field name="status"/>
             <field name="severity"/>
           </group>
