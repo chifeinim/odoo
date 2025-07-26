@@ -26,6 +26,9 @@
     ],
     'assets': {
         'web.assets_backend': [
+            'mail/static/src/js/messaging.js',
+            'mail/static/src/js/discuss/discuss.js',
+            'mail/static/src/js/widgets/chatter.js',
             'fleet_partner_dashboard/static/src/lib/chart.umd.min.js',
             'fleet_partner_dashboard/static/src/js/dashboard/driver_dashboard.js',
             'fleet_partner_dashboard/static/src/js/dashboard/performance_dashboard.js',

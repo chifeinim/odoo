@@ -1,10 +1,9 @@
-from odoo import models, fields, api
+from odoo import models, fields, api, _
 
 class FleetIncidentIssue(models.Model):
     _name = 'x_fleet_incident_issue'
     _description = 'Incident Issue'
     _inherit = ['mail.thread', 'mail.activity.mixin']
-    # Use the category as the “name” of each Issue record
     _rec_name = 'display_name'
     _order = 'id desc'
 
@@ -51,3 +50,34 @@ class FleetIncidentIssue(models.Model):
     def _compute_color(self):
         for rec in self:
             rec.color = 1 if rec.severity == 'can_work' else 2
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        issues = super().create(vals_list)
+        for issue in issues:
+            # Log creation on the parent Incident
+            issue.incident_id.message_post(
+                body=_("New issue <b>%s</b> created with status <b>%s</b>") % (
+                    issue.display_name, issue.status))
+        return issues
+
+    def write(self, vals):
+        # Store old values
+        old = {
+            issue.id: (issue.status, issue.severity)
+            for issue in self
+        }
+        result = super().write(vals)
+        for issue in self:
+            old_status, old_sev = old[issue.id]
+            # If status changed, log it
+            if 'status' in vals and issue.status != old_status:
+                issue.incident_id.message_post(
+                    body=_("Issue <b>%s</b> status changed from <b>%s</b> to <b>%s</b>") % (
+                        issue.display_name, old_status, issue.status))
+            # If severity changed, log it
+            if 'severity' in vals and issue.severity != old_sev:
+                issue.incident_id.message_post(
+                    body=_("Issue <b>%s</b> severity changed from <b>%s</b> to <b>%s</b>") % (
+                        issue.display_name, old_sev, issue.severity))
+        return result

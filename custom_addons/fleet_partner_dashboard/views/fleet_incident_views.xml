@@ -1,5 +1,4 @@
 <odoo>
-  <!-- Incident Form View -->
   <record id="view_x_fleet_incident_form" model="ir.ui.view">
     <field name="name">x_fleet_incident.form</field>
     <field name="model">x_fleet_incident</field>
@@ -8,7 +7,7 @@
       <form string="Incident">
         <sheet>
           <group>
-            <field name="name" string="Incident ID"/>
+            <field name="name"         string="Incident ID"/>
             <field name="date_reported" string="Reported On"/>
             <field name="driver_id"/>
             <field name="status"/>
@@ -16,12 +15,10 @@
           </group>
           <notebook>
             <page string="Issues">
-              <!-- Here is the updated one2many: -->
               <field name="issue_ids"
                      mode="tree,form"
                      context="{'default_incident_id': active_id}"
                      string="Issues">
-                <!-- Tree view no longer editable inline -->
                 <tree string="Issues" color="color"
                       decoration-danger="severity=='cant_work'"
                       decoration-warning="severity=='can_work'">
@@ -31,7 +28,6 @@
                   <field name="status"/>
                   <field name="severity"/>
                 </tree>
-                <!-- Form view will open in a popup -->
                 <form string="Issue">
                   <sheet>
                     <group>
@@ -47,14 +43,13 @@
                       <field name="severity"/>
                     </group>
                   </sheet>
-                  <!-- chatter for logging -->
-                  <div class="oe_chatter"/>
                 </form>
               </field>
             </page>
           </notebook>
-          <div class="oe_chatter"/>
         </sheet>
+        <!-- 2) Chatter placeholder: renders messages (and followers count) -->
+        <div class="oe_chatter"/>
       </form>
     </field>
   </record>
