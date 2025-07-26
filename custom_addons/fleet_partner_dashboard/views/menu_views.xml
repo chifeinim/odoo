@@ -89,6 +89,12 @@
             action="action_x_fleet_incident"
             sequence="10"/>
 
+<menuitem id="menu_fleet_incident_issue"
+            name="Issues"
+            parent="menu_fleet_incident_root"
+            action="action_x_fleet_incident_issue"
+            sequence="50"/>
+
   <menuitem id="menu_fleet_incident_category"
             name="Categories"
             parent="menu_fleet_incident_root"

@@ -3,6 +3,7 @@ from odoo import models, fields, api
 class FleetIncidentIssue(models.Model):
     _name = 'x_fleet_incident_issue'
     _description = 'Incident Issue'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'id desc'
 
     incident_id = fields.Many2one(

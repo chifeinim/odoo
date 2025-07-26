@@ -15,27 +15,39 @@
           </group>
           <notebook>
             <page string="Issues">
-              <field name="issue_ids">
-                <!-- Inline tree for the one2many -->
-                <tree string="Issues" editable="bottom" decoration-danger="severity=='cant_work'" decoration-warning="severity=='can_work'">
+              <!-- Here is the updated one2many: -->
+              <field name="issue_ids"
+                     mode="tree,form"
+                     context="{'default_incident_id': active_id}"
+                     string="Issues">
+                <!-- Tree view no longer editable inline -->
+                <tree string="Issues" color="color"
+                      decoration-danger="severity=='cant_work'"
+                      decoration-warning="severity=='can_work'">
                   <field name="category_id"/>
                   <field name="subcategory_id"/>
                   <field name="subsub_id"/>
                   <field name="status"/>
                   <field name="severity"/>
                 </tree>
-                <!-- Inline form for new/edit -->
+                <!-- Form view will open in a popup -->
                 <form string="Issue">
                   <sheet>
                     <group>
                       <field name="category_id"/>
                       <field name="subcategory_id"/>
                       <field name="subsub_id"/>
+                    </group>
+                    <group>
                       <field name="description"/>
+                    </group>
+                    <group>
                       <field name="status"/>
                       <field name="severity"/>
                     </group>
                   </sheet>
+                  <!-- chatter for logging -->
+                  <div class="oe_chatter"/>
                 </form>
               </field>
             </page>
