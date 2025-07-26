@@ -8,6 +8,7 @@
     'depends': ['base', 'mail', 'web',],
     'data': [
         'data/sequence.xml',
+        'data/ir_sequence.xml',
         'security/ir.model.access.csv',
         'views/fleet_driver_views.xml',
         'views/fleet_order_views.xml',
@@ -16,6 +17,10 @@
         'views/driver_issue_tag_views.xml',
         'views/driver_dashboard.xml',
         'views/driver_supply_hours_views.xml',
+        'views/fleet_incident_views.xml',
+        'views/issue_category_views.xml',
+        'views/issue_subcategory_views.xml',
+        'views/issue_subsubcategory_views.xml',
         'views/menu_views.xml',
     ],
     'assets': {

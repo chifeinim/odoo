@@ -1,0 +1,75 @@
+<odoo>
+  <!-- Incident Form View -->
+  <record id="view_x_fleet_incident_form" model="ir.ui.view">
+    <field name="name">x_fleet_incident.form</field>
+    <field name="model">x_fleet_incident</field>
+    <field name="priority" eval="16"/>
+    <field name="arch" type="xml">
+      <form string="Incident">
+        <sheet>
+          <group>
+            <field name="name" string="Incident ID"/>
+            <field name="date_reported" string="Reported On"/>
+            <field name="status"/>
+            <field name="severity"/>
+          </group>
+          <notebook>
+            <page string="Issues">
+              <field name="issue_ids">
+                <!-- Inline tree for the one2many -->
+                <tree string="Issues" editable="bottom" decoration-danger="severity=='cant_work'" decoration-warning="severity=='can_work'">
+                  <field name="category_id"/>
+                  <field name="subcategory_id"/>
+                  <field name="subsub_id"/>
+                  <field name="status"/>
+                  <field name="severity"/>
+                </tree>
+                <!-- Inline form for new/edit -->
+                <form string="Issue">
+                  <sheet>
+                    <group>
+                      <field name="category_id"/>
+                      <field name="subcategory_id"/>
+                      <field name="subsub_id"/>
+                      <field name="description"/>
+                      <field name="status"/>
+                      <field name="severity"/>
+                    </group>
+                  </sheet>
+                </form>
+              </field>
+            </page>
+          </notebook>
+          <div class="oe_chatter"/>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <!-- Incident List (Tree) View -->
+  <record id="view_x_fleet_incident_tree" model="ir.ui.view">
+    <field name="name">x_fleet_incident.tree</field>
+    <field name="model">x_fleet_incident</field>
+    <field name="priority" eval="15"/>
+    <field name="arch" type="xml">
+      <tree string="Incidents" default_order="date_reported desc" decoration-danger="severity=='cant_work'" decoration-warning="severity=='can_work'">
+        <field name="name"/>
+        <field name="date_reported"/>
+        <field name="status"/>
+        <field name="severity"/>
+      </tree>
+    </field>
+  </record>
+
+  <!-- Action to hook into your menu -->
+  <record id="action_x_fleet_incident" model="ir.actions.act_window">
+    <field name="name">Incidents</field>
+    <field name="res_model">x_fleet_incident</field>
+    <field name="view_mode">tree,form</field>
+    <field name="help" type="html">
+      <p class="oe_view_nocontent_create">
+        Click “Create” to log your first Incident.
+      </p>
+    </field>
+  </record>
+</odoo>

@@ -1,77 +1,109 @@
 <odoo>
-<!-- Root Menu -->
-    <menuitem id="menu_fleet_dashboard_root"
-          name="Fleet Dashboard"
-          action="action_fleet_driver"
-          sequence="10"/>
+  <!-- Root Menu -->
+  <menuitem id="menu_fleet_dashboard_root"
+            name="Fleet Dashboard"
+            action="action_fleet_driver"
+            sequence="10"/>
 
-    <!-- Drivers Menu -->
-    <menuitem id="menu_fleet_driver" name="Drivers"
-              parent="menu_fleet_dashboard_root"
-              action="action_fleet_driver"/>
+  <!-- Drivers Menu -->
+  <menuitem id="menu_fleet_driver"
+            name="Drivers"
+            parent="menu_fleet_dashboard_root"
+            action="action_fleet_driver"/>
 
-    <!-- Orders Menu -->
-    <menuitem id="menu_fleet_order" name="Orders"
-              parent="menu_fleet_dashboard_root"
-              action="action_fleet_order"/>
+  <!-- Orders Menu -->
+  <menuitem id="menu_fleet_order"
+            name="Orders"
+            parent="menu_fleet_dashboard_root"
+            action="action_fleet_order"/>
 
-    <!-- Supply Hours -->
-    <menuitem id="menu_driver_supply_hours"
-              name="Supply Hours"
-              parent="menu_fleet_dashboard_root"
-              action="action_driver_supply_hours"
-              sequence="17"/>
+  <!-- Supply Hours -->
+  <menuitem id="menu_driver_supply_hours"
+            name="Supply Hours"
+            parent="menu_fleet_dashboard_root"
+            action="action_driver_supply_hours"
+            sequence="17"/>
 
-    <!-- Product Types Menu -->
-    <menuitem id="menu_fleet_product_type" name="Product Types"
-              parent="menu_fleet_dashboard_root"
-              action="action_fleet_product_type"/>
+  <!-- Product Types Menu -->
+  <menuitem id="menu_fleet_product_type"
+            name="Product Types"
+            parent="menu_fleet_dashboard_root"
+            action="action_fleet_product_type"/>
 
-    <!-- Driver Issues (parent tab, no action) -->
-    <menuitem id="menu_fleet_driver_issue"
-              name="Driver Issues"
-              parent="menu_fleet_dashboard_root"
-              sequence="30"/> <!-- No action here -->
+  <!-- Driver Issues (parent tab, no action) -->
+  <menuitem id="menu_fleet_driver_issue"
+            name="Driver Issues"
+            parent="menu_fleet_dashboard_root"
+            sequence="30"/>
 
-    <!-- Issues (child of Driver Issues) -->
-    <menuitem id="menu_fleet_driver_issue_issues"
-              name="Issues"
-              parent="menu_fleet_driver_issue"
-              action="action_fleet_driver_issue"
-              sequence="10"/>
+  <!-- Issues (child of Driver Issues) -->
+  <menuitem id="menu_fleet_driver_issue_issues"
+            name="Issues"
+            parent="menu_fleet_driver_issue"
+            action="action_fleet_driver_issue"
+            sequence="10"/>
 
-    <!-- Issue Tags (child of Driver Issues) -->
-    <menuitem id="menu_fleet_driver_issue_tags"
-              name="Issue Tags"
-              parent="menu_fleet_driver_issue"
-              action="action_driver_issue_tags"
-              sequence="20"/>
+  <!-- Issue Tags (child of Driver Issues) -->
+  <menuitem id="menu_fleet_driver_issue_tags"
+            name="Issue Tags"
+            parent="menu_fleet_driver_issue"
+            action="action_driver_issue_tags"
+            sequence="20"/>
 
-    <!-- Action to open OWL page -->
-    <record id="action_fleet_dashboard_webpage" model="ir.actions.act_url">
-        <field name="name">Fleet Dashboard</field>
-        <field name="url">/fleet_partner_dashboard</field>
-        <field name="target">self</field>
-    </record>
+  <!-- OWL Dashboard URL action -->
+  <record id="action_fleet_dashboard_webpage" model="ir.actions.act_url">
+    <field name="name">Fleet Dashboard</field>
+    <field name="url">/fleet_partner_dashboard</field>
+    <field name="target">self</field>
+  </record>
 
-    <!-- Dashboard Menu (Parent already exists) -->
-    <menuitem id="menu_fleet_dashboard_page"
-              name="Dashboards"
-              parent="menu_fleet_dashboard_root"
-              sequence="1"
-              action="action_fleet_dashboard_webpage"/>
+  <!-- Dashboards Menu -->
+  <menuitem id="menu_fleet_dashboard_page"
+            name="Dashboards"
+            parent="menu_fleet_dashboard_root"
+            sequence="1"
+            action="action_fleet_dashboard_webpage"/>
+  <menuitem id="menu_fleet_driver_dashboard"
+            name="Support Dashboard"
+            parent="menu_fleet_dashboard_page"
+            sequence="10"
+            action="action_owl_driver_dashboard"/>
+  <menuitem id="menu_performance_dashboard"
+            name="Performance Dashboard"
+            parent="menu_fleet_dashboard_page"
+            sequence="20"
+            action="action_performance_dashboard"/>
 
-    <menuitem id="menu_fleet_driver_dashboard"
-          name="Support Dashboard"
-          parent="menu_fleet_dashboard_page"
-          sequence="10"
-          action="action_owl_driver_dashboard"/>
+  <!-- ==================================== -->
+  <!-- Incidents Menu under Fleet Dashboard -->
+  <!-- ==================================== -->
 
-    <menuitem id="menu_performance_dashboard"
-          name="Performance Dashboard"
-          parent="menu_fleet_dashboard_page"
-          action="action_performance_dashboard"
-          sequence="20"/>
+  <menuitem id="menu_fleet_incident_root"
+            name="Incidents"
+            parent="menu_fleet_dashboard_root"
+            sequence="40"/>
 
+  <menuitem id="menu_fleet_incident"
+            name="All Incidents"
+            parent="menu_fleet_incident_root"
+            action="action_x_fleet_incident"
+            sequence="10"/>
 
+  <menuitem id="menu_fleet_incident_category"
+            name="Categories"
+            parent="menu_fleet_incident_root"
+            action="action_x_fleet_incident_category"
+            sequence="20"/>
+
+  <menuitem id="menu_fleet_incident_subcategory"
+            name="Sub‑Categories"
+            parent="menu_fleet_incident_root"
+            action="action_x_fleet_incident_subcategory"
+            sequence="30"/>
+
+  <menuitem id="menu_fleet_incident_subsubcategory"
+            name="Sub‑Sub‑Categories"
+            parent="menu_fleet_incident_root"
+            action="action_x_fleet_incident_subsubcategory"
+            sequence="40"/>
 </odoo>

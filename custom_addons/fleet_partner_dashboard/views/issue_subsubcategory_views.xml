@@ -1,0 +1,38 @@
+<odoo>
+  <record id="view_x_fleet_incident_subsubcategory_tree" model="ir.ui.view">
+    <field name="name">x_fleet_incident_subsubcategory.tree</field>
+    <field name="model">x_fleet_incident_subsubcategory</field>
+    <field name="arch" type="xml">
+      <tree string="Sub‑Sub‑Categories">
+        <field name="name"/>
+        <field name="subcategory_id"/>
+      </tree>
+    </field>
+  </record>
+
+  <record id="view_x_fleet_incident_subsubcategory_form" model="ir.ui.view">
+    <field name="name">x_fleet_incident_subsubcategory.form</field>
+    <field name="model">x_fleet_incident_subsubcategory</field>
+    <field name="arch" type="xml">
+      <form string="Sub‑Sub‑Category">
+        <sheet>
+          <group>
+            <field name="subcategory_id"/>
+            <field name="name"/>
+          </group>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <record id="action_x_fleet_incident_subsubcategory" model="ir.actions.act_window">
+    <field name="name">Sub‑Sub‑Categories</field>
+    <field name="res_model">x_fleet_incident_subsubcategory</field>
+    <field name="view_mode">tree,form</field>
+    <field name="help" type="html">
+      <p class="oe_view_nocontent_create">
+        Create your first sub‑sub‑category
+      </p>
+    </field>
+  </record>
+</odoo>

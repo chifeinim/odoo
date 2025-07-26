@@ -1,0 +1,8 @@
+<odoo>
+  <record id="seq_x_fleet_incident" model="ir.sequence">
+    <field name="name">Fleet Incident</field>
+    <field name="code">x_fleet_incident</field>
+    <field name="padding">5</field>
+    <field name="prefix">INC</field>
+  </record>
+</odoo>

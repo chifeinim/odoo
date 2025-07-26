@@ -1,0 +1,36 @@
+<odoo>
+  <record id="view_x_fleet_incident_category_tree" model="ir.ui.view">
+    <field name="name">x_fleet_incident_category.tree</field>
+    <field name="model">x_fleet_incident_category</field>
+    <field name="arch" type="xml">
+      <tree string="Categories">
+        <field name="name"/>
+      </tree>
+    </field>
+  </record>
+
+  <record id="view_x_fleet_incident_category_form" model="ir.ui.view">
+    <field name="name">x_fleet_incident_category.form</field>
+    <field name="model">x_fleet_incident_category</field>
+    <field name="arch" type="xml">
+      <form string="Category">
+        <sheet>
+          <group>
+            <field name="name"/>
+          </group>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <record id="action_x_fleet_incident_category" model="ir.actions.act_window">
+    <field name="name">Categories</field>
+    <field name="res_model">x_fleet_incident_category</field>
+    <field name="view_mode">tree,form</field>
+    <field name="help" type="html">
+      <p class="oe_view_nocontent_create">
+        Create your first category
+      </p>
+    </field>
+  </record>
+</odoo>
