@@ -4,6 +4,33 @@ from odoo.http import request
 from datetime import date, datetime, timedelta
 import calendar, json
 
+def _parse_events(o):
+    evs = o.events or '[]'
+    if isinstance(evs, str):
+        try:
+            evs = json.loads(evs)
+        except ValueError:
+            evs = []
+    return [e for e in evs if isinstance(e, dict)]
+
+def _order_statuses(o):
+    return {e.get('order_status') for e in _parse_events(o)}
+
+def _transport_seconds(o):
+    """If there’s a transporting→(complete|cancelled) pair, return the  
+       seconds between them, else 0."""
+    evs = _parse_events(o)
+    if 'transporting' not in _order_statuses(o):
+        return 0.0
+    t0 = next((e['event_at'] for e in evs if e['order_status']=='transporting'), None)
+    terminal = 'complete' if any(e['order_status']=='complete' for e in evs) else 'cancelled'
+    t1 = next((e['event_at'] for e in evs if e['order_status']==terminal), None)
+    if not (t0 and t1):
+        return 0.0
+    d0 = datetime.fromisoformat(t0.replace('Z','+00:00'))
+    d1 = datetime.fromisoformat(t1.replace('Z','+00:00'))
+    return (d1 - d0).total_seconds()
+
 class FleetDashboardController(http.Controller):
 
     @http.route('/fleet_partner_dashboard/data', type='json', auth='user')
@@ -516,52 +543,28 @@ class FleetDashboardController(http.Controller):
                 
                 # Efficiency % via events JSON
                 bucket_eff_secs = 0.0
+                bucket_orders    = 0
+                bucket_accepts   = 0
+
                 for drv in filtered_drivers:
-                    for o in drv.order_ids.filtered(
-                        lambda o: o.order_date and start_b <= o.order_date.date() <= end_b
-                    ):
-                        # load events list
-                        evs = o.events or '[]'
-                        if isinstance(evs, str):
-                            try:
-                                evs = json.loads(evs)
-                            except ValueError:
-                                evs = []
-                        # did we transport?
-                        if any(e.get('order_status') == 'transporting' for e in evs if isinstance(e, dict)):
-                            t0 = next((e['event_at'] for e in evs
-                                    if e.get('order_status') == 'transporting'), None)
-                            # prefer complete over cancelled
-                            terminal = 'complete' if any(e.get('order_status') == 'complete' for e in evs) else 'cancelled'
-                            t1 = next((e['event_at'] for e in evs
-                                    if e.get('order_status') == terminal), None)
-                            if t0 and t1:
-                                dt0 = datetime.fromisoformat(t0.replace('Z','+00:00'))
-                                dt1 = datetime.fromisoformat(t1.replace('Z','+00:00'))
-                                bucket_eff_secs += (dt1 - dt0).total_seconds()
-                bucket_supply_h = series_supply[-1]['value']
-                eff_pct = (bucket_eff_secs/3600.0 / bucket_supply_h * 100.0) if bucket_supply_h else 0.0
-                series_efficiency.append({'period': label, 'value': eff_pct})
-                
-                # Acceptance % via events JSON
-                bucket_orders = 0
-                bucket_accepts = 0
-                for drv in filtered_drivers:
-                    for o in drv.order_ids.filtered(
-                        lambda o: o.order_date and start_b <= o.order_date.date() <= end_b
-                    ):
+                    for o in drv.order_ids.filtered(lambda o:
+                            o.order_date and start_b <= o.order_date.date() <= end_b):
                         bucket_orders += 1
-                        evs = o.events or '[]'
-                        if isinstance(evs, str):
-                            try:
-                                evs = json.loads(evs)
-                            except ValueError:
-                                evs = []
-                        statuses = {e.get('order_status') for e in evs if isinstance(e, dict)}
-                        if statuses & {'driving', 'waiting', 'transporting'}:
+                        sts = _order_statuses(o)
+                        if sts & {'driving','waiting','transporting'}:
                             bucket_accepts += 1
-                rate = (bucket_accepts / bucket_orders * 100.0) if bucket_orders else 0.0
-                series_acceptanceRate.append({'period': label, 'value': rate})
+                        bucket_eff_secs += _transport_seconds(o)
+
+                # now compute the two rates
+                series_efficiency.append({
+                    'period': label,
+                    'value': (bucket_eff_secs/3600.0 / series_supply[-1]['value'] * 100.0)
+                            if series_supply[-1]['value'] else 0.0
+                })
+                series_acceptanceRate.append({
+                    'period': label,
+                    'value': (bucket_accepts / bucket_orders * 100.0) if bucket_orders else 0.0
+                })
                 
                 # Completed to Request %
                 completed_to_request = (trips / bucket_orders * 100) if bucket_orders else 0.0
@@ -612,42 +615,14 @@ class FleetDashboardController(http.Controller):
                          .sudo().search(sh_dom).mapped('seconds')
             hours = sum(secs) / 3600.0
             
-            eff_secs = 0.0
-            for o in orders:
-                evs = o.events or '[]'
-                if isinstance(evs, str):
-                    try:
-                        evs = json.loads(evs)
-                    except ValueError:
-                        evs = []
-                statuses = {e.get('order_status') for e in evs if isinstance(e, dict)}
-                if 'transporting' in statuses:
-                    t0 = next((e['event_at'] for e in evs
-                            if e.get('order_status') == 'transporting'), None)
-                    terminal = ('complete' if 'complete' in statuses
-                                else 'cancelled' if 'cancelled' in statuses
-                                else None)
-                    t1 = next((e['event_at'] for e in evs
-                            if e.get('order_status') == terminal), None)
-                    if t0 and t1:
-                        dt0 = datetime.fromisoformat(t0.replace('Z','+00:00'))
-                        dt1 = datetime.fromisoformat(t1.replace('Z','+00:00'))
-                        eff_secs += (dt1 - dt0).total_seconds()
-            efficiency = (eff_secs / 3600.0 / hours * 100.0) if hours else 0.0
-            
-            accepted = 0
-            for o in orders:
-                evs = o.events or '[]'
-                if isinstance(evs, str):
-                    try:
-                        evs = json.loads(evs)
-                    except ValueError:
-                        evs = []
-                statuses = {e.get('order_status') for e in evs if isinstance(e, dict)}
-                if statuses & {'driving', 'waiting', 'transporting'}:
-                    accepted += 1
+            # event‑based acceptance
+            accepted = sum(1 for o in orders if _order_statuses(o) & {'driving','waiting','transporting'})
             total_orders = len(orders)
-            accept_rate = (accepted / total_orders * 100.0) if total_orders else 0.0
+            accept_rate  = (accepted / total_orders * 100.0) if total_orders else 0.0
+
+            # event‑based efficiency
+            eff_secs     = sum(_transport_seconds(o) for o in orders)
+            efficiency   = (eff_secs/3600.0 / hours * 100.0) if hours else 0.0
 
             data[drv.id] = {
                 'id':             drv.id,
