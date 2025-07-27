@@ -1,23 +1,21 @@
 <odoo>
-  <!-- Issue List (Tree) View -->
   <record id="view_x_fleet_issue_tree" model="ir.ui.view">
     <field name="name">x_fleet_issue.tree</field>
     <field name="model">x_fleet_issue</field>
     <field name="arch" type="xml">
-      <!-- Must have a string attribute, no other extra attrs on <tree> -->
       <tree string="Issues">
         <field name="name"/>
         <field name="date_reported"/>
         <field name="driver_id"/>
         <field name="category_id"/>
         <field name="subcategory_id"/>
+        <field name="subsub_id"/>
         <field name="status"/>
         <field name="severity"/>
       </tree>
     </field>
   </record>
 
-  <!-- Issue Form View -->
   <record id="view_x_fleet_issue_form" model="ir.ui.view">
     <field name="name">x_fleet_issue.form</field>
     <field name="model">x_fleet_issue</field>
@@ -29,21 +27,30 @@
             <field name="date_reported" readonly="1"/>
             <field name="driver_id"/>
           </group>
-          <group>
-            <field name="category_id"/>
-            <field name="subcategory_id"/>
-            <field name="subsub_id"/>
+          <group string="Classification">
+            <!-- only top‑level categories -->
+            <field name="category_id"
+                   domain="[('parent_id','=', False)]"
+                   options="{'no_create': True}"/>
+            <!-- only children of category_id -->
+            <field name="subcategory_id"
+                   domain="[('parent_id','=', category_id)]"
+                   options="{'no_create': True}"/>
+            <!-- only children of subcategory_id -->
+            <field name="subsub_id"
+                   domain="[('parent_id','=', subcategory_id)]"
+                   options="{'no_create': True}"/>
           </group>
           <group>
             <field name="status"/>
             <field name="severity"/>
           </group>
         </sheet>
+        <div class="oe_chatter"/>
       </form>
     </field>
   </record>
 
-  <!-- Action -->
   <record id="action_x_fleet_issue" model="ir.actions.act_window">
     <field name="name">Issues</field>
     <field name="res_model">x_fleet_issue</field>

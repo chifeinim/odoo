@@ -22,17 +22,17 @@ class FleetIssue(models.Model):
         ondelete='cascade')
 
     category_id = fields.Many2one(
-        'x_fleet_incident_category',
-        string="Category",
-        required=True)
+        'x_fleet_issue_category', string="Category", required=True,
+        domain="[('parent_id','=', False)]",
+        help="Top‑level category")
     subcategory_id = fields.Many2one(
-        'x_fleet_incident_subcategory',
-        string="Sub‑Category",
-        domain="[('category_id','=', category_id)]")
+        'x_fleet_issue_category', string="Sub‑Category",
+        domain="[('parent_id','=', category_id)]",
+        help="Child of the selected Category")
     subsub_id = fields.Many2one(
-        'x_fleet_incident_subsubcategory',
-        string="Sub‑Sub‑Category",
-        domain="[('subcategory_id','=', subcategory_id)]")
+        'x_fleet_issue_category', string="Sub‑Sub‑Category",
+        domain="[('parent_id','=', subcategory_id)]",
+        help="Child of the selected Sub‑Category")
 
     status = fields.Selection([
         ('unresolved', 'Unresolved'),

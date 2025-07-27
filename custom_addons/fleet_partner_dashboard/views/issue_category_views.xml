@@ -1,36 +1,47 @@
 <odoo>
-  <record id="view_x_fleet_incident_category_tree" model="ir.ui.view">
-    <field name="name">x_fleet_incident_category.tree</field>
-    <field name="model">x_fleet_incident_category</field>
+  <!-- Category Tree View -->
+  <record id="view_x_fleet_issue_category_tree" model="ir.ui.view">
+    <field name="name">x_fleet_issue_category.tree</field>
+    <field name="model">x_fleet_issue_category</field>
     <field name="arch" type="xml">
-      <tree string="Categories">
+      <tree string="Issue Categories" editable="bottom">
         <field name="name"/>
+        <field name="parent_id"/>
       </tree>
     </field>
   </record>
 
-  <record id="view_x_fleet_incident_category_form" model="ir.ui.view">
-    <field name="name">x_fleet_incident_category.form</field>
-    <field name="model">x_fleet_incident_category</field>
+  <!-- Category Form View -->
+  <record id="view_x_fleet_issue_form" model="ir.ui.view">
+    <field name="name">x_fleet_issue.form</field>
+    <field name="model">x_fleet_issue</field>
     <field name="arch" type="xml">
-      <form string="Category">
+      <form string="Issue">
         <sheet>
           <group>
-            <field name="name"/>
+            <field name="name" readonly="1"/>
+            <field name="date_reported" readonly="1"/>
+            <field name="driver_id"/>
+          </group>
+          <group string="Classification">
+            <field name="category_id" options="{'no_create': True}"/>
+            <field name="subcategory_id" options="{'no_create': True}"/>
+            <field name="subsub_id"     options="{'no_create': True}"/>
+          </group>
+          <group>
+            <field name="status"/>
+            <field name="severity"/>
           </group>
         </sheet>
+        <div class="oe_chatter"/>
       </form>
     </field>
   </record>
 
-  <record id="action_x_fleet_incident_category" model="ir.actions.act_window">
+  <!-- Category Action -->
+  <record id="action_x_fleet_issue_category" model="ir.actions.act_window">
     <field name="name">Categories</field>
-    <field name="res_model">x_fleet_incident_category</field>
+    <field name="res_model">x_fleet_issue_category</field>
     <field name="view_mode">tree,form</field>
-    <field name="help" type="html">
-      <p class="oe_view_nocontent_create">
-        Create your first category
-      </p>
-    </field>
   </record>
 </odoo>
