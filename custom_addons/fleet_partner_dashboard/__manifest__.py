@@ -17,7 +17,6 @@
         'views/driver_issue_tag_views.xml',
         'views/driver_dashboard.xml',
         'views/driver_supply_hours_views.xml',
-        'views/fleet_incident_views.xml',
         'views/issue_views.xml',
         'views/issue_category_views.xml',
         'views/issue_subcategory_views.xml',

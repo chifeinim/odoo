@@ -1,11 +1,16 @@
 <odoo>
   <!-- Issue List (Tree) View -->
-  <record id="view_x_fleet_incident_issue_tree" model="ir.ui.view">
-    <field name="name">x_fleet_incident_issue.tree</field>
-    <field name="model">x_fleet_incident_issue</field>
+  <record id="view_x_fleet_issue_tree" model="ir.ui.view">
+    <field name="name">x_fleet_issue.tree</field>
+    <field name="model">x_fleet_issue</field>
     <field name="arch" type="xml">
+      <!-- Must have a string attribute, no other extra attrs on <tree> -->
       <tree string="Issues">
-        <field name="display_name"/>
+        <field name="name"/>
+        <field name="date_reported"/>
+        <field name="driver_id"/>
+        <field name="category_id"/>
+        <field name="subcategory_id"/>
         <field name="status"/>
         <field name="severity"/>
       </tree>
@@ -13,34 +18,35 @@
   </record>
 
   <!-- Issue Form View -->
-  <record id="view_x_fleet_incident_issue_form" model="ir.ui.view">
-    <field name="name">x_fleet_incident_issue.form</field>
-    <field name="model">x_fleet_incident_issue</field>
+  <record id="view_x_fleet_issue_form" model="ir.ui.view">
+    <field name="name">x_fleet_issue.form</field>
+    <field name="model">x_fleet_issue</field>
     <field name="arch" type="xml">
       <form string="Issue">
         <sheet>
           <group>
-            <field name="incident_id" readonly="1"/>
+            <field name="name" readonly="1"/>
+            <field name="date_reported" readonly="1"/>
+            <field name="driver_id"/>
+          </group>
+          <group>
             <field name="category_id"/>
             <field name="subcategory_id"/>
             <field name="subsub_id"/>
           </group>
-          <field name="description"/>
           <group>
             <field name="status"/>
             <field name="severity"/>
           </group>
         </sheet>
-        <!-- This is the chatter panel -->
-        <div class="oe_chatter"/>
       </form>
     </field>
   </record>
-  
+
   <!-- Action -->
-  <record id="action_x_fleet_incident_issue" model="ir.actions.act_window">
+  <record id="action_x_fleet_issue" model="ir.actions.act_window">
     <field name="name">Issues</field>
-    <field name="res_model">x_fleet_incident_issue</field>
+    <field name="res_model">x_fleet_issue</field>
     <field name="view_mode">tree,form</field>
   </record>
 </odoo>

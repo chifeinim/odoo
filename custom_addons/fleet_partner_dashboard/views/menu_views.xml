@@ -75,41 +75,36 @@
             action="action_performance_dashboard"/>
 
   <!-- ==================================== -->
-  <!-- Incidents Menu under Fleet Dashboard -->
+  <!-- Issues Menu under Fleet Dashboard -->
   <!-- ==================================== -->
 
-  <menuitem id="menu_fleet_incident_root"
-            name="Incidents"
+  <menuitem id="menu_fleet_issue_root"
+            name="Issues"
             parent="menu_fleet_dashboard_root"
             sequence="40"/>
 
-  <menuitem id="menu_fleet_incident"
-            name="All Incidents"
-            parent="menu_fleet_incident_root"
-            action="action_x_fleet_incident"
+  <menuitem id="menu_fleet_issue"
+            name="All Issues"
+            parent="menu_fleet_issue_root"
+            action="action_x_fleet_issue"
             sequence="10"/>
 
-<menuitem id="menu_fleet_incident_issue"
-            name="Issues"
-            parent="menu_fleet_incident_root"
-            action="action_x_fleet_incident_issue"
-            sequence="50"/>
-
-  <menuitem id="menu_fleet_incident_category"
+  <!-- Categories under Issues -->
+  <menuitem id="menu_fleet_issue_category"
             name="Categories"
-            parent="menu_fleet_incident_root"
+            parent="menu_fleet_issue_root"
             action="action_x_fleet_incident_category"
             sequence="20"/>
 
-  <menuitem id="menu_fleet_incident_subcategory"
+  <menuitem id="menu_fleet_issue_subcategory"
             name="Sub‑Categories"
-            parent="menu_fleet_incident_root"
+            parent="menu_fleet_issue_root"
             action="action_x_fleet_incident_subcategory"
             sequence="30"/>
 
-  <menuitem id="menu_fleet_incident_subsubcategory"
+  <menuitem id="menu_fleet_issue_subsubcategory"
             name="Sub‑Sub‑Categories"
-            parent="menu_fleet_incident_root"
+            parent="menu_fleet_issue_root"
             action="action_x_fleet_incident_subsubcategory"
             sequence="40"/>
 </odoo>
