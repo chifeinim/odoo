@@ -5,4 +5,3 @@ from . import product_type
 from . import driver_issue_tag
 from . import driver_supply_hours
 from . import issue
-from . import issue_category

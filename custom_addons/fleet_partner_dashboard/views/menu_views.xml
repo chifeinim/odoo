@@ -67,22 +67,10 @@
             parent="menu_fleet_dashboard_page"
             sequence="20"
             action="action_performance_dashboard"/>
-
-  <!--      Simplified “Issues” Menu        -->
-  <menuitem id="menu_fleet_issue_root"
+  <menuitem id="menu_fleet_issue"
             name="Issues"
             parent="menu_fleet_dashboard_root"
+            action="action_x_fleet_issue"
             sequence="40"/>
 
-  <menuitem id="menu_fleet_issue"
-            name="All Issues"
-            parent="menu_fleet_issue_root"
-            action="action_x_fleet_issue"
-            sequence="10"/>
-
-  <menuitem id="menu_fleet_issue_category"
-            name="Categories"
-            parent="menu_fleet_issue_root"
-            action="action_x_fleet_issue_category"
-            sequence="20"/>
 </odoo>
