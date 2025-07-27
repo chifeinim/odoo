@@ -4,7 +4,11 @@
     <field name="name">x_fleet_issue.tree</field>
     <field name="model">x_fleet_issue</field>
     <field name="arch" type="xml">
-      <tree string="Issues">
+      <tree string="Issues"
+            decoration-danger="color==2"
+            decoration-warning="color==1"
+            decoration-success="color==3">
+        <field name="color" invisible="1"/>
         <field name="name"/>
         <field name="date_reported"/>
         <field name="driver_id"/>
