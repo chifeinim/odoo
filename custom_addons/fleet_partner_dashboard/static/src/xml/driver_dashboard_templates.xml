@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
   <t t-name="owl.OwlDriverDashboard" owl="1">
-    <!-- single root, with a static key -->
     <div t-key="'owl_driver_dashboard_root'" class="o_fleet_dashboard">
-      <!-- loading / error -->
       <t t-if="state.loading">
         <div>Loading…</div>
       </t>
@@ -12,45 +10,40 @@
           <t t-esc="state.error.message || state.error"/>
         </div>
       </t>
-
-      <!-- main content -->
       <t t-else="">
-        <!-- TAG-FILTER DROPDOWN -->
+        <!-- CATEGORY FILTER DROPDOWN -->
         <div class="dropdown mb-3" t-att-class="{'show': state.dropdownOpen}">
           <button
             type="button"
             class="btn btn-primary dropdown-toggle"
             t-on-click="toggleDropdown">
-            Filter by issue type
-            <t t-if="state.selectedTags.length">
-              (<t t-esc="state.selectedTags.length"/>)
+            Filter by main category
+            <t t-if="state.selectedCats.length">
+              (<t t-esc="state.selectedCats.length"/>)
             </t>
           </button>
           <div
             class="dropdown-menu p-2"
             t-att-class="{'show': state.dropdownOpen}"
             style="max-height:200px; overflow:auto;">
-            <t
-              t-foreach="state.tagsSummary"
-              t-as="tag"
-              t-key="tag.name">
+            <t t-foreach="state.catsSummary" t-as="cat" t-key="cat.name">
               <button
                 type="button"
                 class="dropdown-item"
-                t-att-class="{'active': state.selectedTags.includes(tag.name)}"
-                t-on-click="toggleTag(tag.name)">
-                <t t-esc="tag.name"/>
+                t-att-class="{'active': state.selectedCats.includes(cat.name)}"
+                t-on-click="toggleCategory(cat.name)">
+                <t t-esc="cat.name"/>
               </button>
             </t>
           </div>
         </div>
 
-        <!-- TAG-SUMMARY TABLE -->
-        <h2>Issues by Tag</h2>
+        <!-- CATEGORY SUMMARY TABLE -->
+        <h2>Issues by Main Category</h2>
         <table class="table table-bordered mb-4">
           <thead>
             <tr>
-              <th>Tag</th>
+              <th>Category</th>
               <th>Last 3 Months</th>
               <th>Last Month</th>
               <th>Last 7 Days</th>
@@ -58,14 +51,14 @@
           </thead>
           <tbody>
             <t
-              t-foreach="state.tagsSummary.filter(tag => !state.selectedTags.length || state.selectedTags.includes(tag.name))"
-              t-as="tag"
-              t-key="tag.name">
+              t-foreach="state.catsSummary.filter(cat => !state.selectedCats.length || state.selectedCats.includes(cat.name))"
+              t-as="cat"
+              t-key="cat.name">
               <tr>
-                <td><t t-esc="tag.name"/></td>
-                <td><t t-esc="tag.counts[0]"/></td>
-                <td><t t-esc="tag.counts[1]"/></td>
-                <td><t t-esc="tag.counts[2]"/></td>
+                <td><t t-esc="cat.name"/></td>
+                <td><t t-esc="cat.counts[0]"/></td>
+                <td><t t-esc="cat.counts[1]"/></td>
+                <td><t t-esc="cat.counts[2]"/></td>
               </tr>
             </t>
           </tbody>
@@ -81,40 +74,32 @@
             t-model="state.search"/>
         </div>
 
-        <!-- DRIVER-SUMMARY TABLE -->
+        <!-- DRIVER PERIODS TABLE -->
         <table class="table table-striped">
           <thead>
             <tr>
               <th>Driver</th>
               <th>Phone</th>
-              <t
-                t-foreach="state.windows"
-                t-as="w"
-                t-key="w">
+              <t t-foreach="state.windows" t-as="w" t-key="w">
                 <th><t t-esc="w"/></th>
               </t>
             </tr>
           </thead>
           <tbody>
             <t
-              t-foreach="state.drivers.filter(d => d.name.toLowerCase().includes(state.search.toLowerCase()))"
+              t-foreach="state.drivers
+                          .filter(d => d.name.toLowerCase().includes(state.search.toLowerCase()))"
               t-as="d"
               t-key="d.name">
               <tr>
                 <td><t t-esc="d.name"/></td>
                 <td><t t-esc="d.phone"/></td>
-                <t
-                  t-foreach="d.periods"
-                  t-as="p"
-                  t-key="p.label">
+                <t t-foreach="d.periods" t-as="p" t-key="p.label">
                   <td>
-                    <t t-if="p.tags.length">
+                    <t t-if="p.cats.length">
                       <ul class="o_dashboard_list">
-                        <t
-                          t-foreach="p.tags"
-                          t-as="tag"
-                          t-key="tag">
-                          <li><t t-esc="tag"/></li>
+                        <t t-foreach="p.cats" t-as="cat" t-key="cat">
+                          <li><t t-esc="cat"/></li>
                         </t>
                       </ul>
                     </t>

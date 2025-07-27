@@ -42,43 +42,54 @@ class FleetDashboardController(http.Controller):
             (None,'All Time'),
         ]
         today = date.today()
+        Issue = request.env['x_fleet_issue'].sudo()
         drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
 
-        # … your existing support‑dashboard logic …
+        # per‑driver breakdown
         result = []
         for drv in drivers:
-            issues = drv.issue_ids.filtered('date_reported')
-            row = {'name': drv.name, 'phone': drv.phone or '', 'periods': []}
+            issues = Issue.search([('driver_id', '=', drv.id)])
+            row = {
+                'name':    drv.name,
+                'phone':   drv.phone or '',
+                'periods': [],
+            }
             for days, label in windows:
-                if days is not None:
-                    cutoff = today - timedelta(days=days)
-                    subset = issues.filtered(lambda i: i.date_reported >= cutoff)
-                else:
+                if days is None:
                     subset = issues
-                tags = subset.mapped('tag_ids.name')
-                row['periods'].append({'label': label, 'tags': tags})
+                else:
+                    cutoff = today - timedelta(days=days)
+                    subset = issues.filtered(lambda i: i.date_reported and i.date_reported.date() >= cutoff)
+                main_cats = subset.mapped('main_category')
+                row['periods'].append({
+                    'label': label,
+                    'cats':  main_cats,    # list of strings
+                })
             result.append(row)
 
-        Tag = request.env['x_fleet_driver_issue_tag'].sudo()
-        tags = Tag.search([], order='name')
-        tags_summary = []
-        for tag in tags:
+        # global category‐summary over the last 90/30/7 days (reverse order so counts[0] is 3‑months)
+        unique_cats = sorted(set(Issue.search([]).mapped('main_category')))
+        cats_summary = []
+        for cat in unique_cats:
             counts = []
-            for days, _ in windows[:3][::-1]:
-                if days is not None:
-                    cutoff = today - timedelta(days=days)
-                    domain = [('tag_ids', 'in', tag.id), ('date_reported', '>=', cutoff)]
+            for days, _ in reversed(windows[:3]):
+                if days is None:
+                    domain = [('main_category', '=', cat)]
                 else:
-                    domain = [('tag_ids', 'in', tag.id)]
-                counts.append(request.env['x_fleet_driver_issue']
-                                  .sudo().search_count(domain))
-            tags_summary.append({'name': tag.name, 'counts': counts})
-        tags_summary.sort(key=lambda x: (-x['counts'][0], -x['counts'][1], -x['counts'][2]))
+                    cutoff = today - timedelta(days=days)
+                    domain = [
+                        ('main_category', '=', cat),
+                        ('date_reported', '>=', cutoff),
+                    ]
+                counts.append(Issue.search_count(domain))
+            cats_summary.append({'name': cat, 'counts': counts})
+        # sort by newest window desc, then next desc…
+        cats_summary.sort(key=lambda x: (-x['counts'][0], -x['counts'][1], -x['counts'][2]))
 
         return {
             'windows':      [lbl for _, lbl in windows],
             'drivers':      result,
-            'tags_summary': tags_summary,
+            'catsSummary':  cats_summary,
         }
 
     @http.route('/fleet_partner_dashboard', type='http', auth='user')

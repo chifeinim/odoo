@@ -67,6 +67,8 @@
             parent="menu_fleet_dashboard_page"
             sequence="20"
             action="action_performance_dashboard"/>
+
+  <!-- Issues -->
   <menuitem id="menu_fleet_issue"
             name="Issues"
             parent="menu_fleet_dashboard_root"

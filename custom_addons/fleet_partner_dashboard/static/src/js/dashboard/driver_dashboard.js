@@ -13,19 +13,19 @@ export class OwlDriverDashboard extends Component {
       error:         null,
       windows:       [],
       drivers:       [],
-      tagsSummary:   [],
+      catsSummary:   [],
       search:        '',
-      selectedTags:  [],
-      dropdownOpen:  false,   // ← track menu open/closed
+      selectedCats:  [],
+      dropdownOpen:  false,
     });
 
     onMounted(async () => {
       try {
-        const { windows, drivers: rawDrivers, tags_summary } =
+        const { windows, drivers: rawDrivers, catsSummary } =
           await this.env.services.rpc('/fleet_partner_dashboard/data', {});
         this.state.windows     = windows;
-        this.state.drivers     = rawDrivers;         // you already sort above
-        this.state.tagsSummary = tags_summary;
+        this.state.drivers     = rawDrivers;
+        this.state.catsSummary = catsSummary;
       } catch (err) {
         this.state.error = err;
       } finally {
@@ -34,21 +34,19 @@ export class OwlDriverDashboard extends Component {
     });
   }
 
-  // toggle the dropdown menu
   toggleDropdown() {
     this.state.dropdownOpen = !this.state.dropdownOpen;
   }
 
-  // toggle a tag in selectedTags
-  toggleTag(tagName) {
-    const idx = this.state.selectedTags.indexOf(tagName);
+  toggleCategory(catName) {
+    const idx = this.state.selectedCats.indexOf(catName);
     if (idx === -1) {
-      this.state.selectedTags.push(tagName);
+      this.state.selectedCats.push(catName);
     } else {
-      this.state.selectedTags.splice(idx, 1);
+      this.state.selectedCats.splice(idx, 1);
     }
   }
 }
 
-OwlDriverDashboard.template = "owl.OwlDriverDashboard";
-registry.category("actions").add("owl.driver_dashboard", OwlDriverDashboard);
+OwlDriverDashboard.template = 'owl.OwlDriverDashboard';
+registry.category('actions').add('owl.driver_dashboard', OwlDriverDashboard);
