@@ -25,7 +25,7 @@ class FleetIssue(models.Model):
 
     status   = fields.Selection([('unresolved','Unresolved'),('resolved','Resolved')],
                                 default='unresolved', tracking=True)
-    severity = fields.Selection([('can_work',"Can Work"),('cant_work',"Can't Work")],
+    severity = fields.Selection([('can_work',"Can Work"),('cannot_work',"Cannot Work")],
                                 default='can_work', tracking=True)
 
     color = fields.Integer(compute='_compute_color', store=True)

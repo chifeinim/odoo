@@ -86,7 +86,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                   .data
         )
         _logger.info("Syncing %d product types", len(rows))
-        ProductType = self.env['fleet.product.type'].sudo()
+        ProductType = self.env['x_fleet_product_type'].sudo()
 
         for rec in rows:
             name = rec.get('name')
@@ -112,8 +112,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                      .order('updated_at', asc=True) \
                      .execute().data
         _logger.info("Syncing %d orders", len(rows))
-        Order = self.env['fleet.order'].sudo()
-        Driver = self.env['fleet.driver'].sudo()
+        Order = self.env['x_fleet_order'].sudo()
+        Driver = self.env['x_fleet_driver'].sudo()
         for rec in rows:
             # guard against empty order id
             name = rec.get('name')
@@ -165,8 +165,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         )
         _logger.info("Syncing %d supply_hours rows", len(rows))
 
-        SupplyHours = self.env['fleet.supply.hour'].sudo()
-        Driver     = self.env['fleet.driver'].sudo()
+        SupplyHours = self.env['x_fleet_driver_supply_hours'].sudo()
+        Driver     = self.env['x_fleet_driver'].sudo()
 
         for rec in rows:
             # 1) find the driver
@@ -208,27 +208,54 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
     @api.model
     def sync_issues(self, last_sync):
-        """Fetch and upsert issues rows."""
+        """Fetch and upsert issue records, linking each to its driver by yango_driver_id."""
         client = self._get_client()
-        rows = client.table('issues') \
-                     .select('*') \
-                     .gt('updated_at', last_sync) \
-                     .order('updated_at', asc=True) \
-                     .execute().data
-        _logger.info("Syncing %d issues", len(rows))
-        Issue = self.env['fleet.issue'].sudo()
+        rows = (
+            client.table('issues')
+                  .select('*')
+                  .gt('updated_at', last_sync)
+                  .order('updated_at', asc=True)
+                  .execute()
+                  .data
+        )
+        _logger.info("Syncing %d issue rows", len(rows))
+        Issue  = self.env['x_fleet_issue'].sudo()
+        Driver = self.env['x_fleet_driver'].sudo()
         for rec in rows:
-            vals = {
-                'description': rec['description'],
-                'severity':    rec['severity'],
-                # … map other fields …
+            # 1) find the driver
+            driver_ext_id = rec.get('driver_id')
+            driver = Driver.search([('yango_driver_id', '=', driver_ext_id)], limit=1)
+            if not driver:
+                _logger.warning(
+                    "Skipping issue %r: no driver for yango_driver_id %s",
+                    rec.get('id'), driver_ext_id
+                )
+                continue
+            # 2) build values, dropping None so defaults apply
+            raw_vals = {
+                'date_reported':   rec.get('date_reported'),
+                'main_category':   rec.get('main_category'),
+                'sub_category':    rec.get('sub_category'),
+                'sub_sub_category':rec.get('sub_sub_category'),
+                'status':          rec.get('status'),
+                'severity':        rec.get('severity'),
+                'driver_id':       driver.id,
             }
-            existing = Issue.search([('issue_id','=', rec['issue_id'])], limit=1)
-            if existing:
-                existing.write(vals)
+            vals = {k: v for k, v in raw_vals.items() if v is not None}
+            # 3) upsert by the external issue ID
+            ext_issue_id = rec.get('id')
+            if not ext_issue_id:
+                _logger.warning("Skipping issue with no ID: %r", rec)
+                continue
+
+            existing_issue = Issue.search([('name', '=', ext_issue_id)], limit=1)
+            if existing_issue:
+                existing_issue.write(vals)
+                _logger.debug("Updated issue %s", ext_issue_id)
             else:
-                vals['issue_id'] = rec['issue_id']
+                vals['name'] = ext_issue_id
                 Issue.create(vals)
+                _logger.info("Created issue %s", ext_issue_id)
 
     @api.model
     def sync_all(self):
