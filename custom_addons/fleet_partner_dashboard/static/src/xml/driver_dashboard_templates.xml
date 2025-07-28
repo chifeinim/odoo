@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
   <t t-name="owl.OwlDriverDashboard" owl="1">
-    <div t-key="'owl_driver_dashboard_root'" class="o_fleet_dashboard">
+    <div t-key="'owl_driver_dashboard_root'" class="o_fleet_dashboard" style="height: calc(100vh - 70px); overflow-y: auto; padding: 1rem;">
       <t t-if="state.loading">
         <div>Loading…</div>
       </t>
