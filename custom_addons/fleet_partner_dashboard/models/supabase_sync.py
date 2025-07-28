@@ -33,7 +33,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         )
         _logger.info("Syncing %d drivers", len(rows))
 
-        PT = self.env['x_fleet_product_type'].sudo()
+        ProductType = self.env['x_fleet_product_type'].sudo()
         Driver = self.env['x_fleet_driver'].sudo()
 
         for rec in rows:
@@ -51,11 +51,11 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             # 1) ensure product_type exists (or create it)
             pt_name = rec.get('product_type_id')
             if pt_name:
-                existing_pt = PT.search([('name', '=', pt_name)], limit=1)
+                existing_pt = ProductType.search([('name', '=', pt_name)], limit=1)
                 if existing_pt:
                     vals['product_type_id'] = existing_pt.id
                 else:
-                    new_pt = PT.create({'name': pt_name})
+                    new_pt = ProductType.create({'name': pt_name})
                     vals['product_type_id'] = new_pt.id
 
             # 2) upsert driver by its external ID
@@ -83,17 +83,17 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                      .order('updated_at', asc=True) \
                      .execute().data
         _logger.info("Syncing %d product types", len(rows))
-        PT = self.env['fleet.product.type'].sudo()
+        ProductType = self.env['fleet.product.type'].sudo()
         for rec in rows:
             vals = {
                 'name': rec['name'],
             }
-            existing = PT.search([('work_rule_id','=', rec['work_rule_id'])], limit=1)
+            existing = ProductType.search([('work_rule_id','=', rec['work_rule_id'])], limit=1)
             if existing:
                 existing.write(vals)
             else:
                 vals['work_rule_id'] = rec['work_rule_id']
-                PT.create(vals)
+                ProductType.create(vals)
 
     @api.model
     def sync_orders(self, last_sync):
