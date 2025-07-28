@@ -7,7 +7,7 @@ class FleetIssue(models.Model):
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'date_reported desc'
 
-    name = fields.Char(string="Issue ID", copy=False, readonly=True, default='New')
+    name = fields.Char(string="Issue ID", copy=False, default='New')
     date_reported = fields.Datetime(string="Reported On", default=fields.Datetime.now)
     driver_id = fields.Many2one('x_fleet_driver', string="Driver", required=True, ondelete='cascade')
 
