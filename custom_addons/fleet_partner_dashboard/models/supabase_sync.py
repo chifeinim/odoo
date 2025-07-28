@@ -1,4 +1,3 @@
-# fleet_partner_dashboard/models/supabase_sync.py
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from supabase import create_client
@@ -7,7 +6,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 class FleetPartnerSupabaseSync(models.AbstractModel):
-    _name = 'fleet.partner.supabase_sync'
+    _name = 'x_fleet_partner_supabase_sync'
     _description = 'Sync data from Supabase by table'
 
     def _get_client(self):

@@ -9,6 +9,7 @@
     'data': [
         'data/sequence.xml',
         'data/ir_sequence.xml',
+        'data/ir_cron_supabase.xml',
         'security/ir.model.access.csv',
         'views/fleet_driver_views.xml',
         'views/fleet_order_views.xml',
@@ -18,6 +19,9 @@
         'views/issue_views.xml',
         'views/menu_views.xml',
     ],
+    'external_dependencies': {
+        'python': ['supabase'],    # warn if library missing
+    },
     'assets': {
         'web.assets_backend': [
             'fleet_partner_dashboard/static/src/lib/chart.umd.min.js',
