@@ -115,6 +115,10 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         Order = self.env['fleet.order'].sudo()
         Driver = self.env['fleet.driver'].sudo()
         for rec in rows:
+            name = rec.get('name')
+            if not name:
+                _logger.warning("Skipping order with no name: %r", rec)
+                continue
             # find the driver record we synced earlier
             yango_driver_id = rec.get('yango_driver_id')
             existing_drv = Driver.search([('yango_driver_id','=', yango_driver_id)], limit=1)
@@ -122,28 +126,29 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 _logger.warning("Skipping order %s: no driver %s", rec.get('name'), yango_driver_id)
                 continue
             raw_vals = {
-                'order_date':      rec.get('order_date'),
-                'interval_from': rec.get('interval_from'),
-                'interval_to': rec.get('interval_to'),
-                'status': rec.get('status'),
+                'order_date':               rec.get('order_date'),
+                'interval_from':            rec.get('interval_from'),
+                'interval_to':              rec.get('interval_to'),
+                'status':                   rec.get('status'),
                 'cancellation_description': rec.get('cancellation_description'),
-                'pickup_address': rec.get('pickup_address'),
-                'price': rec.get('price'),
-                'driver_id': existing_drv.id,
-                'yango_driver_id': rec.get('yango_driver_id'),
-                'driver_name': rec.get('driver_name'),
-                'pick_latitude': rec.get('pick_latitude'),
-                'pick_longitude': rec.get('pick_longitude'),
-                'events': rec.get('events'),
+                'pickup_address':           rec.get('pickup_address'),
+                'price':                    rec.get('price'),
+                'driver_id':                existing_drv.id,
+                'yango_driver_id':          rec.get('yango_driver_id'),
+                'driver_name':              rec.get('driver_name'),
+                'pick_latitude':            rec.get('pick_latitude'),
+                'pick_longitude':           rec.get('pick_longitude'),
+                'events':                   rec.get('events'),
             }
             vals = {k: v for k, v in raw_vals.items() if v is not None}
-            name = rec.get('name')
             existing_ord = Order.search([('name','=', name)], limit=1)
             if existing_ord:
                 existing_ord.write(vals)
+                _logger.debug("Updated order %s", name)
             else:
                 vals['name'] = name
                 Order.create(vals)
+                _logger.info("Created order %s", name)
 
     @api.model
     def sync_supply_hours(self, last_sync):
