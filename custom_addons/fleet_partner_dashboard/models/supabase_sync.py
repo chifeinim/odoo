@@ -116,21 +116,33 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         Driver = self.env['fleet.driver'].sudo()
         for rec in rows:
             # find the driver record we synced earlier
-            drv = Driver.search([('yango_driver_id','=', rec['yango_driver_id'])], limit=1)
-            if not drv:
-                _logger.warning("Skipping order %s: no driver %s", rec['order_id'], rec['yango_driver_id'])
+            yango_driver_id = rec.get('yango_driver_id')
+            existing_drv = Driver.search([('yango_driver_id','=', yango_driver_id)], limit=1)
+            if not existing_drv:
+                _logger.warning("Skipping order %s: no driver %s", rec.get('name'), yango_driver_id)
                 continue
-            vals = {
-                'fleet_driver_id': drv.id,
-                'pickup_location': rec['pickup_location'],
-                'date_order':      rec['order_date'],
-                # … map additional fields …
+            raw_vals = {
+                'order_date':      rec.get('order_date'),
+                'interval_from': rec.get('interval_from'),
+                'interval_to': rec.get('interval_to'),
+                'status': rec.get('status'),
+                'cancellation_description': rec.get('cancellation_description'),
+                'pickup_address': rec.get('pickup_address'),
+                'price': rec.get('price'),
+                'driver_id': existing_drv.id,
+                'yango_driver_id': rec.get('yango_driver_id'),
+                'driver_name': rec.get('driver_name'),
+                'pick_latitude': rec.get('pick_latitude'),
+                'pick_longitude': rec.get('pick_longitude'),
+                'events': rec.get('events'),
             }
-            existing = Order.search([('yango_order_id','=', rec['order_id'])], limit=1)
-            if existing:
-                existing.write(vals)
+            vals = {k: v for k, v in raw_vals.items() if v is not None}
+            name = rec.get('name')
+            existing_ord = Order.search([('name','=', name)], limit=1)
+            if existing_ord:
+                existing_ord.write(vals)
             else:
-                vals['yango_order_id'] = rec['order_id']
+                vals['name'] = name
                 Order.create(vals)
 
     @api.model
