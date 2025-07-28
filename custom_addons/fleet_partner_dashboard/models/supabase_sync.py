@@ -75,25 +75,32 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
     @api.model
     def sync_product_types(self, last_sync):
-        """Fetch and upsert product-type (work_rules) rows."""
+        """Fetch product-type names and ensure each exists in Odoo."""
         client = self._get_client()
-        rows = client.table('product_types') \
-                     .select('*') \
-                     .gt('updated_at', last_sync) \
-                     .order('updated_at', asc=True) \
-                     .execute().data
+        rows = (
+            client.table('product_types')
+                  .select('name')
+                  .gt('updated_at', last_sync)
+                  .order('updated_at', asc=True)
+                  .execute()
+                  .data
+        )
         _logger.info("Syncing %d product types", len(rows))
         ProductType = self.env['fleet.product.type'].sudo()
+
         for rec in rows:
-            vals = {
-                'name': rec['name'],
-            }
-            existing = ProductType.search([('work_rule_id','=', rec['work_rule_id'])], limit=1)
-            if existing:
-                existing.write(vals)
-            else:
-                vals['work_rule_id'] = rec['work_rule_id']
-                ProductType.create(vals)
+            name = rec.get('name')
+            if not name:
+                _logger.warning("Skipping product type with no name: %r", rec)
+                continue
+            # If it already exists by name, skip
+            existing_pt = ProductType.search([('name', '=', name)], limit=1)
+            if existing_pt:
+                _logger.debug("ProductType %r already exists, skipping", name)
+                continue
+            # Otherwise create it
+            ProductType.create({'name': name})
+            _logger.info("Created new ProductType %r", name)
 
     @api.model
     def sync_orders(self, last_sync):
