@@ -23,30 +23,54 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     def sync_drivers(self, last_sync):
         """Fetch and upsert driver rows updated since last_sync."""
         client = self._get_client()
-        rows = client.table('drivers') \
-                     .select('*') \
-                     .gt('updated_at', last_sync) \
-                     .order('updated_at', asc=True) \
-                     .execute().data
+        rows = (
+            client.table('drivers')
+                  .select('*')
+                  .gt('updated_at', last_sync)
+                  .order('updated_at', asc=True)
+                  .execute()
+                  .data
+        )
         _logger.info("Syncing %d drivers", len(rows))
-        Driver = self.env['fleet.driver'].sudo()
+
+        PT = self.env['x_fleet_product_type'].sudo()
+        Driver = self.env['x_fleet_driver'].sudo()
+
         for rec in rows:
-            # rec is a dict, e.g. {'name': 'John Doe', 'yango_driver_id': 42, ...}
-            vals = {
-                'name':             rec['name'],
-                'phone':            rec['phone'],
-                'hire_date':        rec['hire_date'],
-                'training_rating':  rec.get('training_rating'),
-                'work_status':      rec['work_status'],
-                'driver_type':      rec['type'],
-                'product_type_id':  rec['product_type_id'],
+            # build the core vals, dropping None so defaults apply
+            raw_vals = {
+                'name':            rec.get('name'),
+                'phone':           rec.get('phone'),
+                'hire_date':       rec.get('hire_date'),
+                'training_rating': rec.get('training_rating'),
+                'work_status':     rec.get('work_status'),
+                'driver_type':     rec.get('type'),
             }
-            # search for an existing driver by its external ID
-            existing = Driver.search([('yango_driver_id','=', rec['yango_driver_id'])], limit=1)
-            if existing:
-                existing.write(vals)
+            vals = {k: v for k, v in raw_vals.items() if v is not None}
+
+            # 1) ensure product_type exists (or create it)
+            pt_name = rec.get('product_type_id')
+            if pt_name:
+                existing_pt = PT.search([('name', '=', pt_name)], limit=1)
+                if existing_pt:
+                    vals['product_type_id'] = existing_pt.id
+                else:
+                    new_pt = PT.create({'name': pt_name})
+                    vals['product_type_id'] = new_pt.id
+
+            # 2) upsert driver by its external ID
+            ext_id = rec.get('yango_driver_id')
+            if not ext_id:
+                _logger.warning("Skipping driver without ID: %r", rec)
+                continue
+
+            existing_drv = Driver.search(
+                [('yango_driver_id', '=', ext_id)], limit=1
+            )
+            if existing_drv:
+                existing_drv.write(vals)
             else:
-                vals['yango_driver_id'] = rec['yango_driver_id']
+                vals['yango_driver_id'] = ext_id
                 Driver.create(vals)
 
     @api.model
