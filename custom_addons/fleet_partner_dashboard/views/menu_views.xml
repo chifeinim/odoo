@@ -30,22 +30,6 @@
             parent="menu_fleet_dashboard_root"
             action="action_fleet_product_type"/>
 
-  <!-- Driver Issues (old hierarchy) -->
-  <menuitem id="menu_fleet_driver_issue"
-            name="Driver Issues"
-            parent="menu_fleet_dashboard_root"
-            sequence="30"/>
-  <menuitem id="menu_fleet_driver_issue_issues"
-            name="Issues"
-            parent="menu_fleet_driver_issue"
-            action="action_fleet_driver_issue"
-            sequence="10"/>
-  <menuitem id="menu_fleet_driver_issue_tags"
-            name="Issue Tags"
-            parent="menu_fleet_driver_issue"
-            action="action_driver_issue_tags"
-            sequence="20"/>
-
   <!-- Dashboards -->
   <record id="action_fleet_dashboard_webpage" model="ir.actions.act_url">
     <field name="name">Fleet Dashboard</field>
