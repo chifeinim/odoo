@@ -98,8 +98,19 @@
                   <td>
                     <t t-if="p.cats.length">
                       <ul class="o_dashboard_list">
-                        <t t-foreach="p.cats" t-as="cat" t-key="cat">
-                          <li><t t-esc="cat"/></li>
+                        <t t-foreach="p.cats" t-as="cat" t-key="cat.name">
+                          <li>
+                            <span
+                              class="badge"
+                              t-att-class="{
+                                'badge-success': cat.color === 3,
+                                'badge-warning': cat.color === 1,
+                                'badge-danger':  cat.color === 2
+                              }"
+                            >
+                              <t t-esc="cat.name"/>
+                            </span>
+                          </li>
                         </t>
                       </ul>
                     </t>

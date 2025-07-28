@@ -49,22 +49,18 @@ class FleetDashboardController(http.Controller):
         result = []
         for drv in drivers:
             issues = Issue.search([('driver_id', '=', drv.id)])
-            row = {
-                'name':    drv.name,
-                'phone':   drv.phone or '',
-                'periods': [],
-            }
+            row = {'name': drv.name, 'phone': drv.phone or '', 'periods': []}
             for days, label in windows:
                 if days is None:
                     subset = issues
                 else:
                     cutoff = today - timedelta(days=days)
                     subset = issues.filtered(lambda i: i.date_reported and i.date_reported.date() >= cutoff)
-                main_cats = subset.mapped('main_category')
-                row['periods'].append({
-                    'label': label,
-                    'cats':  main_cats,    # list of strings
-                })
+                cats = [{
+                    'name': issue.main_category,
+                    'color': issue.color,
+                } for issue in subset]
+                row['periods'].append({'label': label, 'cats': cats})
             result.append(row)
 
         # global category‐summary over the last 90/30/7 days (reverse order so counts[0] is 3‑months)
