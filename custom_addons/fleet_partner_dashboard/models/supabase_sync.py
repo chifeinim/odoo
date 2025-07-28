@@ -115,6 +115,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         Order = self.env['fleet.order'].sudo()
         Driver = self.env['fleet.driver'].sudo()
         for rec in rows:
+            # guard against empty order id
             name = rec.get('name')
             if not name:
                 _logger.warning("Skipping order with no name: %r", rec)
@@ -152,27 +153,58 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
     @api.model
     def sync_supply_hours(self, last_sync):
-        """Fetch and upsert supply_hours rows."""
+        """Fetch and upsert supply_hours by driver & date."""
         client = self._get_client()
-        rows = client.table('supply_hours') \
-                     .select('*') \
-                     .gt('updated_at', last_sync) \
-                     .order('updated_at', asc=True) \
-                     .execute().data
-        _logger.info("Syncing %d supply_hours", len(rows))
-        SH = self.env['fleet.supply.hour'].sudo()
+        rows = (
+            client.table('supply_hours')
+                  .select('*')
+                  .gt('updated_at', last_sync)
+                  .order('updated_at', asc=True)
+                  .execute()
+                  .data
+        )
+        _logger.info("Syncing %d supply_hours rows", len(rows))
+
+        SupplyHours = self.env['fleet.supply.hour'].sudo()
+        Driver     = self.env['fleet.driver'].sudo()
+
         for rec in rows:
-            vals = {
-                'start_time': rec['start_time'],
-                'end_time':   rec['end_time'],
-                # … map other fields …
+            # 1) find the driver
+            yango_driver_id = rec.get('yango_driver_id')
+            driver = Driver.search([('yango_driver_id', '=', yango_driver_id)], limit=1)
+            if not driver:
+                _logger.warning("Skipping supply_hours: no driver for yango_driver_id %r", yango_driver_id)
+                continue
+            # 2) pull date & seconds
+            date = rec.get('date')
+            seconds  = rec.get('seconds')
+            if not date or seconds is None:
+                _logger.warning("Skipping supply_hours for driver %s: missing date or seconds: %r", yango_driver_id, rec)
+                continue
+            # 3) build vals, drop None so defaults can apply
+            raw_vals = {
+                'driver_id': driver.id,
+                'date':      date,
+                'seconds':   seconds,
             }
-            existing = SH.search([('supply_hour_id','=', rec['supply_hour_id'])], limit=1)
+            vals = {k: v for k, v in raw_vals.items() if v is not None}
+            # 4) upsert by driver + date
+            existing = SupplyHours.search(
+                [('driver_id', '=', driver.id),
+                 ('date',      '=', date)],
+                limit=1
+            )
             if existing:
                 existing.write(vals)
+                _logger.debug(
+                    "Updated supply_hours for driver %s on %s", 
+                    yango_driver_id, date
+                )
             else:
-                vals['supply_hour_id'] = rec['supply_hour_id']
-                SH.create(vals)
+                SupplyHours.create(vals)
+                _logger.info(
+                    "Created supply_hours for driver %s on %s", 
+                    yango_driver_id, date)
 
     @api.model
     def sync_issues(self, last_sync):
