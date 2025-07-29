@@ -64,7 +64,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 "limit":      page_size,
                 "offset":     offset,
             }
-            _logger.info("Fetching orders %d→%d…", offset + 1, offset + page_size)
+            _logger.info("Fetching %s rows %d→%d…", table, offset + 1, offset + page_size)
             resp = requests.get(endpoint, headers=headers, params=params, timeout=60)
             resp.raise_for_status()
             batch = resp.json()
@@ -318,23 +318,254 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         if new_issues:
             Issue.create(new_issues)
             _logger.info("Bulk‑created %d new issues", len(new_issues))
+            
+    def _upsert_product_types(self, rows):
+        """Upsert a list of rows (dicts) into the fleet_product_type model."""
+        _logger.info("Upserting %d product types", len(rows))
+        ProductType = self.env['x_fleet_product_type'].sudo()
+        new_pts = []
+        for i, rec in enumerate(rows, start=1):
+            # (optional) progress every 50
+            if not rec.get('name'):
+                _logger.warning("Skipping unnamed product type: %r", rec)
+                continue
+            name = rec['name']
+            exists = ProductType.search([('name', '=', name)], limit=1)
+            if exists:
+                _logger.debug("ProductType %r already exists; skipping", name)
+            else:
+                new_pts.append({'name': name})
+        if new_pts:
+            ProductType.create(new_pts)
+            _logger.info("Bulk‑created %d new product types", len(new_pts))
+            
+    def _upsert_drivers(self, rows):
+        """Upsert a list of driver rows (dicts) into x_fleet_driver."""
+        _logger.info("Upserting %d drivers", len(rows))
+        ProductType = self.env['x_fleet_product_type'].sudo()
+        Driver      = self.env['x_fleet_driver'].sudo()
+        new_vals    = []
+
+        for i, rec in enumerate(rows, start=1):
+            if i % 100 == 0:
+                _logger.info("Processed %d/%d drivers…", i, len(rows))
+
+            # core fields
+            raw = {
+                'name':            rec.get('name'),
+                'phone':           rec.get('phone'),
+                'hire_date':       _normalize_datetime(rec['hire_date']) if rec.get('hire_date') else None,
+                'training_rating': rec.get('training_rating'),
+                'work_status':     rec.get('work_status'),
+                'type_type':     rec.get('type'),
+            }
+            vals = {k: v for k, v in raw.items() if v is not None}
+
+            # ensure product_type
+            pt_name = rec.get('product_type_id')
+            if pt_name:
+                existing = ProductType.search([('name', '=', pt_name)], limit=1)
+                if not existing:
+                    existing = ProductType.create({'name': pt_name})
+                vals['product_type_id'] = existing.id
+
+            # external ID
+            ext_id = rec.get('yango_driver_id')
+            if not ext_id:
+                _logger.warning("Skipping driver without ID: %r", rec)
+                continue
+
+            # update vs create
+            existing_drv = Driver.search([('yango_driver_id', '=', ext_id)], limit=1)
+            if existing_drv:
+                existing_drv.write(vals)
+            else:
+                vals['yango_driver_id'] = ext_id
+                new_vals.append(vals)
+
+        if new_vals:
+            Driver.create(new_vals)
+            _logger.info("Bulk‑created %d new drivers", len(new_vals))
+
+
+    def _upsert_orders(self, rows):
+        """Upsert a list of order rows (dicts) into fleet.order."""
+        _logger.info("Upserting %d orders", len(rows))
+        Order  = self.env['x_fleet_order'].sudo()
+        Driver = self.env['x_fleet_driver'].sudo()
+
+        # preload maps
+        driver_map = {
+            d.yango_driver_id: d.id
+            for d in Driver.search([('yango_driver_id', '!=', False)])
+        }
+        existing_orders = {o.name: o for o in Order.search([])}
+        new_vals = []
+
+        for i, rec in enumerate(rows, start=1):
+            if i % 500 == 0:
+                _logger.info("Processed %d/%d orders…", i, len(rows))
+
+            name = rec.get('name')
+            if not name:
+                _logger.warning("Skipping order without name: %r", rec)
+                continue
+
+            drv_id = driver_map.get(rec.get('yango_driver_id'))
+            if not drv_id:
+                _logger.warning("No driver for order %s (yango_driver_id=%s)", name, rec.get('yango_driver_id'))
+                continue
+
+            raw = {
+                'order_date':               _normalize_datetime(rec['order_date'])      if rec.get('order_date')     else None,
+                'interval_from':            _normalize_datetime(rec['interval_from'])   if rec.get('interval_from')  else None,
+                'interval_to':              _normalize_datetime(rec['interval_to'])     if rec.get('interval_to')    else None,
+                'status':                   rec.get('status'),
+                'cancellation_description': rec.get('cancellation_description'),
+                'pickup_address':           rec.get('pickup_address'),
+                'price':                    rec.get('price'),
+                'driver_id':                drv_id,
+                'yango_driver_id':          rec.get('yango_driver_id'),
+                'driver_name':              rec.get('driver_name'),
+                'pick_latitude':            rec.get('pick_latitude'),
+                'pick_longitude':           rec.get('pick_longitude'),
+                'events':                   rec.get('events'),
+            }
+            vals = {k: v for k, v in raw.items() if v is not None}
+
+            if name in existing_orders:
+                existing_orders[name].write(vals)
+            else:
+                vals['name'] = name
+                new_vals.append(vals)
+
+        if new_vals:
+            Order.create(new_vals)
+            _logger.info("Bulk‑created %d new orders", len(new_vals))
+
+
+    def _upsert_supply_hours(self, rows):
+        """Upsert a list of supply_hours rows (dicts) into x_fleet_driver_supply_hours."""
+        _logger.info("Upserting %d supply_hours rows", len(rows))
+        SupplyHour = self.env['x_fleet_driver_supply_hours'].sudo()
+        Driver     = self.env['x_fleet_driver'].sudo()
+        new_vals   = []
+
+        for i, rec in enumerate(rows, start=1):
+            if i % 100 == 0:
+                _logger.info("Processed %d/%d supply_hours…", i, len(rows))
+
+            yid = rec.get('yango_driver_id')
+            drv = Driver.search([('yango_driver_id', '=', yid)], limit=1)
+            if not drv:
+                _logger.warning("No driver for supply_hours: %r", rec)
+                continue
+
+            date = rec.get('date')
+            secs = rec.get('seconds')
+            if not date or secs is None:
+                _logger.warning("Incomplete supply_hours row: %r", rec)
+                continue
+
+            date_str = _normalize_datetime(date)
+            vals = {
+                'driver_id': drv.id,
+                'date':      date_str,
+                'seconds':   secs,
+            }
+
+            existing = SupplyHour.search([
+                ('driver_id', '=', drv.id),
+                ('date',      '=', date_str),
+            ], limit=1)
+
+            if existing:
+                existing.write({'seconds': secs})
+            else:
+                new_vals.append(vals)
+
+        if new_vals:
+            SupplyHour.create(new_vals)
+            _logger.info("Bulk‑created %d new supply_hours", len(new_vals))
+
+
+    def _upsert_issues(self, rows):
+        """Upsert a list of issue rows (dicts) into x_fleet_issue."""
+        _logger.info("Upserting %d issues", len(rows))
+        Issue  = self.env['x_fleet_issue'].sudo()
+        Driver = self.env['x_fleet_driver'].sudo()
+        new_vals = []
+
+        for i, rec in enumerate(rows, start=1):
+            if i % 50 == 0:
+                _logger.info("Processed %d/%d issues…", i, len(rows))
+
+            ext_id = rec.get('id')
+            if not ext_id:
+                _logger.warning("Skipping issue without ID: %r", rec)
+                continue
+
+            drv = Driver.search([('yango_driver_id', '=', rec.get('driver_id'))], limit=1)
+            if not drv:
+                _logger.warning("No driver for issue %s", ext_id)
+                continue
+
+            raw = {
+                'name':            ext_id,
+                'date_reported':   _normalize_datetime(rec['date_reported']) if rec.get('date_reported') else None,
+                'main_category':   rec.get('main_category'),
+                'sub_category':    rec.get('sub_category'),
+                'sub_sub_category':rec.get('sub_sub_category'),
+                'status':          rec.get('status'),
+                'severity':        rec.get('severity'),
+                'driver_id':       drv.id,
+            }
+            vals = {k: v for k, v in raw.items() if v is not None}
+
+            existing = Issue.search([('name', '=', ext_id)], limit=1)
+            if existing:
+                existing.write(vals)
+            else:
+                new_vals.append(vals)
+
+        if new_vals:
+            Issue.create(new_vals)
+            _logger.info("Bulk‑created %d new issues", len(new_vals))
 
     @api.model
     def sync_all(self):
-        """Master method for the cron — calls each table’s sync in turn."""
+        """Master method for the cron — fetch + upsert each table, then record last_sync."""
         _logger.info("Starting full Supabase → Odoo sync")
-        last = self.env['ir.config_parameter'].sudo().get_param('fleet_partner.last_sync')
-        #last_dt = fields.Datetime.to_datetime(last) if last else '1970-01-01T00:00:00Z'
+        params = self.env['ir.config_parameter'].sudo()
+        last = params.get_param('fleet_partner.last_sync')
+        # if it exists, convert to ISO8601, otherwise start at Unix epoch
+        #last_dt = last or '1970-01-01T00:00:00Z'
         last_dt = '1970-01-01T00:00:00Z'
 
-        # call each sync, passing the timestamp of the last run
-        self.sync_product_types(last_dt)
-        self.sync_drivers(last_dt)
-        self.sync_orders(last_dt)
-        self.sync_supply_hours(last_dt)
-        self.sync_issues(last_dt)
+        # fetch once per table
+        pt_rows  = self._fetch_table('product_types', last_dt)
+        drv_rows = self._fetch_table('drivers',       last_dt)
+        ord_rows = self._fetch_table('orders',        last_dt)
+        sh_rows  = self._fetch_table('supply_hours',  last_dt)
+        iss_rows = self._fetch_table('issues',        last_dt)
 
-        # store the new “last_sync” timestamp
-        now = fields.Datetime.now()
-        self.env['ir.config_parameter'].sudo().set_param('fleet_partner.last_sync', now)
-        _logger.info("Completed full sync at %s", now)
+        # upsert into Odoo
+        self._upsert_product_types(pt_rows)
+        self._upsert_drivers(drv_rows)
+        self._upsert_orders(ord_rows)
+        self._upsert_supply_hours(sh_rows)
+        self._upsert_issues(iss_rows)
+
+        # compute the maximum updated_at across all rows we just processed
+        all_ts = []
+        for rows in (pt_rows, drv_rows, ord_rows, sh_rows, iss_rows):
+            all_ts.extend(r.get('updated_at') for r in rows if r.get('updated_at'))
+        if all_ts:
+            # pick the latest timestamp string
+            max_ts = max(all_ts)
+            params.set_param('fleet_partner.last_sync', max_ts)
+            _logger.info("Recorded last_sync = %s", max_ts)
+        else:
+            _logger.info("No updated_at found; last_sync unchanged")
+
+        _logger.info("Completed full sync")

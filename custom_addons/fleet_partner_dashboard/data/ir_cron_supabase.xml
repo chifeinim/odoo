@@ -1,15 +1,20 @@
 <odoo>
   <data noupdate="1">
     <record id="ir_cron_supabase_full_sync" model="ir.cron">
-      <field name="name">Sync Supabase - Odoo</field>
+      <field name="name">Sync Supabase → Odoo</field>
       <field name="model_id" ref="fleet_partner_dashboard.model_x_fleet_partner_supabase_sync"/>
       <field name="state">code</field>
       <field name="code">model.sync_all()</field>
-      <!-- every 5 minutes: */5 * * * * -->
       <field name="interval_number">5</field>
       <field name="interval_type">minutes</field>
       <field name="numbercall">-1</field>
       <field name="active">True</field>
+
+      <!-- bump the allowable wall‑clock time to 1 h: -->
+      <field name="limit_time_real">3600</field>
+      <field name="limit_time_cpu">1800</field>
+      <field name="limit_time_real_cron">3600</field>
+      <field name="limit_time_cpu_cron">1800</field>
     </record>
   </data>
 </odoo>
