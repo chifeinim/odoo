@@ -41,30 +41,30 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         return create_client(url, key)
     
     def _fetch_table(self, table, last_sync):
+        """Fetch *all* rows from data_for_odoo.<table> updated since last_sync."""
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/{table}"
         headers = {
-            "apikey":          key,
-            "Authorization":   f"Bearer {key}",
-            "Content-Type":    "application/json",
-            "Accept":          "application/json",
+            "apikey":        key,
+            "Authorization": f"Bearer {key}",
+            "Accept":        "application/json",
             "Accept-Profile":  "data_for_odoo",
             "Content-Profile": "data_for_odoo",
-            "Prefer":          "count=exact",
+            "Prefer":        "count=exact",
         }
-        params = {
-            "select":     "*",
-            "updated_at": f"gt.{last_sync}",
-            "order":      "updated_at.asc",
-        }
-
         all_rows = []
-        page_size = 5000   # bump from 1000 → fewer HTTP requests
+        page_size = 1000   # max Supabase will return
         offset = 0
 
         while True:
-            headers["Range"] = f"{offset}-{offset + page_size - 1}"
-            _logger.info("Fetching %d→%d of %s", offset, offset+page_size, table)
+            params = {
+                "select":     "*",
+                "updated_at": f"gt.{last_sync}",
+                "order":      "updated_at.asc",
+                "limit":      page_size,
+                "offset":     offset,
+            }
+            _logger.info("Fetching orders %d→%d…", offset + 1, offset + page_size)
             resp = requests.get(endpoint, headers=headers, params=params, timeout=60)
             resp.raise_for_status()
             batch = resp.json()
