@@ -9,6 +9,17 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     _name = 'x_fleet_partner_supabase_sync'
     _description = 'Sync data from Supabase by table'
 
+    def _get_config(self):
+        """Return (base_url, api_key) from ir.config_parameter."""
+        params = self.env['ir.config_parameter'].sudo()
+        url = params.get_param('supabase.url')
+        key = params.get_param('supabase.publishable_key')
+        if not url or not key:
+            raise UserError(
+                "Supabase URL or publishable key not found in ir.config_parameter."
+            )
+        return url.rstrip('/'), key
+
     def _get_client(self):
         params = self.env['ir.config_parameter'].sudo()
         url = params.get_param('supabase.url')
@@ -20,36 +31,29 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         return create_client(url, key)
     
     def _fetch_table(self, table, last_sync):
-        url = f"{self.supabase_url}/rest/v1/{table}"
+        """Fetch all rows from data_for_odoo.<table> updated since last_sync."""
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/{table}"
         headers = {
-            "apikey":        self.supabase_key,
-            "Authorization": f"Bearer {self.supabase_key}",
+            "apikey":        key,
+            "Authorization": f"Bearer {key}",
             "Content-Type":  "application/json",
-            # Prefer header to set schema, per PostgREST:
-            "Accept":        "application/vnd.pgrst.object+json",
+            # Tell PostgREST to use our staging schema:
             "Prefer":        "params=single-object; schema=data_for_odoo",
         }
         params = {
             "select": "*",
             "updated_at": f"gt.{ last_sync }",
-            "order":      "updated_at.asc"
+            "order":      "updated_at.asc",
         }
-        resp = requests.get(url, headers=headers, params=params)
-        resp.raise_for_status()
-        return resp.json()
+        response = requests.get(endpoint, headers=headers, params=params, timeout=30)
+        response.raise_for_status()
+        return response.json()  # a list of dicts
 
     @api.model
     def sync_drivers(self, last_sync):
         """Fetch and upsert driver rows updated since last_sync."""
-        client = self._get_client()
-        rows = (
-            client.table('drivers', 'data_for_odoo')
-                  .select('*')
-                  .gt('updated_at', last_sync)
-                  .order('updated_at')
-                  .execute()
-                  .data
-        )
+        rows = self._fetch_table('drivers', last_sync)
         _logger.info("Syncing %d drivers", len(rows))
 
         ProductType = self.env['x_fleet_product_type'].sudo()
@@ -95,15 +99,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     @api.model
     def sync_product_types(self, last_sync):
         """Fetch product-type names and ensure each exists in Odoo."""
-        client = self._get_client()
-        rows = (
-            client.table('product_types', 'data_for_odoo')
-                  .select('name')
-                  .gt('updated_at', last_sync)
-                  .order('updated_at')
-                  .execute()
-                  .data
-        )
+        rows = self._fetch_table('product_types', last_sync)
         _logger.info("Syncing %d product types", len(rows))
         ProductType = self.env['x_fleet_product_type'].sudo()
 
@@ -124,12 +120,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     @api.model
     def sync_orders(self, last_sync):
         """Fetch and upsert orders, linking each to its driver by yango_driver_id."""
-        client = self._get_client()
-        rows = client.table('orders', 'data_for_odoo') \
-                     .select('*') \
-                     .gt('updated_at', last_sync) \
-                     .order('updated_at') \
-                     .execute().data
+        rows = self._fetch_table('orders', last_sync)
         _logger.info("Syncing %d orders", len(rows))
         Order = self.env['x_fleet_order'].sudo()
         Driver = self.env['x_fleet_driver'].sudo()
@@ -173,15 +164,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     @api.model
     def sync_supply_hours(self, last_sync):
         """Fetch and upsert supply_hours by driver & date."""
-        client = self._get_client()
-        rows = (
-            client.table('supply_hours', 'data_for_odoo')
-                  .select('*')
-                  .gt('updated_at', last_sync)
-                  .order('updated_at')
-                  .execute()
-                  .data
-        )
+        rows = self._fetch_table('supply_hours', last_sync)
         _logger.info("Syncing %d supply_hours rows", len(rows))
 
         SupplyHours = self.env['x_fleet_driver_supply_hours'].sudo()
@@ -228,15 +211,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     @api.model
     def sync_issues(self, last_sync):
         """Fetch and upsert issue records, linking each to its driver by yango_driver_id."""
-        client = self._get_client()
-        rows = (
-            client.table('issues', 'data_for_odoo')
-                  .select('*')
-                  .gt('updated_at', last_sync)
-                  .order('updated_at')
-                  .execute()
-                  .data
-        )
+        rows = self._fetch_table('issues', last_sync)
         _logger.info("Syncing %d issue rows", len(rows))
         Issue  = self.env['x_fleet_issue'].sudo()
         Driver = self.env['x_fleet_driver'].sudo()
