@@ -539,8 +539,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         params = self.env['ir.config_parameter'].sudo()
         last = params.get_param('fleet_partner.last_sync')
         # if it exists, convert to ISO8601, otherwise start at Unix epoch
-        #last_dt = last or '1970-01-01T00:00:00Z'
-        last_dt = '1970-01-01T00:00:00Z'
+        last_dt = last or '1970-01-01T00:00:00Z'
+        #last_dt = '1970-01-01T00:00:00Z'
 
         # fetch once per table
         pt_rows  = self._fetch_table('product_types', last_dt)

@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
   <t t-name="owl.OwlDriverDashboard" owl="1">
-    <div t-key="'owl_driver_dashboard_root'" class="o_fleet_dashboard" style="height: calc(100vh - 70px); overflow-y: auto; padding: 1rem;">
-      <t t-if="state.loading">
+    <div class="o_fleet_dashboard" style="height: calc(100vh - 70px); overflow-y: auto; padding: 1rem;">
+      <t t-if="state.loading" t-key="'loading'">
         <div>Loading…</div>
       </t>
-      <t t-elif="state.error">
+      <t t-elif="state.error"  t-key="'error'">
         <div class="alert alert-danger">
           <t t-esc="state.error.message || state.error"/>
         </div>
       </t>
-      <t t-else="">
+      <t t-else="" t-key="'content'">
         <!-- CATEGORY FILTER DROPDOWN -->
         <div class="dropdown mb-3" t-att-class="{'show': state.dropdownOpen}">
           <button
