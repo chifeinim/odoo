@@ -1,7 +1,17 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from supabase import create_client
-import logging, requests
+import logging, requests, datetime
+
+def _normalize_datetime(val):
+    """Convert ISO8601 with offset into naive UTC 'YYYY‑MM‑DD HH:MM:SS'."""
+    # Parse the full ISO string (including fractional seconds & offset)
+    dt = datetime.datetime.fromisoformat(val)
+    # Convert to UTC (if it had any tzinfo) and strip tzinfo
+    if dt.tzinfo:
+        dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+    # Format for Odoo
+    return dt.strftime('%Y-%m-%d %H:%M:%S')
 
 _logger = logging.getLogger(__name__)
 
@@ -33,13 +43,14 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     def _fetch_table(self, table, last_sync):
         """Fetch all rows from data_for_odoo.<table> updated since last_sync."""
         base_url, key = self._get_config()
-        endpoint = f"{base_url}/rest/v1/{table}"
+        endpoint = f"{base_url}/rest/v1/{table}" 
         headers = {
             "apikey":        key,
             "Authorization": f"Bearer {key}",
             "Content-Type":  "application/json",
-            # Tell PostgREST to use our staging schema:
-            "Prefer":        "params=single-object; schema=data_for_odoo",
+            "Accept":          "application/json",
+            "Accept-Profile":  "data_for_odoo",
+            "Content-Profile": "data_for_odoo",
         }
         params = {
             "select": "*",
@@ -49,7 +60,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         response = requests.get(endpoint, headers=headers, params=params, timeout=30)
         response.raise_for_status()
         return response.json()  # a list of dicts
-
+    
     @api.model
     def sync_drivers(self, last_sync):
         """Fetch and upsert driver rows updated since last_sync."""
@@ -64,10 +75,10 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             raw_vals = {
                 'name':            rec.get('name'),
                 'phone':           rec.get('phone'),
-                'hire_date':       rec.get('hire_date'),
+                'hire_date':       _normalize_datetime(rec['hire_date'])      if rec.get('hire_date')     else None,
                 'training_rating': rec.get('training_rating'),
                 'work_status':     rec.get('work_status'),
-                'driver_type':     rec.get('type'),
+                'type':            rec.get('type'),
             }
             vals = {k: v for k, v in raw_vals.items() if v is not None}
 
@@ -137,9 +148,9 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 _logger.warning("Skipping order %s: no driver %s", rec.get('name'), yango_driver_id)
                 continue
             raw_vals = {
-                'order_date':               rec.get('order_date'),
-                'interval_from':            rec.get('interval_from'),
-                'interval_to':              rec.get('interval_to'),
+                'order_date':               _normalize_datetime(rec['order_date'])      if rec.get('order_date')     else None,
+                'interval_from':            _normalize_datetime(rec['interval_from'])   if rec.get('interval_from')  else None,
+                'interval_to':              _normalize_datetime(rec['interval_to'])     if rec.get('interval_to')    else None,
                 'status':                   rec.get('status'),
                 'cancellation_description': rec.get('cancellation_description'),
                 'pickup_address':           rec.get('pickup_address'),
@@ -186,7 +197,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             # 3) build vals, drop None so defaults can apply
             raw_vals = {
                 'driver_id': driver.id,
-                'date':      date,
+                'date':      _normalize_datetime(rec['date'])     if rec.get('date')    else None,
                 'seconds':   seconds,
             }
             vals = {k: v for k, v in raw_vals.items() if v is not None}
@@ -227,7 +238,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 continue
             # 2) build values, dropping None so defaults apply
             raw_vals = {
-                'date_reported':   rec.get('date_reported'),
+                'date_reported':   _normalize_datetime(rec['date_reported'])     if rec.get('date_reported')    else None,
                 'main_category':   rec.get('main_category'),
                 'sub_category':    rec.get('sub_category'),
                 'sub_sub_category':rec.get('sub_sub_category'),
