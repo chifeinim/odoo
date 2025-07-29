@@ -357,7 +357,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 'hire_date':       _normalize_datetime(rec['hire_date']) if rec.get('hire_date') else None,
                 'training_rating': rec.get('training_rating'),
                 'work_status':     rec.get('work_status'),
-                'type_type':     rec.get('type'),
+                'type':     rec.get('type'),
             }
             vals = {k: v for k, v in raw.items() if v is not None}
 
