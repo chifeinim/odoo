@@ -177,7 +177,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Supply Hours</h5>
-                  <h2><t t-esc="state.metrics.supplyHours.toFixed(1)"/>h</h2>
+                  <h2><t t-esc="(state.metrics.supplyHours || 0 ).toFixed(1)"/>h</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevSupplyHours"/>
                     <t t-set="curr"  t-value="state.metrics.supplyHours"/>
@@ -204,7 +204,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Cash Earned</h5>
-                  <h2>Kz <t t-esc="state.metrics.cashEarned.toFixed(2)"/></h2>
+                  <h2>Kz <t t-esc="(state.metrics.cashEarned || 0).toFixed(2)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevCashEarned"/>
                     <t t-set="curr"  t-value="state.metrics.cashEarned"/>
@@ -229,7 +229,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Avg Money / Hour</h5>
-                  <h2>Kz <t t-esc="state.metrics.moneyPerHour.toFixed(2)"/></h2>
+                  <h2>Kz <t t-esc="(state.metrics.moneyPerHour || 0).toFixed(2)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevMoneyPerHour"/>
                     <t t-set="curr"  t-value="state.metrics.moneyPerHour"/>
@@ -250,7 +250,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Avg Trips / Hour</h5>
-                  <h2><t t-esc="state.metrics.tripsPerHour.toFixed(2)"/></h2>
+                  <h2><t t-esc="(state.metrics.tripsPerHour || 0).toFixed(2)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevTripsPerHour"/>
                     <t t-set="curr"  t-value="state.metrics.tripsPerHour"/>
@@ -273,7 +273,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Avg SH per Active Driver</h5>
-                  <h2><t t-esc="state.metrics.avgSupplyHoursPerDriver.toFixed(1)"/>h</h2>
+                  <h2><t t-esc="(state.metrics.avgSupplyHoursPerDriver || 0).toFixed(1)"/>h</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevAvgSupplyHoursPerDriver"/>
                     <t t-set="curr"  t-value="state.metrics.avgSupplyHoursPerDriver"/>
@@ -294,7 +294,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Avg Utilisation</h5>
-                  <h2><t t-esc="state.metrics.avgUtilisation.toFixed(1)"/>%</h2>
+                  <h2><t t-esc="(state.metrics.avgUtilisation || 0).toFixed(1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevAvgUtilisation"/>
                     <t t-set="curr"  t-value="state.metrics.avgUtilisation"/>
@@ -315,7 +315,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Avg Efficiency</h5>
-                  <h2><t t-esc="state.metrics.avgEfficiency.toFixed(1)"/>%</h2>
+                  <h2><t t-esc="(state.metrics.avgEfficiency || 0).toFixed(1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevAvgEfficiency"/>
                     <t t-set="curr"  t-value="state.metrics.avgEfficiency"/>
@@ -338,7 +338,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Avg Acceptance Rate</h5>
-                  <h2><t t-esc="state.metrics.acceptanceRate.toFixed(1)"/>%</h2>
+                  <h2><t t-esc="(state.metrics.acceptanceRate || 0).toFixed(1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev" t-value="state.metrics.prevAcceptanceRate"/>
                     <t t-set="curr" t-value="state.metrics.acceptanceRate"/>
@@ -359,7 +359,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Avg Completed to Request</h5>
-                  <h2><t t-esc="state.metrics.completedToRequest.toFixed(1)"/>%</h2>
+                  <h2><t t-esc="(state.metrics.completedToRequest || 0).toFixed(1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev" t-value="state.metrics.prevCompletedToRequest"/>
                     <t t-set="curr" t-value="state.metrics.completedToRequest"/>
@@ -380,7 +380,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Service Fee</h5>
-                  <h2>Kz <t t-esc="state.metrics.serviceFee.toFixed(2)"/></h2>
+                  <h2>Kz <t t-esc="(state.metrics.serviceFee || 0).toFixed(2)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevServiceFee"/>
                     <t t-set="curr"  t-value="state.metrics.serviceFee"/>
@@ -407,7 +407,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Partner Fee</h5>
-                  <h2>Kz <t t-esc="state.metrics.partnerFee.toFixed(2)"/></h2>
+                  <h2>Kz <t t-esc="(state.metrics.partnerFee || 0).toFixed(2)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevPartnerFee"/>
                     <t t-set="curr"  t-value="state.metrics.partnerFee"/>
@@ -519,17 +519,17 @@
                 <td><t t-esc="d.type"/></td>
                 <td><t t-esc="d.quality_score"/></td>
                 <td><t t-esc="d.active"/></td>
-                <td><t t-esc="d.cash.toFixed(2)"/></td>
+                <td><t t-esc="(d.cash || 0).toFixed(2)"/></td>
                 <td><t t-esc="d.trips"/></td>
-                <td><t t-esc="d.hours.toFixed(1)"/>h</td>
-                <td><t t-esc="d.trips_per_hour.toFixed(2)"/></td>
-                <td><t t-esc="d.money_per_hour.toFixed(2)"/></td>
-                <td><t t-esc="d.utilisation.toFixed(1)"/>%</td>
-                <td><t t-esc="d.efficiency.toFixed(1)"/>%</td>
-                <td><t t-esc="d.acceptance_rate.toFixed(1)"/>%</td>
-                <td><t t-esc="d.completed_to_request.toFixed(1)"/>%</td>
-                <td><t t-esc="d.service_fee.toFixed(2)"/></td>
-                <td><t t-esc="d.partner_fee.toFixed(2)"/></td>
+                <td><t t-esc="(d.hours || 0).toFixed(1)"/>h</td>
+                <td><t t-esc="(d.trips_per_hour || 0).toFixed(2)"/></td>
+                <td><t t-esc="(d.money_per_hour || 0).toFixed(2)"/></td>
+                <td><t t-esc="(d.utilisation || 0).toFixed(1)"/>%</td>
+                <td><t t-esc="(d.efficiency || 0).toFixed(1)"/>%</td>
+                <td><t t-esc="(d.acceptance_rate || 0).toFixed(1)"/>%</td>
+                <td><t t-esc="(d.completed_to_request || 0).toFixed(1)"/>%</td>
+                <td><t t-esc="(d.service_fee || 0).toFixed(2)"/></td>
+                <td><t t-esc="(d.partner_fee || 0).toFixed(2)"/></td>
               </tr>
             </t>
           </tbody>
