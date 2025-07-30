@@ -1,7 +1,7 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from supabase import create_client
-import logging, requests, datetime
+import logging, requests, datetime, json
 
 def _normalize_datetime(val):
     """Convert ISO8601 with offset into naive UTC 'YYYY‑MM‑DD HH:MM:SS'."""
@@ -196,7 +196,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             if not drv_id:
                 _logger.warning("No driver for order %s (yango_driver_id=%s)", name, yid)
                 continue
-
+            evs = rec.get('events')
             vals = {
                 'order_date':               _normalize_datetime(rec['order_date'])      if rec.get('order_date')     else None,
                 'interval_from':            _normalize_datetime(rec['interval_from'])   if rec.get('interval_from')  else None,
@@ -210,7 +210,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 'driver_name':              rec.get('driver_name'),
                 'pick_latitude':            rec.get('pick_latitude'),
                 'pick_longitude':           rec.get('pick_longitude'),
-                'events':                   rec.get('events'),
+                'events': json.dumps(evs) if evs is not None else None,
             }
             vals = {k: v for k, v in vals.items() if v is not None}
 
