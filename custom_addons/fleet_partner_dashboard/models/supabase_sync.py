@@ -1,7 +1,7 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from supabase import create_client
-import logging, requests, datetime, json
+import logging, requests, datetime
 
 def _normalize_datetime(val):
     """Convert ISO8601 with offset into naive UTC 'YYYY‑MM‑DD HH:MM:SS'."""
@@ -196,7 +196,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             if not drv_id:
                 _logger.warning("No driver for order %s (yango_driver_id=%s)", name, yid)
                 continue
-            evs = rec.get('events')
+
             vals = {
                 'order_date':               _normalize_datetime(rec['order_date'])      if rec.get('order_date')     else None,
                 'interval_from':            _normalize_datetime(rec['interval_from'])   if rec.get('interval_from')  else None,
@@ -210,7 +210,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 'driver_name':              rec.get('driver_name'),
                 'pick_latitude':            rec.get('pick_latitude'),
                 'pick_longitude':           rec.get('pick_longitude'),
-                'events': json.dumps(evs) if evs is not None else None,
+                'events':                   rec.get('events'),
             }
             vals = {k: v for k, v in vals.items() if v is not None}
 
@@ -415,7 +415,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             if not drv_id:
                 _logger.warning("No driver for order %s (yango_driver_id=%s)", name, rec.get('yango_driver_id'))
                 continue
-            evs = rec.get('events')
+
             raw = {
                 'order_date':               _normalize_datetime(rec['order_date'])      if rec.get('order_date')     else None,
                 'interval_from':            _normalize_datetime(rec['interval_from'])   if rec.get('interval_from')  else None,
@@ -429,7 +429,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 'driver_name':              rec.get('driver_name'),
                 'pick_latitude':            rec.get('pick_latitude'),
                 'pick_longitude':           rec.get('pick_longitude'),
-                'events': json.dumps(evs) if evs is not None else None,
+                'events':                   rec.get('events'),
             }
             vals = {k: v for k, v in raw.items() if v is not None}
 
@@ -537,43 +537,21 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         """Master method for the cron — fetch + upsert each table, then record last_sync."""
         _logger.info("Starting full Supabase → Odoo sync")
         params = self.env['ir.config_parameter'].sudo()
-        last = params.get_param('fleet_partner.last_sync') or '1970-01-01T00:00:00Z'
+        last = params.get_param('fleet_partner.last_sync')
+        # if it exists, convert to ISO8601, otherwise start at Unix epoch
+        last_dt = last or '1970-01-01T00:00:00Z'
+        #last_dt = '1970-01-01T00:00:00Z'
 
         # fetch once per table
-        pt_rows  = self._fetch_table('product_types', last)
-        drv_rows = self._fetch_table('drivers',       last)
-        ord_rows = self._fetch_table('orders',        last)
-        sh_rows  = self._fetch_table('supply_hours',  last)
-        iss_rows = self._fetch_table('issues',        last)
+        pt_rows  = self._fetch_table('product_types', last_dt)
+        drv_rows = self._fetch_table('drivers',       last_dt)
+        ord_rows = self._fetch_table('orders',        last_dt)
+        sh_rows  = self._fetch_table('supply_hours',  last_dt)
+        iss_rows = self._fetch_table('issues',        last_dt)
 
         # upsert into Odoo
         self._upsert_product_types(pt_rows)
         self._upsert_drivers(drv_rows)
-
-        # ensure every order's driver exists
-        fetched_yids = {r.get('yango_driver_id') for r in ord_rows if r.get('yango_driver_id')}
-        existing_yids = {
-            d.yango_driver_id
-            for d in self.env['x_fleet_driver'].sudo().search([('yango_driver_id','!=',False)])
-        }
-        missing = fetched_yids - existing_yids
-        if missing:
-            _logger.info("Found %d orders whose drivers aren't yet in Odoo; fetching missing drivers", len(missing))
-            client = self._get_client()
-            missing_rows = []
-            for yid in missing:
-                resp = client.table('drivers') \
-                             .select('*') \
-                             .eq('yango_driver_id', yid) \
-                             .limit(1) \
-                             .execute()
-                data = getattr(resp, 'data', None) or []
-                if data:
-                    missing_rows.extend(data)
-            if missing_rows:
-                _logger.info("Upserting %d missing drivers", len(missing_rows))
-                self._upsert_drivers(missing_rows)
-
         self._upsert_orders(ord_rows)
         self._upsert_supply_hours(sh_rows)
         self._upsert_issues(iss_rows)
@@ -583,6 +561,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         for rows in (pt_rows, drv_rows, ord_rows, sh_rows, iss_rows):
             all_ts.extend(r.get('updated_at') for r in rows if r.get('updated_at'))
         if all_ts:
+            # pick the latest timestamp string
             max_ts = max(all_ts)
             params.set_param('fleet_partner.last_sync', max_ts)
             _logger.info("Recorded last_sync = %s", max_ts)
