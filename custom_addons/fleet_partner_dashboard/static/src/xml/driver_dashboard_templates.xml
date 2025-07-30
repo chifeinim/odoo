@@ -1,37 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
   <t t-name="owl.OwlDriverDashboard" owl="1">
-    <div class="o_fleet_dashboard" style="height: calc(100vh - 70px); overflow-y: auto; padding: 1rem;">
+    <div class="o_fleet_dashboard"
+         style="height: calc(100vh - 70px); overflow-y: auto; padding: 1rem;">
+      <!-- LOADING / ERROR -->
       <t t-if="state.loading" t-key="'loading'">
         <div>Loading…</div>
       </t>
-      <t t-elif="state.error"  t-key="'error'">
+      <t t-elif="state.error" t-key="'error'">
         <div class="alert alert-danger">
           <t t-esc="state.error.message || state.error"/>
         </div>
       </t>
+
+      <!-- MAIN CONTENT -->
       <t t-else="" t-key="'content'">
         <!-- CATEGORY FILTER DROPDOWN -->
         <div class="dropdown mb-3" t-att-class="{'show': state.dropdownOpen}">
           <button
             type="button"
             class="btn btn-primary dropdown-toggle"
-            t-on-click="toggleDropdown">
+            t-on-click="toggleDropdown"
+          >
             Filter by main category
-            <t t-if="state.selectedCats.length">
+            <t t-if="(state.selectedCats || []).length">
               (<t t-esc="state.selectedCats.length"/>)
             </t>
           </button>
           <div
             class="dropdown-menu p-2"
             t-att-class="{'show': state.dropdownOpen}"
-            style="max-height:200px; overflow:auto;">
-            <t t-foreach="state.catsSummary" t-as="cat" t-key="cat.name">
+            style="max-height:200px; overflow:auto;"
+          >
+            <t t-foreach="state.catsSummary || []" t-as="cat" t-as-index="ci" t-key="ci">
               <button
                 type="button"
                 class="dropdown-item"
-                t-att-class="{'active': state.selectedCats.includes(cat.name)}"
-                t-on-click="toggleCategory(cat.name)">
+                t-att-class="{'active': (state.selectedCats||[]).includes(cat.name)}"
+                t-on-click="toggleCategory(cat.name)"
+              >
                 <t t-esc="cat.name"/>
               </button>
             </t>
@@ -51,9 +58,11 @@
           </thead>
           <tbody>
             <t
-              t-foreach="state.catsSummary.filter(cat => !state.selectedCats.length || state.selectedCats.includes(cat.name))"
+              t-foreach="(state.catsSummary || []).filter(cat => !(state.selectedCats||[]).length || (state.selectedCats||[]).includes(cat.name))"
               t-as="cat"
-              t-key="cat.name">
+              t-as-index="cti"
+              t-key="cti"
+            >
               <tr>
                 <td><t t-esc="cat.name"/></td>
                 <td><t t-esc="cat.counts[0]"/></td>
@@ -71,7 +80,8 @@
             type="text"
             class="form-control"
             placeholder="Search driver..."
-            t-model="state.search"/>
+            t-model="state.search"
+          />
         </div>
 
         <!-- DRIVER PERIODS TABLE -->
@@ -80,25 +90,35 @@
             <tr>
               <th>Driver</th>
               <th>Phone</th>
-              <t t-foreach="state.windows" t-as="w" t-key="w">
+              <t t-foreach="state.windows || []" t-as="w" t-as-index="wi" t-key="wi">
                 <th><t t-esc="w"/></th>
               </t>
             </tr>
           </thead>
           <tbody>
             <t
-              t-foreach="state.drivers
-                          .filter(d => d.name.toLowerCase().includes(state.search.toLowerCase()))"
+              t-foreach="
+                (state.drivers || []).filter(d =>
+                  (d.name||'').toLowerCase().includes((state.search||'').toLowerCase())
+                )
+              "
               t-as="d"
-              t-key="d.name">
+              t-as-index="di"
+              t-key="di"
+            >
               <tr>
                 <td><t t-esc="d.name"/></td>
                 <td><t t-esc="d.phone"/></td>
-                <t t-foreach="d.periods" t-as="p" t-key="p.label">
+                <t t-foreach="d.periods || []" t-as="p" t-as-index="pi" t-key="pi">
                   <td>
-                    <t t-if="p.cats.length">
+                    <t t-if="(p.cats||[]).length">
                       <ul class="o_dashboard_list">
-                        <t t-foreach="p.cats" t-as="cat" t-key="cat.name">
+                        <t
+                          t-foreach="p.cats || []"
+                          t-as="cat"
+                          t-as-index="ci"
+                          t-key="ci"
+                        >
                           <li>
                             <span
                               class="badge"
