@@ -415,7 +415,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             if not drv_id:
                 _logger.warning("No driver for order %s (yango_driver_id=%s)", name, rec.get('yango_driver_id'))
                 continue
-
+            evs = rec.get('events')
             raw = {
                 'order_date':               _normalize_datetime(rec['order_date'])      if rec.get('order_date')     else None,
                 'interval_from':            _normalize_datetime(rec['interval_from'])   if rec.get('interval_from')  else None,
@@ -429,7 +429,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 'driver_name':              rec.get('driver_name'),
                 'pick_latitude':            rec.get('pick_latitude'),
                 'pick_longitude':           rec.get('pick_longitude'),
-                'events':                   rec.get('events'),
+                'events': json.dumps(evs) if evs is not None else None,
             }
             vals = {k: v for k, v in raw.items() if v is not None}
 
@@ -539,8 +539,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         params = self.env['ir.config_parameter'].sudo()
         last = params.get_param('fleet_partner.last_sync')
         # if it exists, convert to ISO8601, otherwise start at Unix epoch
-        last_dt = last or '1970-01-01T00:00:00Z'
-        #last_dt = '1970-01-01T00:00:00Z'
+        #last_dt = last or '1970-01-01T00:00:00Z'
+        last_dt = '1970-01-01T00:00:00Z'
 
         # fetch once per table
         pt_rows  = self._fetch_table('product_types', last_dt)
