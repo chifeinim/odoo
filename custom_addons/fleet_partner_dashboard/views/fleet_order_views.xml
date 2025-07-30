@@ -43,6 +43,9 @@
                         <field name="pick_latitude"/>
                         <field name="pick_longitude"/>
                     </group>
+                    <group>
+                        <field name="events"/>
+                    </group>
                 </sheet>
             </form>
         </field>
