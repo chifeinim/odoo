@@ -122,6 +122,12 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_partner_performance/data', type='json', auth='user')
     def performance_data(self, period=None, products=None, scores=None,
                          categories=None, start_date=None, end_date=None):
+        
+        # normalize filters
+        products   = products   or []
+        scores     = scores     or []
+        categories = categories or []
+        
         # --- 1) Build df, dt, prev_df, prev_dt exactly as before ---
         today = date.today()
         if start_date and end_date:
@@ -145,11 +151,28 @@ class FleetDashboardController(http.Controller):
                 dt      = today
                 prev_df = today - timedelta(days=2*days)
                 prev_dt = today - timedelta(days=days)
+                
+        
+        Order = request.env['x_fleet_order'].sudo()
 
-        # normalize filters
-        products   = products   or []
-        scores     = scores     or []
-        categories = categories or []
+        # 1) Domain that restricts just by date (all statuses)
+        date_dom = []
+        if df:
+            date_dom.append(('order_date', '>=', df))
+        if dt:
+            date_dom.append(('order_date', '<=', dt))
+
+        # 2) Domain for completed orders only
+        complete_dom = date_dom + [('status', '=', 'complete')]
+
+        # 3) Domain for the previous window, if any
+        prev_date_dom = []
+        if prev_df is not None and prev_dt is not None:
+            prev_date_dom = [
+                ('order_date', '>=', prev_df),
+                ('order_date', '<=', prev_dt),
+            ]
+        prev_complete_dom = prev_date_dom + [('status', '=', 'complete')]
 
         # fetch all drivers & compute DQS map
         all_drivers = request.env['x_fleet_driver'].sudo().search([])
