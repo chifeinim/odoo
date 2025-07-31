@@ -32,3 +32,7 @@ class FleetOrder(models.Model):
         default='[]',
         help="JSON array of {event_at, order_status} objects"
     )
+    
+    _sql_constraints = [
+        ('unique_order_name', 'unique(name)', 'Each order must have a unique Order ID.')
+    ]

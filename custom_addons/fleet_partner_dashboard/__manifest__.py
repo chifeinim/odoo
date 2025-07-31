@@ -19,9 +19,6 @@
         'views/issue_views.xml',
         'views/menu_views.xml',
     ],
-    'external_dependencies': {
-        'python': ['supabase'],    # warn if library missing
-    },
     'assets': {
         'web.assets_backend': [
             'fleet_partner_dashboard/static/src/lib/chart.umd.min.js',
