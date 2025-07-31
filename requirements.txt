@@ -69,4 +69,3 @@ XlsxWriter==1.1.2
 xlwt==1.3.0
 zeep==3.4.0
 twilio>=8.0.0
-supabase>=1.0.0
