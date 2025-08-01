@@ -1,5 +1,6 @@
 from odoo import models, api, _
 from odoo.exceptions import UserError
+from requests.exceptions import HTTPError
 import logging, requests, datetime, json, urllib.parse
 
 _logger = logging.getLogger(__name__)
@@ -24,15 +25,15 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             raise UserError("Supabase URL or publishable key not found in ir.config_parameter.")
         return url.rstrip('/'), key
 
-    def _fetch_table(self, table, last_sync, page_size=1000):
+    def _fetch_table(self, table, last_sync, page_size=1000, profile="external_data_yango"):
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/{table}"
         headers = {
             "apikey":        key,
             "Authorization": f"Bearer {key}",
             "Accept":        "application/json",
-            "Accept-Profile":  "external_data_yango",
-            "Content-Profile": "external_data_yango",
+            "Accept-Profile":  profile,
+            "Content-Profile": profile,
             "Prefer":        "count=exact",
         }
         all_rows = []
@@ -58,15 +59,15 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         _logger.info("Fetched %d rows from %s", len(all_rows), table)
         return all_rows
 
-    def _fetch_page(self, table, last_sync, limit, offset):
+    def _fetch_page(self, table, last_sync, limit, offset, profile="external_data_yango"):
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/{table}"
         headers = {
             "apikey":        key,
             "Authorization": f"Bearer {key}",
             "Accept":        "application/json",
-            "Accept-Profile":  "external_data_yango",
-            "Content-Profile": "external_data_yango",
+            "Accept-Profile":  profile,
+            "Content-Profile": profile,
             "Prefer":        "count=exact",
         }
         params = {
@@ -81,7 +82,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         resp.raise_for_status()
         return resp.json() or []
 
-    def _fetch_orders_page(self, last_updated_at, last_id, page_size=5000):
+    def _fetch_orders_page(self, last_updated_at, last_id, page_size=5000, profile="external_data_yango"):
         """
         Fetch next page of orders with composite cursor (updated_at, id).
         """
@@ -91,8 +92,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             "apikey":        key,
             "Authorization": f"Bearer {key}",
             "Accept":        "application/json",
-            "Accept-Profile":  "external_data_yango",
-            "Content-Profile": "external_data_yango",
+            "Accept-Profile":  profile,
+            "Content-Profile": profile,
             "Prefer":        "count=exact",
         }
 
@@ -113,15 +114,15 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         resp.raise_for_status()
         return resp.json() or []
     
-    def _stream_table_limited(self, table, last_sync, page_size=1000, max_pages=5):
+    def _stream_table_limited(self, table, last_sync, page_size=1000, max_pages=5, profile="external_data_yango"):
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/{table}"
         headers = {
             "apikey":        key,
             "Authorization": f"Bearer {key}",
             "Accept":        "application/json",
-            "Accept-Profile":  "external_data_yango",
-            "Content-Profile": "external_data_yango",
+            "Accept-Profile":  profile,
+            "Content-Profile": profile,
             "Prefer":        "count=exact",
         }
         all_rows = []
@@ -424,8 +425,17 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         _logger.info("Bulk-upserted %d unique supply_hours rows", len(tuples))
 
     @api.model
-    def sync_issues(self, last_sync):
-        rows = self._fetch_table('issues', last_sync)
+    def sync_issues(self, last_sync, rows=None, profile="dashboard"):
+        if rows is None:
+            try:
+                rows = self._fetch_table('issues', last_sync, page_size=1000, profile=profile)
+            except HTTPError as e:
+                if e.response.status_code == 406 and profile != "external_data_yango":
+                    _logger.warning("Profile '%s' rejected for issues, falling back to default profile", profile)
+                    rows = self._fetch_table('issues', last_sync, page_size=1000, profile="external_data_yango")
+                else:
+                    raise
+
         Issue = self.env['x_fleet_issue'].sudo()
         Driver = self.env['x_fleet_driver'].sudo()
         new_vals = []
@@ -453,6 +463,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         if new_vals:
             Issue.create(new_vals)
             _logger.info("Bulk-created %d new issues", len(new_vals))
+        return rows  # so caller can reuse for timestamp logic
 
     @api.model
     def sync_all(self):
@@ -494,8 +505,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         except Exception:
             _logger.exception("Failed to commit after supply_hours upsert; continuing")
 
-        is_rows = self._fetch_table('issues', last_support)
-        self.sync_issues(last_support)
+        # fetch and sync issues, capturing the rows used
+        is_rows = self.sync_issues(last_support, profile="dashboard")
         try:
             self.env.cr.commit()  # commit issues separately
         except Exception:
