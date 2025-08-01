@@ -9,15 +9,20 @@ _logger = logging.getLogger(__name__)
 
 def _normalize_datetime(val):
     """Convert ISO8601 with offset into naive UTC 'YYYY-MM-DD HH:MM:SS'."""
+    # Normalize Z to explicit offset for fromisoformat
+    s = val
+    if s.endswith('Z'):
+        s = s[:-1] + '+00:00'
     try:
-        dt = datetime.fromisoformat(val)
+        dt = datetime.fromisoformat(s)
     except ValueError:
         # fallback to more permissive parsing for fractional seconds like .22 or .2
-        # and ensure the offset is preserved
-        # pattern captures datetime, fractional, and offset
-        m = re.match(r'^(?P<base>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(?P<frac>\d+))?(?P<tz>(?:Z|[+\-]\d{2}:\d{2}))$', val)
+        m = re.match(
+            r'^(?P<base>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(?P<frac>\d+))?(?P<tz>[+\-]\d{2}:\d{2})$',
+            s
+        )
         if not m:
-            raise  # re-raise original
+            raise  # re-raise original ValueError
         base = m.group('base')
         frac = m.group('frac') or '0'
         tz = m.group('tz')
