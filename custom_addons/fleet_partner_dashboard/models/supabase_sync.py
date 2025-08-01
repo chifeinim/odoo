@@ -112,6 +112,40 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         resp = requests.get(f"{endpoint}?{query}", headers=headers, timeout=60)
         resp.raise_for_status()
         return resp.json() or []
+    
+    def _stream_table_limited(self, table, last_sync, page_size=1000, max_pages=5):
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/{table}"
+        headers = {
+            "apikey":        key,
+            "Authorization": f"Bearer {key}",
+            "Accept":        "application/json",
+            "Accept-Profile":  "external_data_yango",
+            "Content-Profile": "external_data_yango",
+            "Prefer":        "count=exact",
+        }
+        all_rows = []
+        offset = 0
+        for page in range(max_pages):
+            params = {
+                "select":     "*",
+                "updated_at": f"gt.{last_sync}",
+                "order":      "updated_at.asc",
+                "limit":      page_size,
+                "offset":     offset,
+            }
+            _logger.info("Fetching %s rows %d→%d (page_size=%d)…", table, offset+1, offset+page_size, page_size)
+            resp = requests.get(endpoint, headers=headers, params=params, timeout=60)
+            resp.raise_for_status()
+            batch = resp.json() or []
+            if not batch:
+                break
+            all_rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+        _logger.info("Fetched %d rows from %s (limited stream)", len(all_rows), table)
+        return all_rows
 
     @api.model
     def _upsert_product_types(self, rows):
@@ -443,7 +477,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             orders_updated_at = new_orders_cursor
 
         # 3) supply_hours & issues (same support window)
-        sh_rows = self._fetch_table('supply_hours', last_support)
+        sh_rows = self._stream_table_limited('supply_hours', last_support, page_size=1000, max_pages=5)
         self._upsert_supply_hours(sh_rows)
         try:
             self.env.cr.commit()  # commit supply_hours separately
