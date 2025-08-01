@@ -1,8 +1,15 @@
 # -*- coding: utf-8 -*-
 from odoo import http
 from odoo.http import request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from dateutil.parser import isoparse
 import calendar, json
+
+def parse_iso_with_frac(s: str) -> datetime:
+    dt = isoparse(s)
+    if dt.tzinfo:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
 
 def _parse_events(o):
     evs = o.events or '[]'
@@ -27,8 +34,8 @@ def _transport_seconds(o):
     t1 = next((e['event_at'] for e in evs if e['order_status']==terminal), None)
     if not (t0 and t1):
         return 0.0
-    d0 = datetime.fromisoformat(t0.replace('Z','+00:00'))
-    d1 = datetime.fromisoformat(t1.replace('Z','+00:00'))
+    d0 = parse_iso_with_frac(t0)
+    d1 = parse_iso_with_frac(t1)
     return (d1 - d0).total_seconds()
 
 class FleetDashboardController(http.Controller):
@@ -275,8 +282,8 @@ class FleetDashboardController(http.Controller):
                     terminal = 'complete' if 'complete' in statuses else 'cancelled'
                     t1 = next((e['event_at'] for e in evs if e.get('order_status') == terminal), None)
                     if t0 and t1:
-                        dt0 = datetime.fromisoformat(t0.replace('Z','+00:00'))
-                        dt1 = datetime.fromisoformat(t1.replace('Z','+00:00'))
+                        dt0 = parse_iso_with_frac(t0)
+                        dt1 = parse_iso_with_frac(t1)
                         eff_secs_current += (dt1 - dt0).total_seconds()
             
             # current cash
@@ -302,26 +309,22 @@ class FleetDashboardController(http.Controller):
                 prev_ords = drv.order_ids.filtered(lambda o:
                     o.order_date and prev_df <= o.order_date.date() < prev_dt
                 )
-                
-                # previous complete orders
                 prev_comp = prev_ords.filtered(lambda o: o.status == 'complete')
                 if prev_comp:
                     active_previous += 1
-                
-                for o in ords:
-                    # previous no. of accepted
+
+                for o in prev_ords:
+                    evs = _parse_events(o)
+                    statuses = {e.get('order_status') for e in evs if isinstance(e, dict)}
                     if statuses & {'driving', 'waiting', 'transporting'}:
                         accept_num_previous += 1
-                    order_num_previous += 1
-                    
                     if 'transporting' in statuses:
                         t0 = next((e['event_at'] for e in evs if e.get('order_status') == 'transporting'), None)
-                        # prefer complete over cancelled
                         terminal = 'complete' if 'complete' in statuses else 'cancelled'
                         t1 = next((e['event_at'] for e in evs if e.get('order_status') == terminal), None)
                         if t0 and t1:
-                            dt0 = datetime.fromisoformat(t0.replace('Z','+00:00'))
-                            dt1 = datetime.fromisoformat(t1.replace('Z','+00:00'))
+                            dt0 = parse_iso_with_frac(t0)
+                            dt1 = parse_iso_with_frac(t1)
                             eff_secs_previous += (dt1 - dt0).total_seconds()
                 
                 # previous no. of completed trips
@@ -343,12 +346,6 @@ class FleetDashboardController(http.Controller):
                 # previous utilisation
                 util_secs_previous += sum(
                     (o.interval_to - o.interval_from).total_seconds()
-                    for o in prev_ords
-                )
-                
-                # previous efficiency
-                eff_secs_previous += sum(
-                    (o.interval_to - o.order_date).total_seconds()
                     for o in prev_ords
                 )
                 
