@@ -45,3 +45,7 @@ class FleetIssue(models.Model):
                 rec.color = 1
             else:
                 rec.color = 2
+                
+    _sql_constraints = [
+        ('unique_issue_name', 'unique(name)', 'Each issue must have a unique Issue ID.')
+    ]
