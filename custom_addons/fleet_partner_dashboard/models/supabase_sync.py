@@ -308,12 +308,16 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         Driver = self.env['x_fleet_driver'].sudo()
         params = self.env['ir.config_parameter'].sudo()
 
-        # Reconstruct cursor
+        # Reconstruct cursor; parse id as integer for proper comparison
         if isinstance(last_sync, str) and "||" in last_sync:
             last_updated_at, last_id = last_sync.split("||", 1)
+            try:
+                last_id = int(last_id)
+            except ValueError:
+                last_id = 0
         else:
             last_updated_at = last_sync
-            last_id = "0"
+            last_id = 0
 
         _logger.info("Streaming orders since cursor (%s, %s)…", last_updated_at, last_id)
 
@@ -321,14 +325,14 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         driver_map = {d.yango_driver_id: d.id for d in Driver.search([('yango_driver_id', '!=', False)])}
         total = 0
         max_updated_at = last_updated_at
-        max_id = last_id
+        max_id = last_id  # integer
 
         page_size = 1000
         max_pages = 5  # up to 5 pages per sync_orders call
 
         for page in range(max_pages):
             try:
-                batch = self._fetch_orders_page(last_updated_at, last_id, page_size=page_size)
+                batch = self._fetch_orders_page(last_updated_at, str(last_id), page_size=page_size)
             except Exception:
                 _logger.exception("Failed to fetch orders page after (%s, %s); aborting stream", last_updated_at, last_id)
                 break
@@ -345,10 +349,16 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             # Advance cursor to last row (ordered by updated_at,id)
             last_row = batch[-1]
             last_updated_at = last_row.get('updated_at', last_updated_at)
-            last_id = str(last_row.get('id', last_id))
+            try:
+                last_id = int(last_row.get('id', last_id))
+            except (TypeError, ValueError):
+                # fallback if id missing or non-int
+                last_id = last_id
 
-            # Update max markers
-            if last_updated_at > max_updated_at or (last_updated_at == max_updated_at and last_id > max_id):
+            # Update max markers with proper numeric comparison
+            if (last_updated_at > max_updated_at) or (
+                last_updated_at == max_updated_at and last_id > max_id
+            ):
                 max_updated_at = last_updated_at
                 max_id = last_id
 
@@ -363,7 +373,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             if batch_count < page_size:
                 break  # no more pages
 
-            # loop continues with updated last_updated_at/last_id
+            # prepare for next iteration: use updated last_updated_at and last_id
 
         final_cursor = f"{max_updated_at}||{max_id}"
         _logger.info("Finished streaming %d orders; new cursor (%s, %s)", total, max_updated_at, max_id)
