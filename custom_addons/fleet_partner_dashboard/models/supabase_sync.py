@@ -2,37 +2,15 @@ from odoo import models, api, _
 from odoo.exceptions import UserError
 from requests.exceptions import HTTPError
 from datetime import datetime, timezone, timedelta
+from dateutil.parser import isoparse
 import logging, requests, json, urllib.parse, re
 
 
 _logger = logging.getLogger(__name__)
 
 def _normalize_datetime(val):
-    """Convert ISO8601 with offset into naive UTC 'YYYY-MM-DD HH:MM:SS'."""
-    # Normalize Z to explicit offset for fromisoformat
-    s = val
-    if s.endswith('Z'):
-        s = s[:-1] + '+00:00'
-    try:
-        dt = datetime.fromisoformat(s)
-    except ValueError:
-        # fallback to more permissive parsing for fractional seconds like .22 or .2
-        m = re.match(
-            r'^(?P<base>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(?P<frac>\d+))?(?P<tz>[+\-]\d{2}:\d{2})$',
-            s
-        )
-        if not m:
-            raise  # re-raise original ValueError
-        base = m.group('base')
-        frac = m.group('frac') or '0'
-        tz = m.group('tz')
-        # pad or truncate fractional to microseconds (6 digits)
-        if len(frac) > 6:
-            frac = frac[:6]
-        else:
-            frac = frac.ljust(6, '0')
-        reconstructed = f"{base}.{frac}{tz}"
-        dt = datetime.fromisoformat(reconstructed)  # should succeed now
+    """Convert arbitrary ISO8601 (with offset / fractional seconds) into naive UTC 'YYYY-MM-DD HH:MM:SS'."""
+    dt = isoparse(val)  # handles fractional seconds, offsets, Z, etc.
     if dt.tzinfo:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt.strftime('%Y-%m-%d %H:%M:%S')
