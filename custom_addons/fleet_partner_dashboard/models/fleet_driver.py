@@ -6,7 +6,10 @@ class FleetDriver(models.Model):
 
     name = fields.Char(string="Driver Name", required=True) #first_name + last_name
     phone = fields.Char(string="Phone") #phone_number
-    yango_driver_id = fields.Char(string="Yango Driver ID") #yango_driver_id
+    yango_driver_id = fields.Char(
+        string="Yango Driver ID",
+        required=True,
+        index=True,) #yango_driver_id
     hire_date = fields.Date(string="Hire Date") #hire_date
     training_rating = fields.Selection([
         ('weak', 'Weak'),
