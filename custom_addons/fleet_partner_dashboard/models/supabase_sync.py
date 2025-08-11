@@ -470,69 +470,49 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
     @api.model
     def sync_all(self):
-        _logger.info("Starting full Supabase → Odoo sync")
         params = self.env['ir.config_parameter'].sudo()
 
-        last_support = params.get_param('fleet_partner.last_sync') or '1970-01-01T00:00:00Z'
-        orders_cursor = params.get_param('fleet_partner.orders_cursor') or last_support
-
-        # 1) support tables: work_rules then drivers
-        wr_rows = self._fetch_table('work_rules', last_support)
-        dr_rows = self._fetch_table('drivers', last_support)
-        self._upsert_product_types(wr_rows)
-        work_rule_map = {
-            wr.get('work_rule_id'): wr.get('name')
-            for wr in wr_rows
-            if wr.get('work_rule_id') and wr.get('name')
-        }
-        self._upsert_drivers(dr_rows, work_rule_map)
-
-        # commit support tables so they’re durable before streaming orders
-        try:
+        # 1) work_rules
+        wr_cur = params.get_param('fleet_partner_dashboard.work_rules_cursor') or '1970-01-01T00:00:00Z'
+        wr = self._fetch_table('work_rules', wr_cur)
+        self._upsert_product_types(wr)
+        if wr:
+            params.set_param('fleet_partner_dashboard.work_rules_cursor',
+                            max(r['updated_at'] for r in wr))
             self.env.cr.commit()
-        except Exception:
-            _logger.exception("Failed to commit after support table upserts; continuing")
 
-        # 2) orders streamed with composite cursor
-        new_orders_cursor = self.sync_orders(orders_cursor)
-        if isinstance(new_orders_cursor, str) and "||" in new_orders_cursor:
-            orders_updated_at, _ = new_orders_cursor.split("||", 1)
-        else:
-            orders_updated_at = new_orders_cursor
+        # 2) drivers
+        dr_cur = params.get_param('fleet_partner_dashboard.drivers_cursor') or wr_cur
+        dr = self._fetch_table('drivers', dr_cur)
+        work_map = {r['work_rule_id']: r['name'] for r in wr}
+        self._upsert_drivers(dr, work_map)
+        if dr:
+            params.set_param('fleet_partner_dashboard.drivers_cursor',
+                            max(r['updated_at'] for r in dr))
+            self.env.cr.commit()
 
-        # 3) supply_hours & issues (same support window)
-        sh_rows = self._stream_table_limited('supply_hours', last_support, page_size=1000, max_pages=5)
-        self._upsert_supply_hours(sh_rows)
-        try:
-            self.env.cr.commit()  # commit supply_hours separately
-        except Exception:
-            _logger.exception("Failed to commit after supply_hours upsert; continuing")
+        # 3) orders (composite cursor)
+        ord_cur = params.get_param('fleet_partner_dashboard.orders_cursor') or dr_cur
+        new_ord_cur = self.sync_orders(ord_cur)
+        params.set_param('fleet_partner_dashboard.orders_cursor', new_ord_cur)
 
-        # fetch and sync issues, capturing the rows used
-        is_rows = self.sync_issues(last_support, profile="dashboard")
-        try:
-            self.env.cr.commit()  # commit issues separately
-        except Exception:
-            _logger.exception("Failed to commit after issues upsert; continuing")
+        # 4) supply_hours
+        sh_cur = params.get_param('fleet_partner_dashboard.supply_hours_cursor') or dr_cur
+        sh = self._stream_table_limited('supply_hours', sh_cur, page_size=1000, max_pages=5)
+        self._upsert_supply_hours(sh)
+        if sh:
+            params.set_param('fleet_partner_dashboard.supply_hours_cursor',
+                            max(r['updated_at'] for r in sh))
+            self.env.cr.commit()
 
-        # 4) compute new last_support as the max updated_at seen among support tables and orders
-        all_ts = []
-        all_ts.extend(r.get('updated_at') for r in wr_rows if r.get('updated_at'))
-        all_ts.extend(r.get('updated_at') for r in dr_rows if r.get('updated_at'))
-        all_ts.extend(r.get('updated_at') for r in sh_rows if r.get('updated_at'))
-        all_ts.extend(r.get('updated_at') for r in is_rows if r.get('updated_at'))
-        if orders_updated_at:
-            all_ts.append(orders_updated_at)
-        if not all_ts:
-            _logger.info("No timestamps found; nothing to update for last_sync.")
-            return
+        # 5) issues
+        is_cur = params.get_param('fleet_partner_dashboard.issues_cursor') or dr_cur
+        is_rows = self.sync_issues(is_cur)
+        if is_rows:
+            params.set_param('fleet_partner_dashboard.issues_cursor',
+                            max(r['updated_at'] for r in is_rows))
+            self.env.cr.commit()
 
-        new_last_support = max(all_ts)
-
-        # 5) persist support cursor (orders_cursor already written inside sync_orders)
-        params.set_param('fleet_partner.last_sync', new_last_support)
-        params.set_param('fleet_partner.orders_cursor', new_orders_cursor)
-        _logger.info("Recorded last_sync = %s and orders_cursor = %s", new_last_support, new_orders_cursor)
-        _logger.info("Completed full sync")
+        _logger.info("Full multi-cursor sync complete")
 
 
