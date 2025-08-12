@@ -273,6 +273,7 @@ class FleetDashboardController(http.Controller):
                 # 3) ACCEPTANCE: did we ever reach driving|waiting|transporting?
                 if statuses & {'driving', 'waiting', 'transporting'}:
                     accept_num_current += 1
+                # total number of orders
                 order_num_current += 1
                 
                 # 4) EFFICIENCY: if we started transporting, find the terminal event
@@ -354,16 +355,20 @@ class FleetDashboardController(http.Controller):
         avg_supply_prev = (supply_previous / active_previous) if active_previous else 0.0
         
         # compute % utilisation
-        avg_util_current = (util_secs_current / 3600.0 / supply_current * 100.0) \
-                            if supply_current else 0.0
-        avg_util_previous = (util_secs_previous / 3600.0 / supply_previous * 100.0) \
-                             if supply_previous else 0.0
+        avg_util_current = (
+            util_secs_current / 3600.0 / supply_current * 100.0
+            ) if supply_current else 0.0
+        avg_util_previous = (
+            util_secs_previous / 3600.0 / supply_previous * 100.0
+            ) if supply_previous else 0.0
                              
         # compute % efficiency
-        avg_eff_current = (eff_secs_current / 3600.0 / supply_current * 100.0) \
-                            if supply_current else 0.0
-        avg_eff_previous = (eff_secs_previous / 3600.0 / supply_previous * 100.0) \
-                             if supply_previous else 0.0
+        avg_eff_current = (
+            eff_secs_current / 3600.0 / supply_current * 100.0
+        ) if supply_current else 0.0
+        avg_eff_previous = (
+            eff_secs_previous / 3600.0 / supply_previous * 100.0
+        ) if supply_previous else 0.0
         
         # compute acceptance rate %                     
         accept_rate_current = (
@@ -374,8 +379,12 @@ class FleetDashboardController(http.Controller):
         ) if order_num_previous else 0.0
         
         # compute completed to request %
-        completed_to_request_current = (trip_current / order_num_current * 100.0) if order_num_current else 0.0
-        completed_to_request_previous = (trip_previous / order_num_previous * 100.0) if order_num_previous else 0.0
+        completed_to_request_current = (
+            trip_current / order_num_current * 100.0
+        ) if order_num_current else 0.0
+        completed_to_request_previous = (
+            trip_previous / order_num_previous * 100.0
+        ) if order_num_previous else 0.0
 
         metrics = {
             'activeDrivers':     active_current,

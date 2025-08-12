@@ -44,7 +44,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         while True:
             params = {
                 "select":     "*",
-                "updated_at": f"gt.{last_sync}",
+                "updated_at": f"gte.{last_sync}",
                 "order":      "updated_at.asc",
                 "limit":      page_size,
                 "offset":     offset,
@@ -75,7 +75,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         }
         params = {
             "select":     "*",
-            "updated_at": f"gt.{last_sync}",
+            "updated_at": f"gte.{last_sync}",
             "order":      "updated_at.asc",
             "limit":      limit,
             "offset":     offset,
@@ -133,7 +133,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         for page in range(max_pages):
             params = {
                 "select":     "*",
-                "updated_at": f"gt.{last_sync}",
+                "updated_at": f"gte.{last_sync}",
                 "order":      "updated_at.asc",
                 "limit":      page_size,
                 "offset":     offset,
