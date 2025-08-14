@@ -1,4 +1,4 @@
-from odoo import models, api, _
+from odoo import models, api, fields, _
 from odoo.exceptions import UserError
 from requests.exceptions import HTTPError
 from datetime import datetime, timezone, timedelta
@@ -19,6 +19,15 @@ def _normalize_datetime(val):
 class FleetPartnerSupabaseSync(models.AbstractModel):
     _name = 'x_fleet_partner_supabase_sync'
     _description = 'Sync data from Supabase by table'
+    
+    def _queue_failed_row(self, table, rec, key, err_msg=None):
+        """Enqueue a single source row into the DLQ."""
+        self.env['x_supabase_sync_queue'].sudo().create({
+            'table': table,
+            'record_key': key or '<missing>',
+            'raw_data': json.dumps(rec, ensure_ascii=False),
+            'error': (err_msg or '')[:1000],
+        })
 
     def _get_config(self):
         params = self.env['ir.config_parameter'].sudo()
@@ -249,6 +258,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         for rec in rows:
             short_id = rec.get('order_short_id')
             if short_id is None:
+                self._queue_failed_row('orders', rec, '<missing>', 'missing order_short_id')
                 continue
             name = str(short_id)
             batch_names.append(name)
@@ -267,16 +277,18 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             rec = short_id_to_rec.get(name)
             if not rec:
                 continue  # should not happen
+
             drv_ext_id = rec.get('driver_id')
             drv_id = driver_map.get(drv_ext_id)
             if not drv_id:
-                _logger.warning("No driver for order %s (driver_id=%s)", name, drv_ext_id)
+                self._queue_failed_row('orders', rec, name, f"missing driver {drv_ext_id}")
+                _logger.warning("Queued order %s for later (driver %s missing)", name, drv_ext_id)
                 continue
 
             raw = {
-                'order_date':               _normalize_datetime(rec['booked_at'])           if rec.get('booked_at')        else None,
-                'interval_from':            _normalize_datetime(rec['interval_from'])      if rec.get('interval_from')     else None,
-                'interval_to':              _normalize_datetime(rec['interval_to'])        if rec.get('interval_to')       else None,
+                'order_date':               _normalize_datetime(rec['booked_at'])      if rec.get('booked_at')      else None,
+                'interval_from':            _normalize_datetime(rec['interval_from'])  if rec.get('interval_from')  else None,
+                'interval_to':              _normalize_datetime(rec['interval_to'])    if rec.get('interval_to')    else None,
                 'status':                   rec.get('order_status'),
                 'cancellation_description': rec.get('cancellation_description'),
                 'pickup_address':           rec.get('pickup_address'),
@@ -290,16 +302,30 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             }
             vals = {k: v for k, v in raw.items() if v is not None}
 
-            if name in existing_map:
-                existing_map[name].write(vals)
-            else:
-                vals['name'] = name
-                new_vals.append(vals)
+            try:
+                if name in existing_map:
+                    existing_map[name].write(vals)
+                else:
+                    vals['name'] = name
+                    new_vals.append(vals)
+            except Exception as e:
+                self._queue_failed_row('orders', rec, name, str(e))
+                _logger.exception("Failed to upsert order %s; queued for retry", name)
 
+        # Bulk-create new ones; on failure, fall back per-row and queue bad ones
         if new_vals:
-            Order.create(new_vals)
-            _logger.info("Bulk-created %d new orders", len(new_vals))
-
+            try:
+                Order.create(new_vals)
+                _logger.info("Bulk-created %d new orders", len(new_vals))
+            except Exception:
+                _logger.exception("Bulk create for orders failed; falling back per-row")
+                for vals in new_vals:
+                    name = vals.get('name')
+                    rec  = short_id_to_rec.get(name, {})
+                    try:
+                        Order.create(vals)
+                    except Exception as e:
+                        self._queue_failed_row('orders', rec, name or '<missing>', str(e))
 
     @api.model
     def sync_orders(self, last_sync):
@@ -385,34 +411,47 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
     @api.model
     def _upsert_supply_hours(self, rows):
-        """Bulk upsert supply_hours via single SQL, deduping by (driver_id,date). Assumes chunked input."""
+        """Bulk upsert supply_hours via single SQL, deduping by (driver_id,date).
+        Queues rows missing a driver or required fields; falls back per-row if bulk fails."""
         _logger.info("Upserting %d supply_hours rows (bulk SQL + dedupe)…", len(rows))
         Driver = self.env['x_fleet_driver'].sudo()
         cr = self.env.cr
 
-        upsert_map = {}
+        # pre-fetch drivers by external id once
+        dmap = {d.yango_driver_id: d.id for d in Driver.search([('yango_driver_id', '!=', False)])}
+
+        ok_rows = []     # (drv_id, date_str, secs)
+        keys    = []     # record_key aligned with ok_rows
+        sources = []     # original rec aligned with ok_rows
+
         for rec in rows:
-            yid = rec.get('yango_driver_id')
+            yid  = rec.get('yango_driver_id')
             secs = rec.get('supply_duration_seconds')
             date = rec.get('date')
             if not (yid and date is not None and secs is not None):
-                _logger.warning("Skipping incomplete supply_hours: %r", rec)
+                self._queue_failed_row('supply_hours', rec, f"{yid}|{date}", "incomplete row")
                 continue
-            drv = Driver.search([('yango_driver_id', '=', yid)], limit=1)
-            if not drv:
-                _logger.warning("No driver for supply_hours: %r", rec)
+            drv_id = dmap.get(yid)
+            if not drv_id:
+                self._queue_failed_row('supply_hours', rec, f"{yid}|{date}", f"missing driver {yid}")
                 continue
-            if isinstance(date, str):
-                date_str = date
-            else:
-                date_str = date.strftime('%Y-%m-%d')
-            upsert_map[(drv.id, date_str)] = secs
+            date_str = date if isinstance(date, str) else date.strftime('%Y-%m-%d')
+            ok_rows.append((drv_id, date_str, secs))
+            keys.append(f"{yid}|{date_str}")
+            sources.append(rec)
 
-        if not upsert_map:
+        if not ok_rows:
             _logger.info("Nothing to upsert for supply_hours.")
             return
 
-        tuples = list(upsert_map.items())
+        # dedupe by (driver_id, date) keeping last value
+        dedup = {}
+        keep  = {}
+        for i, (drv_id, date_str, secs) in enumerate(ok_rows):
+            dedup[(drv_id, date_str)] = secs
+            keep[(drv_id, date_str)]  = i  # remember one source index
+
+        tuples = list(dedup.items())
         placeholders = ",".join(["(%s,%s,%s)"] * len(tuples))
         sql = f"""
             INSERT INTO x_fleet_driver_supply_hours (driver_id, date, seconds)
@@ -424,8 +463,23 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         for (drv_id, date_str), secs in tuples:
             params.extend([drv_id, date_str, secs])
 
-        cr.execute(sql, params)
-        _logger.info("Bulk-upserted %d unique supply_hours rows", len(tuples))
+        try:
+            cr.execute(sql, params)
+            _logger.info("Bulk-upserted %d unique supply_hours rows", len(tuples))
+        except Exception as e:
+            _logger.exception("Bulk upsert supply_hours failed; falling back per-row")
+            # per-row fallback with queue on failure
+            for (drv_id, date_str), secs in tuples:
+                rec_idx = keep.get((drv_id, date_str))
+                rec     = sources[rec_idx] if rec_idx is not None else {}
+                try:
+                    cr.execute("""
+                        INSERT INTO x_fleet_driver_supply_hours (driver_id, date, seconds)
+                        VALUES (%s,%s,%s)
+                        ON CONFLICT (driver_id, date) DO UPDATE SET seconds = EXCLUDED.seconds
+                    """, (drv_id, date_str, secs))
+                except Exception as ee:
+                    self._queue_failed_row('supply_hours', rec, f"{rec.get('yango_driver_id')}|{date_str}", str(ee))
 
     @api.model
     def sync_issues(self, last_sync, rows=None, profile="dashboard"):
@@ -439,14 +493,19 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 else:
                     raise
 
-        Issue = self.env['x_fleet_issue'].sudo()
+        Issue  = self.env['x_fleet_issue'].sudo()
         Driver = self.env['x_fleet_driver'].sudo()
-        new_vals = []
+
         for rec in rows:
             ext_id = rec.get('id')
-            drv = Driver.search([('yango_driver_id', '=', rec.get('yango_driver_id'))], limit=1)
-            if not (ext_id and drv):
+            if not ext_id:
+                self._queue_failed_row('issues', rec, '<missing>', 'missing issue id')
                 continue
+            drv = Driver.search([('yango_driver_id', '=', rec.get('yango_driver_id'))], limit=1)
+            if not drv:
+                self._queue_failed_row('issues', rec, str(ext_id), f"missing driver {rec.get('yango_driver_id')}")
+                continue
+
             raw = {
                 'name':            ext_id,
                 'date_reported':   _normalize_datetime(rec['date_reported']) if rec.get('date_reported') else None,
@@ -458,15 +517,18 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 'driver_id':       drv.id,
             }
             vals = {k: v for k, v in raw.items() if v is not None}
-            exists = Issue.search([('name', '=', ext_id)], limit=1)
-            if exists:
-                exists.write(vals)
-            else:
-                new_vals.append(vals)
-        if new_vals:
-            Issue.create(new_vals)
-            _logger.info("Bulk-created %d new issues", len(new_vals))
-        return rows  # so caller can reuse for timestamp logic
+
+            try:
+                exists = Issue.search([('name', '=', ext_id)], limit=1)
+                if exists:
+                    exists.write(vals)
+                else:
+                    Issue.create(vals)
+            except Exception as e:
+                self._queue_failed_row('issues', rec, str(ext_id), str(e))
+
+        # return rows so caller can compute last_sync
+        return rows
 
     @api.model
     def sync_all(self):
@@ -514,5 +576,41 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             self.env.cr.commit()
 
         _logger.info("Full multi-cursor sync complete")
+        
+    @api.model
+    def _retry_queued_rows(self, limit=200):
+        Q = self.env['x_supabase_sync_queue'].sudo()
+        now = fields.Datetime.now()
+        items = Q.search([('state','=','queued'), ('next_attempt','<=', now)],
+                         order='next_attempt,id', limit=limit)
+        ok = fail = 0
+        for q in items:
+            try:
+                rec = json.loads(q.raw_data) if q.raw_data else {}
+                if q.table == 'orders':
+                    # your upsert handles lists; pass single
+                    self._upsert_orders([rec])
+                elif q.table == 'supply_hours':
+                    self._upsert_supply_hours([rec])
+                elif q.table == 'drivers':
+                    # minimal map; if needed, build one or call a small upsert
+                    self._upsert_drivers([rec], {})
+                elif q.table == 'issues':
+                    self.sync_issues(last_sync=None, rows=[rec])  # your method accepts rows
+                else:
+                    raise ValueError(f"Unknown table {q.table}")
+
+                # success — drop from queue (or mark done if you prefer to keep history)
+                q.unlink()
+                ok += 1
+            except Exception as e:
+                fail += 1
+                # record error and backoff
+                q.error = str(e)[:1000]
+                q.set_retry_backoff()
+                # optionally move to 'failed' after N attempts
+                if q.retries >= 10:
+                    q.state = 'failed'
+        _logger.info("DLQ retry run: processed=%d, ok=%d, failed=%d", len(items), ok, fail)
 
 

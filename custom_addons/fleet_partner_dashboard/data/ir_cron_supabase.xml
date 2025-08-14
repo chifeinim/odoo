@@ -9,4 +9,15 @@
     <field name="numbercall">-1</field>
     <field name="active">True</field>
   </record>
+
+  <record id="ir_cron_supabase_failed_record_sync" model="ir.cron">
+    <field name="name">Retry syncing failed Supabase Records to Odoo</field>
+    <field name="model_id" ref="fleet_partner_dashboard.model_x_fleet_partner_supabase_sync"/>
+    <field name="state">code</field>
+    <field name="code">model._retry_queued_rows()</field>
+    <field name="interval_number">60</field>
+    <field name="interval_type">minutes</field>
+    <field name="numbercall">-1</field>
+    <field name="active">False</field>
+  </record>
 </odoo>
