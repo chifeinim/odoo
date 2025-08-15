@@ -15,10 +15,47 @@ def _normalize_datetime(val):
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt.strftime('%Y-%m-%d %H:%M:%S')
 
-
 class FleetPartnerSupabaseSync(models.AbstractModel):
     _name = 'x_fleet_partner_supabase_sync'
     _description = 'Sync data from Supabase by table'
+    
+    def _parse_sh_cursor(self, cursor):
+        """
+        Parse a supply_hours composite cursor into (ts, yango_driver_id, date_str).
+
+        Accepted forms:
+        - "" / None                                 → ('1970-01-01T00:00:00Z', '', '0001-01-01')
+        - "2025-08-06T10:00:01Z"                    → (ts, '', '0001-01-01')
+        - "2025-08-06T10:00:01Z||abcd1234"          → (ts, 'abcd1234', '0001-01-01')
+        - "2025-08-06T10:00:01Z||abcd1234||2025-08-05" → (ts, 'abcd1234', '2025-08-05')
+        """
+        # defaults: ts at epoch, and the smallest ISO date (lexicographically minimal)
+        ts_default = "1970-01-01T00:00:00Z"
+        yid_default = ""
+        date_default = "0001-01-01"
+
+        if not cursor:
+            return ts_default, yid_default, date_default
+
+        if not isinstance(cursor, str):
+            cursor = str(cursor)
+
+        parts = [p.strip() for p in cursor.split("||")]
+
+        if len(parts) >= 3 and parts[0]:
+            ts, yid, d = parts[0], parts[1], parts[2]
+        elif len(parts) == 2 and parts[0]:
+            ts, yid, d = parts[0], parts[1], date_default
+        elif len(parts) == 1 and parts[0]:
+            ts, yid, d = parts[0], yid_default, date_default
+        else:
+            return ts_default, yid_default, date_default
+
+        # Very light validation / normalization for date component
+        if not (isinstance(d, str) and len(d) == 10 and d[4] == '-' and d[7] == '-'):
+            d = date_default
+
+        return ts, yid or yid_default, d
     
     def _queue_failed_row(self, table, rec, key, err_msg=None):
         """Enqueue a single source row into the DLQ."""
@@ -126,39 +163,36 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         resp.raise_for_status()
         return resp.json() or []
     
-    def _stream_table_limited(self, table, last_sync, page_size=1000, max_pages=5, profile="external_data_yango"):
+    def _fetch_supply_hours_page(self, last_ts, last_yid, last_date,
+                                page_size=1000, profile="external_data_yango"):
         base_url, key = self._get_config()
-        endpoint = f"{base_url}/rest/v1/{table}"
+        endpoint = f"{base_url}/rest/v1/supply_hours"
         headers = {
-            "apikey":        key,
-            "Authorization": f"Bearer {key}",
-            "Accept":        "application/json",
-            "Accept-Profile":  profile,
-            "Content-Profile": profile,
-            "Prefer":        "count=exact",
+            "apikey": key, "Authorization": f"Bearer {key}",
+            "Accept": "application/json",
+            "Accept-Profile": profile, "Content-Profile": profile,
+            "Prefer": "count=exact",
         }
-        all_rows = []
-        offset = 0
-        for page in range(max_pages):
-            params = {
-                "select":     "*",
-                "updated_at": f"gte.{last_sync}",
-                "order":      "updated_at.asc",
-                "limit":      page_size,
-                "offset":     offset,
-            }
-            _logger.info("Fetching %s rows %d→%d (page_size=%d)…", table, offset+1, offset+page_size, page_size)
-            resp = requests.get(endpoint, headers=headers, params=params, timeout=60)
-            resp.raise_for_status()
-            batch = resp.json() or []
-            if not batch:
-                break
-            all_rows.extend(batch)
-            if len(batch) < page_size:
-                break
-            offset += page_size
-        _logger.info("Fetched %d rows from %s (limited stream)", len(all_rows), table)
-        return all_rows
+        ts_q  = urllib.parse.quote_plus(last_ts)
+        yid_q = urllib.parse.quote_plus(last_yid or '')
+        date_q= urllib.parse.quote_plus(last_date or '0001-01-01')
+
+        or_clause = (
+            f"or=("
+            f"updated_at.gt.{ts_q},"
+            f"and(updated_at.eq.{ts_q},yango_driver_id.gt.{yid_q}),"
+            f"and(updated_at.eq.{ts_q},yango_driver_id.eq.{yid_q},date.gt.{date_q})"
+            f")"
+        )
+        params = {
+            "select": "*",
+            "order": "updated_at.asc,yango_driver_id.asc,date.asc",
+            "limit": page_size,
+        }
+        query = f"{urllib.parse.urlencode(params)}&{or_clause}"
+        resp = requests.get(f"{endpoint}?{query}", headers=headers, timeout=60)
+        resp.raise_for_status()
+        return resp.json() or []
 
     @api.model
     def _upsert_product_types(self, rows):
@@ -410,76 +444,26 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         return final_cursor
 
     @api.model
-    def _upsert_supply_hours(self, rows):
-        """Bulk upsert supply_hours via single SQL, deduping by (driver_id,date).
-        Queues rows missing a driver or required fields; falls back per-row if bulk fails."""
-        _logger.info("Upserting %d supply_hours rows (bulk SQL + dedupe)…", len(rows))
-        Driver = self.env['x_fleet_driver'].sudo()
-        cr = self.env.cr
-
-        # pre-fetch drivers by external id once
-        dmap = {d.yango_driver_id: d.id for d in Driver.search([('yango_driver_id', '!=', False)])}
-
-        ok_rows = []     # (drv_id, date_str, secs)
-        keys    = []     # record_key aligned with ok_rows
-        sources = []     # original rec aligned with ok_rows
-
-        for rec in rows:
-            yid  = rec.get('yango_driver_id')
-            secs = rec.get('supply_duration_seconds')
-            date = rec.get('date')
-            if not (yid and date is not None and secs is not None):
-                self._queue_failed_row('supply_hours', rec, f"{yid}|{date}", "incomplete row")
-                continue
-            drv_id = dmap.get(yid)
-            if not drv_id:
-                self._queue_failed_row('supply_hours', rec, f"{yid}|{date}", f"missing driver {yid}")
-                continue
-            date_str = date if isinstance(date, str) else date.strftime('%Y-%m-%d')
-            ok_rows.append((drv_id, date_str, secs))
-            keys.append(f"{yid}|{date_str}")
-            sources.append(rec)
-
-        if not ok_rows:
-            _logger.info("Nothing to upsert for supply_hours.")
+    def _upsert_supply_hours_resolved(self, rows):
+        """rows: list of {'driver_id': int, 'date': 'YYYY-MM-DD', 'seconds': int}"""
+        if not rows:
             return
-
-        # dedupe by (driver_id, date) keeping last value
+        # Deduplicate by (driver_id, date)
         dedup = {}
-        keep  = {}
-        for i, (drv_id, date_str, secs) in enumerate(ok_rows):
-            dedup[(drv_id, date_str)] = secs
-            keep[(drv_id, date_str)]  = i  # remember one source index
-
+        for r in rows:
+            dedup[(r['driver_id'], r['date'])] = r['seconds']
         tuples = list(dedup.items())
         placeholders = ",".join(["(%s,%s,%s)"] * len(tuples))
         sql = f"""
             INSERT INTO x_fleet_driver_supply_hours (driver_id, date, seconds)
             VALUES {placeholders}
-            ON CONFLICT (driver_id, date)
-            DO UPDATE SET seconds = EXCLUDED.seconds
+            ON CONFLICT (driver_id, date) DO UPDATE SET seconds = EXCLUDED.seconds
         """
         params = []
-        for (drv_id, date_str), secs in tuples:
-            params.extend([drv_id, date_str, secs])
-
-        try:
-            cr.execute(sql, params)
-            _logger.info("Bulk-upserted %d unique supply_hours rows", len(tuples))
-        except Exception as e:
-            _logger.exception("Bulk upsert supply_hours failed; falling back per-row")
-            # per-row fallback with queue on failure
-            for (drv_id, date_str), secs in tuples:
-                rec_idx = keep.get((drv_id, date_str))
-                rec     = sources[rec_idx] if rec_idx is not None else {}
-                try:
-                    cr.execute("""
-                        INSERT INTO x_fleet_driver_supply_hours (driver_id, date, seconds)
-                        VALUES (%s,%s,%s)
-                        ON CONFLICT (driver_id, date) DO UPDATE SET seconds = EXCLUDED.seconds
-                    """, (drv_id, date_str, secs))
-                except Exception as ee:
-                    self._queue_failed_row('supply_hours', rec, f"{rec.get('yango_driver_id')}|{date_str}", str(ee))
+        for (drv_id, d), secs in tuples:
+            params.extend([drv_id, d, secs])
+        self.env.cr.execute(sql, params)
+        _logger.info("Bulk-upserted %d unique supply_hours rows", len(tuples))
 
     @api.model
     def sync_issues(self, last_sync, rows=None, profile="dashboard"):
@@ -529,6 +513,71 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         # return rows so caller can compute last_sync
         return rows
+    
+    def sync_supply_hours(self, cursor):
+        """
+        Stream supply_hours ordered by (updated_at, yango_driver_id, date),
+        queue rows with missing drivers, bulk-upsert the rest,
+        and return the new composite cursor "ts||yid||date".
+        """
+        params = self.env['ir.config_parameter'].sudo()
+        Driver = self.env['x_fleet_driver'].sudo()
+
+        # preload map once
+        driver_map = {d.yango_driver_id: d.id
+                    for d in Driver.search([('yango_driver_id', '!=', False)])}
+
+        page_size = 1000
+        max_pages = 5
+        last_ts, last_yid, last_date = self._parse_sh_cursor(cursor)  # your helper
+
+        total = 0
+        for _ in range(max_pages):
+            rows = self._fetch_supply_hours_page(last_ts, last_yid, last_date, page_size)  # ordered by ts,yid,date
+            if not rows:
+                break
+
+            # split into queue vs upsertable
+            upsert_rows = []
+            queued = 0
+            for rec in rows:
+                yid = rec.get('yango_driver_id')
+                dt  = rec.get('date')
+                secs = rec.get('supply_duration_seconds')
+                drv_id = driver_map.get(yid)
+                if not (yid and dt and secs is not None):
+                    continue
+                if not drv_id:
+                    # queue for later retry
+                    self._queue_failed_row('supply_hours', rec, f"{yid}|{dt}")
+                    queued += 1
+                    continue
+                upsert_rows.append({'driver_id': drv_id, 'date': dt, 'seconds': secs})
+
+            if upsert_rows:
+                self._upsert_supply_hours_resolved(upsert_rows)  # bulk SQL on (driver_id,date)
+
+            total += len(rows)
+            if queued:
+                _logger.warning("Queued %d supply_hours rows (missing drivers)", queued)
+
+            # advance cursor to the last row actually fetched
+            last = rows[-1]
+            last_ts   = last['updated_at']
+            last_yid  = last['yango_driver_id']
+            last_date = last['date']
+            params.set_param('fleet_partner_dashboard.supply_hours_cursor',
+                            f"{last_ts}||{last_yid}||{last_date}")
+            try:
+                self.env.cr.commit()
+            except Exception:
+                _logger.exception("Commit failed after supply_hours batch; continuing")
+
+            if len(rows) < page_size:
+                break
+
+        _logger.info("Streamed supply_hours rows: %d", total)
+        return f"{last_ts}||{last_yid}||{last_date}"
 
     @api.model
     def sync_all(self):
@@ -560,11 +609,9 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         # 4) supply_hours
         sh_cur = params.get_param('fleet_partner_dashboard.supply_hours_cursor') or dr_cur
-        sh = self._stream_table_limited('supply_hours', sh_cur, page_size=1000, max_pages=5)
-        self._upsert_supply_hours(sh)
-        if sh:
-            params.set_param('fleet_partner_dashboard.supply_hours_cursor',
-                            max(r['updated_at'] for r in sh))
+        new_sh_cur = self.sync_supply_hours(sh_cur)
+        if new_sh_cur:
+            params.set_param('fleet_partner_dashboard.supply_hours_cursor', new_sh_cur)
             self.env.cr.commit()
 
         # 5) issues
