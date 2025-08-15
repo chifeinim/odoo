@@ -22,7 +22,11 @@ class FleetSyncQueue(models.Model):
     error         = fields.Text()
     retries       = fields.Integer(default=0)
     next_attempt  = fields.Datetime(default=lambda self: fields.Datetime.now(), index=True)
-    state         = fields.Selection([('queued','Queued'), ('failed','Failed')], default='queued', index=True)
+    state = fields.Selection([
+        ('queued', 'Queued'),
+        ('processing', 'Processing'),
+        ('failed', 'Failed'),
+    ], default='queued', index=True)
 
     _sql_constraints = [
         ('uniq_table_key', 'unique(table, record_key)', 'This record is already queued.'),
