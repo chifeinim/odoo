@@ -3,7 +3,7 @@ from odoo.exceptions import UserError
 from requests.exceptions import HTTPError
 from datetime import datetime, timezone, timedelta
 from dateutil.parser import isoparse
-import logging, requests, json, urllib.parse, re
+import logging, requests, json, urllib.parse, re, traceback
 
 
 _logger = logging.getLogger(__name__)
@@ -442,28 +442,96 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         final_cursor = f"{max_updated_at}||{max_id}"
         _logger.info("Finished streaming %d orders; new cursor (%s, %s)", total, max_updated_at, max_id)
         return final_cursor
-
+    
     @api.model
-    def _upsert_supply_hours_resolved(self, rows):
-        """rows: list of {'driver_id': int, 'date': 'YYYY-MM-DD', 'seconds': int}"""
-        if not rows:
+    def _upsert_supply_hours(self, rows, on_missing='queue'):
+        """
+        Bulk upsert supply_hours (dedupe on (driver_id, date)).
+
+        on_missing:
+        - 'queue' : queue the row and continue
+        - 'error' : raise if driver not found (useful in retry path)
+        - 'skip'  : silently skip rows whose driver is missing
+        """
+        Driver = self.env['x_fleet_driver'].sudo()
+        cr = self.env.cr
+
+        # Preload driver map once
+        driver_map = {d.yango_driver_id: d.id for d in Driver.search([('yango_driver_id', '!=', False)])}
+
+        upsert_map = {}   # (driver_id, date_str) -> seconds
+        queued = 0
+        skipped = 0
+        bad = 0
+
+        for rec in rows or []:
+            # Accept several shapes
+            yid  = rec.get('yango_driver_id') or rec.get('driver_id') or rec.get('yango_id')
+            secs = (rec.get('supply_duration_seconds') if rec.get('supply_duration_seconds') is not None
+                    else rec.get('seconds') if rec.get('seconds') is not None
+                    else rec.get('total_seconds'))
+            date = rec.get('date')
+
+            if not (yid and date is not None and secs is not None):
+                bad += 1
+                continue
+
+            drv_id = driver_map.get(yid)
+            if not drv_id:
+                if on_missing == 'queue':
+                    # stable key: driver + date
+                    key = f"{yid}||{date}"
+                    try:
+                        self._queue_failed_row('supply_hours', rec, key)
+                        queued += 1
+                    except Exception:
+                        # if unique constraint prevents dupes, that’s fine
+                        pass
+                    continue
+                elif on_missing == 'skip':
+                    skipped += 1
+                    continue
+                else:  # 'error'
+                    raise ValueError(f"Supply-hours row has missing driver: {yid} ({date})")
+
+            # date normalization → 'YYYY-MM-DD'
+            if hasattr(date, 'strftime'):
+                date_str = date.strftime('%Y-%m-%d')
+            else:
+                # assume ISO date string already (e.g. '2025-08-14')
+                date_str = str(date)[:10]
+
+            upsert_map[(drv_id, date_str)] = int(secs)
+
+        if not upsert_map:
+            _logger.info("No supply_hours rows to upsert (queued=%d, skipped=%d, bad=%d).", queued, skipped, bad)
             return
-        # Deduplicate by (driver_id, date)
-        dedup = {}
-        for r in rows:
-            dedup[(r['driver_id'], r['date'])] = r['seconds']
-        tuples = list(dedup.items())
+
+        tuples = list(upsert_map.items())
         placeholders = ",".join(["(%s,%s,%s)"] * len(tuples))
         sql = f"""
             INSERT INTO x_fleet_driver_supply_hours (driver_id, date, seconds)
             VALUES {placeholders}
-            ON CONFLICT (driver_id, date) DO UPDATE SET seconds = EXCLUDED.seconds
+            ON CONFLICT (driver_id, date)
+            DO UPDATE SET seconds = EXCLUDED.seconds
         """
         params = []
-        for (drv_id, d), secs in tuples:
-            params.extend([drv_id, d, secs])
-        self.env.cr.execute(sql, params)
-        _logger.info("Bulk-upserted %d unique supply_hours rows", len(tuples))
+        for (drv_id, date_str), secs in tuples:
+            params.extend([drv_id, date_str, secs])
+
+        cr.execute(sql, params)
+        _logger.info(
+            "Bulk-upserted %d unique supply_hours rows (queued=%d, skipped=%d, bad=%d).",
+            len(tuples), queued, skipped, bad
+        )
+
+    @api.model
+    def _upsert_supply_hours_resolved(self, rows):
+        """
+        Wrapper for cases where all drivers should already exist.
+        We just skip missing instead of queueing/raising.
+        """
+        return self._upsert_supply_hours(rows, on_missing='skip')
 
     @api.model
     def sync_issues(self, last_sync, rows=None, profile="dashboard"):
@@ -628,36 +696,44 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     def _retry_queued_rows(self, limit=200):
         Q = self.env['x_supabase_sync_queue'].sudo()
         now = fields.Datetime.now()
-        items = Q.search([('state','=','queued'), ('next_attempt','<=', now)],
-                         order='next_attempt,id', limit=limit)
+
+        items = Q.search([
+            ('state', '=', 'queued'),
+            ('next_attempt', '<=', now),
+        ], order='next_attempt,id', limit=limit)
+
+        # claim items (optional but good practice if you can have parallel workers)
+        items.write({'state': 'processing'})
+
         ok = fail = 0
         for q in items:
             try:
                 rec = json.loads(q.raw_data) if q.raw_data else {}
-                if q.table == 'orders':
-                    # your upsert handles lists; pass single
-                    self._upsert_orders([rec])
-                elif q.table == 'supply_hours':
-                    self._upsert_supply_hours([rec])
-                elif q.table == 'drivers':
-                    # minimal map; if needed, build one or call a small upsert
-                    self._upsert_drivers([rec], {})
-                elif q.table == 'issues':
-                    self.sync_issues(last_sync=None, rows=[rec])  # your method accepts rows
-                else:
-                    raise ValueError(f"Unknown table {q.table}")
 
-                # success — drop from queue (or mark done if you prefer to keep history)
-                q.unlink()
-                ok += 1
-            except Exception as e:
+                if q.table == 'orders':
+                    self._upsert_orders([rec])
+
+                elif q.table == 'supply_hours':
+                    # Raise if driver still missing → backoff
+                    self._upsert_supply_hours([rec], on_missing='error')
+
+                elif q.table == 'issues':
+                    # your sync_issues works when rows are provided
+                    self.sync_issues(last_sync='1970-01-01T00:00:00Z', rows=[rec])
+
+                else:
+                    raise ValueError(f"Retry not implemented for table {q.table!r}")
+
+            except Exception:
                 fail += 1
-                # record error and backoff
-                q.error = str(e)[:1000]
-                q.set_retry_backoff()
-                # optionally move to 'failed' after N attempts
-                if q.retries >= 10:
-                    q.state = 'failed'
-        _logger.info("DLQ retry run: processed=%d, ok=%d, failed=%d", len(items), ok, fail)
+                # store full trace for debugging, then backoff
+                q.write({'error': traceback.format_exc()[:100000]})
+                q.set_retry_backoff()   # <= from the queue model
+            else:
+                ok += 1
+                q.unlink()  # success → remove from queue
+
+        _logger.info("DLQ retry run: processed=%d, ok=%d, failed(backoff)=%d", len(items), ok, fail)
+        return True
 
 

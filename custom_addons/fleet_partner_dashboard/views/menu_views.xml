@@ -30,6 +30,19 @@
             parent="menu_fleet_dashboard_root"
             action="action_fleet_product_type"/>
 
+  <!-- Parent “Technical” under Fleet Dashboard root -->
+  <menuitem id="menu_fleet_technical"
+            name="Technical"
+            parent="fleet_partner_dashboard.menu_fleet_dashboard_root"
+            sequence="99"/>
+
+  <!-- Child “Queued Records” -->
+  <menuitem id="menu_fleet_sync_queue"
+            name="Queued Records"
+            parent="menu_fleet_technical"
+            action="action_fleet_sync_queue"
+            sequence="10"/>
+
   <!-- Dashboards -->
   <record id="action_fleet_dashboard_webpage" model="ir.actions.act_url">
     <field name="name">Fleet Dashboard</field>

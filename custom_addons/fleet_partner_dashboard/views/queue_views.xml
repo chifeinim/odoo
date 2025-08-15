@@ -1,0 +1,88 @@
+<odoo>
+  <!-- Tree -->
+  <record id="view_x_supabase_sync_queue_tree" model="ir.ui.view">
+    <field name="name">x_supabase_sync_queue.tree</field>
+    <field name="model">x_supabase_sync_queue</field>
+    <field name="arch" type="xml">
+      <tree string="Queued Records" create="false">
+        <field name="table"/>
+        <field name="record_key"/>
+        <field name="state"/>
+        <field name="retries"/>
+        <field name="next_attempt"/>
+        <field name="create_date"/>
+        <field name="write_date"/>
+      </tree>
+    </field>
+  </record>
+
+  <!-- Form -->
+  <record id="view_x_supabase_sync_queue_form" model="ir.ui.view">
+    <field name="name">x_supabase_sync_queue.form</field>
+    <field name="model">x_supabase_sync_queue</field>
+    <field name="arch" type="xml">
+      <form string="Queued Record" create="false">
+        <sheet>
+          <group>
+            <group>
+              <field name="table"/>
+              <field name="record_key"/>
+              <field name="retries" readonly="1"/>
+              <field name="next_attempt"/>
+            </group>
+            <group>
+              <field name="create_date" readonly="1"/>
+              <field name="write_date" readonly="1"/>
+            </group>
+          </group>
+          <notebook>
+            <page string="Raw Data">
+              <field name="raw_data" nolabel="1" widget="text"/>
+            </page>
+            <page string="Last Error">
+              <field name="error" nolabel="1" widget="text"/>
+            </page>
+          </notebook>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+    <record id="view_x_supabase_sync_queue_search" model="ir.ui.view">
+    <field name="name">x_supabase_sync_queue.search</field>
+    <field name="model">x_supabase_sync_queue</field>
+    <field name="arch" type="xml">
+        <search>
+        <!-- basic free-text on the key -->
+        <field name="record_key"/>
+        <!-- simple state toggles -->
+        <filter name="flt_queued" string="Queued" domain="[('state','=','queued')]"/>
+        <filter name="flt_failed" string="Failed" domain="[('state','=','failed')]"/>
+        <!-- safe group-by -->
+        <group expand="1" string="Group By">
+            <filter name="grp_table" string="Table" context="{'group_by':'table'}"/>
+            <filter name="grp_state" string="State" context="{'group_by':'state'}"/>
+        </group>
+        </search>
+    </field>
+    </record>
+
+
+  <!-- Action -->
+  <record id="action_fleet_sync_queue" model="ir.actions.act_window">
+    <field name="name">Queued Records</field>
+    <field name="res_model">x_supabase_sync_queue</field>
+    <field name="view_mode">tree,form</field>
+    <field name="search_view_id" ref="view_x_supabase_sync_queue_search"/>
+    <field name="help" type="html">
+      <p class="o_view_nocontent_smiling_face">
+        No queued records yet.
+      </p>
+      <p>
+        This list shows Supabase rows that couldn’t be upserted (e.g. missing drivers).
+        Use <b>Retry Now</b> to attempt a single row, or wait for the
+        <i>Retry syncing failed Supabase Records to Odoo</i> cron.
+      </p>
+    </field>
+  </record>
+</odoo>

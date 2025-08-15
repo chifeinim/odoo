@@ -17,6 +17,7 @@
         'views/driver_dashboard.xml',
         'views/driver_supply_hours_views.xml',
         'views/issue_views.xml',
+        'views/queue_views.xml',
         'views/menu_views.xml',
     ],
     'assets': {
