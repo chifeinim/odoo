@@ -58,6 +58,7 @@
         <!-- simple state toggles -->
         <filter name="flt_queued" string="Queued" domain="[('state','=','queued')]"/>
         <filter name="flt_failed" string="Failed" domain="[('state','=','failed')]"/>
+        <filter name="flt_processing" string="Processing" domain="[('state','=','processing')]"/>
         <!-- safe group-by -->
         <group expand="1" string="Group By">
             <filter name="grp_table" string="Table" context="{'group_by':'table'}"/>
