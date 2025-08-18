@@ -3,7 +3,14 @@ from odoo import http
 from odoo.http import request
 from datetime import date, datetime, timedelta, timezone
 from dateutil.parser import isoparse
-import calendar, json
+import calendar, json, re
+
+def _humanize(s):
+    if not s:
+        return ''
+    # turn "bike_breakdown" -> "Bike Breakdown"
+    s = re.sub(r'[_\s]+', ' ', str(s)).strip()
+    return s.title()
 
 def parse_iso_with_frac(s: str) -> datetime:
     dt = isoparse(s)
@@ -50,13 +57,20 @@ class FleetDashboardController(http.Controller):
         ]
         today = date.today()
         Issue = request.env['x_fleet_issue'].sudo()
-        drivers = request.env['x_fleet_driver'].sudo().search([], order='name')
+        Driver = request.env['x_fleet_driver'].sudo()
+        drivers = Driver.search([], order='name')
 
-        # per‑driver breakdown
+        # per-driver breakdown (with human labels)
         result = []
         for drv in drivers:
             issues = Issue.search([('driver_id', '=', drv.id)])
             row = {'name': drv.name, 'phone': drv.phone or '', 'periods': []}
+
+            # counts for sorting
+            total_count = len(issues)
+            cutoff_7 = today - timedelta(days=7)
+            last7_count = len(issues.filtered(lambda i: i.date_reported and i.date_reported.date() >= cutoff_7))
+
             for days, label in windows:
                 if days is None:
                     subset = issues
@@ -64,28 +78,39 @@ class FleetDashboardController(http.Controller):
                     cutoff = today - timedelta(days=days)
                     subset = issues.filtered(lambda i: i.date_reported and i.date_reported.date() >= cutoff)
                 cats = [{
-                    'name': issue.main_category,
+                    'name':  issue.main_category,         # raw (snake_case) – kept if you need it later
+                    'label': _humanize(issue.main_category),  # human-friendly for display
                     'color': issue.color,
                 } for issue in subset]
                 row['periods'].append({'label': label, 'cats': cats})
+
+            # store sort helpers (not rendered by the UI)
+            row['_last7'] = last7_count
+            row['_total'] = total_count
             result.append(row)
 
-        # global category‐summary over the last 90/30/7 days (reverse order so counts[0] is 3‑months)
+        # Prioritize: drivers with any issues in last 7 days, then any issues at all, then counts, then name
+        result.sort(key=lambda r: (
+            -(1 if r['_last7'] > 0 else 0),
+            -(1 if r['_total'] > 0 else 0),
+            -r['_last7'],
+            -r['_total'],
+            r['name'] or ''
+        ))
+
+        # global category summary (with human labels)
         unique_cats = sorted(set(Issue.search([]).mapped('main_category')))
         cats_summary = []
         for cat in unique_cats:
             counts = []
-            for days, _ in reversed(windows[:3]):
+            for days, _ in reversed(windows[:3]):  # 90, 30, 7
                 if days is None:
                     domain = [('main_category', '=', cat)]
                 else:
                     cutoff = today - timedelta(days=days)
-                    domain = [
-                        ('main_category', '=', cat),
-                        ('date_reported', '>=', cutoff),
-                    ]
+                    domain = [('main_category', '=', cat), ('date_reported', '>=', cutoff)]
                 counts.append(Issue.search_count(domain))
-            cats_summary.append({'name': cat, 'counts': counts})
+            cats_summary.append({'name': cat, 'label': _humanize(cat), 'counts': counts})
         # sort by newest window desc, then next desc…
         cats_summary.sort(key=lambda x: (-x['counts'][0], -x['counts'][1], -x['counts'][2]))
 

@@ -15,7 +15,7 @@ export class OwlDriverDashboard extends Component {
       drivers:       [],
       catsSummary:   [],
       search:        '',
-      selectedCats:  [],
+      selectedCats:  [],    // holds labels now
       dropdownOpen:  false,
     });
 
@@ -38,10 +38,10 @@ export class OwlDriverDashboard extends Component {
     this.state.dropdownOpen = !this.state.dropdownOpen;
   }
 
-  toggleCategory(catName) {
-    const idx = this.state.selectedCats.indexOf(catName);
+  toggleCategory(catLabel) {
+    const idx = this.state.selectedCats.indexOf(catLabel);
     if (idx === -1) {
-      this.state.selectedCats.push(catName);
+      this.state.selectedCats.push(catLabel);
     } else {
       this.state.selectedCats.splice(idx, 1);
     }
