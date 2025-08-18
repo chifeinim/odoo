@@ -197,6 +197,62 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         resp = requests.get(f"{endpoint}?{query}", headers=headers, timeout=60)
         resp.raise_for_status()
         return resp.json() or []
+    
+    def _fetch_issue_logs(self, last_sync, page_size=1000, profile="dashboard"):
+        """
+        Fetch issue_logs joined with issues_list (embedded), filtered by created_at.
+        Returns rows like:
+        {
+            "id": ...,
+            "created_at": "...",
+            "issue_id": ...,
+            "date_reported": "YYYY-MM-DD",
+            "yango_driver_id": "...",
+            "internal_driver_id": ...,
+            "status": "...",
+            "can_work": true/false,
+            "issues_list": {
+                "main_category": "...",
+                "sub_category": "...",
+                "sub_sub_category": "..."
+            }
+        }
+        """
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/issue_logs"
+        headers = {
+            "apikey": key,
+            "Authorization": f"Bearer {key}",
+            "Accept": "application/json",
+            "Accept-Profile": profile,
+            "Content-Profile": profile,
+            "Prefer": "count=exact",
+        }
+
+        select = "*,issues_list:issue_id(main_category,sub_category,sub_sub_category)"
+        all_rows = []
+        offset = 0
+        while True:
+            params = {
+                "select": select,
+                "created_at": f"gte.{last_sync}",
+                "order": "created_at.asc,id.asc",
+                "limit": page_size,
+                "offset": offset,
+            }
+            _logger.info("Fetching issue_logs %d→%d (page_size=%d)…", offset + 1, offset + page_size, page_size)
+            resp = requests.get(endpoint, headers=headers, params=params, timeout=60)
+            resp.raise_for_status()
+            batch = resp.json() or []
+            if not batch:
+                break
+            all_rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+
+        _logger.info("Fetched %d rows from issue_logs (with issues_list)", len(all_rows))
+        return all_rows
 
     @api.model
     def _upsert_product_types(self, rows):
@@ -554,13 +610,18 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
     @api.model
     def sync_issues(self, last_sync, rows=None, profile="dashboard"):
+        """
+        Sync from dashboard.issue_logs joined with dashboard.issues_list.
+        Cursor uses issue_logs.created_at (NOT updated_at).
+        """
         if rows is None:
             try:
-                rows = self._fetch_table('issues', last_sync, page_size=1000, profile=profile)
+                rows = self._fetch_issue_logs(last_sync, page_size=1000, profile=profile)
             except HTTPError as e:
+                # If the profile rejects embedding, fall back to default profile once
                 if e.response.status_code == 406 and profile != "external_data_yango":
-                    _logger.warning("Profile '%s' rejected for issues, falling back to default profile", profile)
-                    rows = self._fetch_table('issues', last_sync, page_size=1000, profile="external_data_yango")
+                    _logger.warning("Profile '%s' rejected for issue_logs; falling back to default profile", profile)
+                    rows = self._fetch_issue_logs(last_sync, page_size=1000, profile="external_data_yango")
                 else:
                     raise
 
@@ -568,37 +629,42 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         Driver = self.env['x_fleet_driver'].sudo()
 
         for rec in rows:
-            ext_id = rec.get('id')
+            ext_id = rec.get('id')  # issue_logs.id (unique per log row)
             if not ext_id:
-                self._queue_failed_row('issues', rec, '<missing>', 'missing issue id')
-                continue
-            drv = Driver.search([('yango_driver_id', '=', rec.get('yango_driver_id'))], limit=1)
-            if not drv:
-                self._queue_failed_row('issues', rec, str(ext_id), f"missing driver {rec.get('yango_driver_id')}")
+                self._queue_failed_row('issues', rec, '<missing>', 'missing issue_log id')
                 continue
 
+            yid = rec.get('yango_driver_id')
+            drv = Driver.search([('yango_driver_id', '=', yid)], limit=1)
+            if not drv:
+                self._queue_failed_row('issues', rec, str(ext_id), f"missing driver {yid}")
+                continue
+
+            il = rec.get('issues_list') or {}
             raw = {
-                'name':            ext_id,
-                'date_reported':   _normalize_datetime(rec['date_reported']) if rec.get('date_reported') else None,
-                'main_category':   rec.get('main_category'),
-                'sub_category':    rec.get('sub_category'),
-                'sub_sub_category':rec.get('sub_sub_category'),
-                'status':          rec.get('status'),
-                'severity':        rec.get('severity'),
-                'driver_id':       drv.id,
+                'name':              ext_id,  # keep as text; unique enforced by SQL constraint
+                'date_reported':     _normalize_datetime(rec['date_reported']) if rec.get('date_reported') else None,
+                'main_category':     il.get('main_category'),
+                'sub_category':      il.get('sub_category'),
+                'sub_sub_category':  il.get('sub_sub_category'),
+                'status':            rec.get('status'),     # 'unresolved' / 'resolved' expected
+                'can_work':          rec.get('can_work'),   # boolean from issue_logs
+                'driver_id':         drv.id,
             }
             vals = {k: v for k, v in raw.items() if v is not None}
 
             try:
-                exists = Issue.search([('name', '=', ext_id)], limit=1)
+                exists = Issue.search([('name', '=', str(ext_id))], limit=1)
                 if exists:
                     exists.write(vals)
                 else:
+                    # ensure name is string to match the unique(name) sql constraint consistently
+                    vals['name'] = str(ext_id)
                     Issue.create(vals)
             except Exception as e:
                 self._queue_failed_row('issues', rec, str(ext_id), str(e))
 
-        # return rows so caller can compute last_sync
+        # return rows so caller can compute last_sync (created_at)
         return rows
     
     def sync_supply_hours(self, cursor):
@@ -705,8 +771,9 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         is_cur = params.get_param('fleet_partner_dashboard.issues_cursor') or dr_cur
         is_rows = self.sync_issues(is_cur)
         if is_rows:
+            # issue_logs are filtered by created_at
             params.set_param('fleet_partner_dashboard.issues_cursor',
-                            max(r['updated_at'] for r in is_rows))
+                            max(r['created_at'] for r in is_rows))
             self.env.cr.commit()
 
         _logger.info("Full multi-cursor sync complete")
