@@ -473,7 +473,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
             # Persist cursor & commit immediately for durability
             new_cursor = f"{max_updated_at}||{max_id}"
-            params.set_param('fleet_partner.orders_cursor', new_cursor)
+            params.set_param('fleet_partner_dashboard.orders_cursor', new_cursor)
             try:
                 self.env.cr.commit()
             except Exception:
@@ -575,7 +575,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         Wrapper for cases where all drivers should already exist.
         We just skip missing instead of queueing/raising.
         """
-        return self._upsert_supply_hours(rows, on_missing='skip')
+        return self._upsert_supply_hours(rows, from_queue=False)
 
     @api.model
     def sync_issues(self, last_sync, rows=None, profile="dashboard"):
@@ -697,7 +697,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         # 1) work_rules
         wr_cur = params.get_param('fleet_partner_dashboard.work_rules_cursor') or '1970-01-01T00:00:00Z'
-        wr = self._fetch_table('work_rules', wr_cur)
+        wr = self._fetch_table('work_rules', '1970-01-01T00:00:00Z')
         self._upsert_product_types(wr)
         if wr:
             params.set_param('fleet_partner_dashboard.work_rules_cursor',
