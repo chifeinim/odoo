@@ -293,22 +293,6 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                         self._queue_failed_row('drivers', rec, ext_id or '<missing>', str(e))
 
     @api.model
-    def sync_product_types(self, last_sync):
-        rows = self._fetch_table('work_rules', last_sync)
-        self._upsert_product_types(rows)
-
-    @api.model
-    def sync_drivers(self, last_sync):
-        drv_rows = self._fetch_table('drivers', last_sync)
-        wr_rows = self._fetch_table('work_rules', last_sync)
-        work_rule_map = {
-            wr.get('work_rule_id'): wr.get('name')
-            for wr in wr_rows
-            if wr.get('work_rule_id') and wr.get('name')
-        }
-        self._upsert_drivers(drv_rows, work_rule_map)
-
-    @api.model
     def _upsert_orders(self, rows, from_queue=False):
         """
         Upsert orders. When from_queue=True, DO NOT requeue; raise on prerequisite
@@ -567,15 +551,6 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         cr.execute(sql, params)
         _logger.info("Bulk-upserted %d unique supply_hours rows", len(tuples))
-
-
-    @api.model
-    def _upsert_supply_hours_resolved(self, rows):
-        """
-        Wrapper for cases where all drivers should already exist.
-        We just skip missing instead of queueing/raising.
-        """
-        return self._upsert_supply_hours(rows, from_queue=False)
 
     @api.model
     def sync_issues(self, last_sync, rows=None, profile="dashboard"):

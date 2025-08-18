@@ -81,7 +81,7 @@
       </p>
       <p>
         This list shows Supabase rows that couldn’t be upserted (e.g. missing drivers).
-        Use <b>Retry Now</b> to attempt a single row, or wait for the
+        Wait for the
         <i>Retry syncing failed Supabase Records to Odoo</i> cron.
       </p>
     </field>
