@@ -664,10 +664,10 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                     self._queue_failed_row('supply_hours', rec, f"{yid}|{dt}")
                     queued += 1
                     continue
-                upsert_rows.append({'driver_id': drv_id, 'date': dt, 'seconds': secs})
+                upsert_rows.append(rec)
 
             if upsert_rows:
-                self._upsert_supply_hours_resolved(upsert_rows)  # bulk SQL on (driver_id,date)
+                self._upsert_supply_hours(upsert_rows, from_queue=False)  # bulk SQL on (driver_id,date)
 
             total += len(rows)
             if queued:
