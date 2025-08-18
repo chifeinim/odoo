@@ -1,4 +1,5 @@
 # models/issue.py
+import re
 from odoo import models, fields, api, _
 
 class FleetIssue(models.Model):
@@ -15,6 +16,15 @@ class FleetIssue(models.Model):
     main_category    = fields.Char(string="Main Category", required=True, tracking=True)
     sub_category     = fields.Char(string="Sub-Category", tracking=True)
     sub_sub_category = fields.Char(string="Sub-Sub-Category", tracking=True)
+    main_category_label = fields.Char(
+        string="Main Category", compute="_compute_category_labels",
+        search="_search_main_category_label")
+    sub_category_label = fields.Char(
+        string="Sub-Category", compute="_compute_category_labels",
+        search="_search_sub_category_label")
+    sub_sub_category_label = fields.Char(
+        string="Sub-Sub-Category", compute="_compute_category_labels",
+        search="_search_sub_sub_category_label")
 
     status   = fields.Selection([('unresolved','Unresolved'),('resolved','Resolved')],
                                 default='unresolved', tracking=True)
@@ -45,6 +55,50 @@ class FleetIssue(models.Model):
                 rec.color = 1
             else:
                 rec.color = 2
+                
+    def _humanize(self, s):
+        return s.replace('_', ' ').strip().title() if s else False
+
+    def _slug(self, v):
+        if not v:
+            return v
+        v = v.lower().strip()
+        v = re.sub(r'\s+', '_', v)           # spaces -> underscores
+        v = re.sub(r'[^0-9a-z_]+', '', v)    # drop punctuation
+        return v
+
+    def _compute_category_labels(self):
+        for rec in self:
+            rec.main_category_label = self._humanize(rec.main_category)
+            rec.sub_category_label = self._humanize(rec.sub_category)
+            rec.sub_sub_category_label = self._humanize(rec.sub_sub_category)
+
+    # Make searches on the *_label fields hit the stored snake_case fields
+    @api.model
+    def _search_main_category_label(self, operator, value):
+        norm = self._slug(value)
+        like = norm.replace('_', '%') if norm else norm
+        # OR: raw ilike, normalized ilike, and wildcarded normalized
+        return ['|', '|',
+                ('main_category', 'ilike', value),
+                ('main_category', 'ilike', norm or value),
+                ('main_category', 'ilike', like or value)]
+
+    @api.model
+    def _search_sub_category_label(self, operator, value):
+        norm = self._slug(value); like = norm.replace('_', '%') if norm else norm
+        return ['|', '|',
+                ('sub_category', 'ilike', value),
+                ('sub_category', 'ilike', norm or value),
+                ('sub_category', 'ilike', like or value)]
+
+    @api.model
+    def _search_sub_sub_category_label(self, operator, value):
+        norm = self._slug(value); like = norm.replace('_', '%') if norm else norm
+        return ['|', '|',
+                ('sub_sub_category', 'ilike', value),
+                ('sub_sub_category', 'ilike', norm or value),
+                ('sub_sub_category', 'ilike', like or value)]
 
     _sql_constraints = [
         ('unique_issue_name', 'unique(name)', 'Each issue must have a unique Issue ID.')
