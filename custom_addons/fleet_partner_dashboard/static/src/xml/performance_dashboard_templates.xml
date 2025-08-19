@@ -499,8 +499,8 @@
         <table class="table table-striped table-hover mb-0">
           <thead class="table-light">
             <tr>
-              <th>Driver</th><th>Phone</th><th>Hire Date</th>
-              <th>Product</th><th>Category</th><th>Quality</th><th>Active in Period</th><th>Cash Kz</th><th>Trips</th>
+              <th>Driver</th><th>Quality Score</th><th>Phone</th><th>Hire Date</th>
+              <th>Product</th><th>Category</th><th>Active in Period</th><th>Cash Kz</th><th>Trips</th>
               <th>Supply Hours</th><th>Trips/Hour</th>
               <th>Money/Hour</th><th>Utilisation</th><th>Efficiency</th><th>Acceptance Rate</th><th>Completed to Request</th>
               <th>Service Fee Kz</th><th>Partner Fee Kz</th>
@@ -513,23 +513,23 @@
             " t-as="d" t-key="d.id">
               <tr>
                 <td><t t-esc="d.name"/></td>
+                <td><t t-esc="d.quality_score"/></td>
                 <td><t t-esc="d.phone"/></td>
                 <td><t t-esc="d.hire_date"/></td>
                 <td><t t-esc="d.product_type"/></td>
                 <td><t t-esc="d.type"/></td>
-                <td><t t-esc="d.quality_score"/></td>
                 <td><t t-esc="d.active"/></td>
-                <td><t t-esc="d.cash.toFixed(2)"/></td>
+                <td><t t-esc="d.cash.toFixed(0)"/></td>
                 <td><t t-esc="d.trips"/></td>
-                <td><t t-esc="d.hours.toFixed(1)"/>h</td>
-                <td><t t-esc="d.trips_per_hour.toFixed(2)"/></td>
-                <td><t t-esc="d.money_per_hour.toFixed(2)"/></td>
+                <td><t t-esc="d.hours.toFixed(0)"/>h</td>
+                <td><t t-esc="d.trips_per_hour.toFixed(0)"/></td>
+                <td><t t-esc="d.money_per_hour.toFixed(0)"/></td>
                 <td><t t-esc="d.utilisation.toFixed(1)"/>%</td>
                 <td><t t-esc="d.efficiency.toFixed(1)"/>%</td>
                 <td><t t-esc="d.acceptance_rate.toFixed(1)"/>%</td>
                 <td><t t-esc="d.completed_to_request.toFixed(1)"/>%</td>
-                <td><t t-esc="d.service_fee.toFixed(2)"/></td>
-                <td><t t-esc="d.partner_fee.toFixed(2)"/></td>
+                <td><t t-esc="d.service_fee.toFixed(0)"/></td>
+                <td><t t-esc="d.partner_fee.toFixed(0)"/></td>
               </tr>
             </t>
           </tbody>
