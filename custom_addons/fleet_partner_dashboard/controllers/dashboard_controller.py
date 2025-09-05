@@ -4,6 +4,7 @@ from odoo.http import request
 from datetime import date, datetime, timedelta, timezone
 from dateutil.parser import isoparse
 from collections import defaultdict
+from typing import Optional
 import calendar, json, re
 
 def _humanize(s):
@@ -199,31 +200,35 @@ class FleetDashboardController(http.Controller):
         }
 
     @http.route('/fleet_partner_performance/data', type='json', auth='user')
-    def performance_data(self, period=None, products=None, scores=None,
-                        categories=None, start_date=None, end_date=None):
+    def performance_data(self,
+                        period: Optional[str] = None,
+                        products=None, scores=None, categories=None,
+                        start_date: Optional[str] = None,
+                        end_date: Optional[str] = None):
+
         today = date.today()
 
-        # ---- A) Build df/dt and previous window (unchanged behavior) ----
+        mapping: dict[str, int | None] = {
+            'Last Week':       7,
+            'Last Month':     30,
+            'Last 3 Months':  90,
+            'All Time':     None,
+        }
+
         if start_date and end_date:
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
             dt = datetime.strptime(end_date,   '%Y-%m-%d').date()
             span = (dt - df).days + 1
             prev_dt = df - timedelta(days=1)
-            prev_df = prev_dt - timedelta(days=span-1)
+            prev_df = prev_dt - timedelta(days=span - 1)
         else:
-            mapping = {
-                'Last Week':      7,
-                'Last Month':    30,
-                'Last 3 Months': 90,
-                'All Time':     None,
-            }
-            days = mapping.get(period, 7)
+            days = mapping.get(period, 7) if period else 7
             if days is None:
                 df = prev_df = dt = prev_dt = None
             else:
                 df      = today - timedelta(days=days)
                 dt      = today
-                prev_df = today - timedelta(days=2*days)
+                prev_df = today - timedelta(days=2 * days)
                 prev_dt = today - timedelta(days=days)
 
         # ---- B) Normalize filters ----

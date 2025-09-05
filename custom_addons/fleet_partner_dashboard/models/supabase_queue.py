@@ -35,7 +35,8 @@ class FleetSyncQueue(models.Model):
     def set_retry_backoff(self, max_retries=10):
         """Exponential backoff: 2^retries minutes, capped at 60."""
         self.ensure_one()
-        retries = (self.retries or 0) + 1
+        retries_val = int(self.retries) if isinstance(self.retries, int) else 0
+        retries = retries_val + 1
         delay_min = min(60, 2 ** retries)
         self.write({
             'retries': retries,
