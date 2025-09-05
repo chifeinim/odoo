@@ -32,6 +32,8 @@ class FleetIssue(models.Model):
     # NEW: boolean instead of selection
     can_work = fields.Boolean(string="Can Work", default=True, tracking=True)
     can_work_label = fields.Char(string="Can Work", compute="_compute_can_work_label")
+    
+    ext_attachment_ids = fields.One2many('x_issue_attachment', 'issue_id', string='Media')
 
     color = fields.Integer(compute='_compute_color', store=True)
 
@@ -72,6 +74,11 @@ class FleetIssue(models.Model):
             rec.main_category_label = self._humanize(rec.main_category)
             rec.sub_category_label = self._humanize(rec.sub_category)
             rec.sub_sub_category_label = self._humanize(rec.sub_sub_category)
+            
+    def action_refresh_signed_urls(self):
+        # refresh all linked attachments in one go
+        self.mapped('ext_attachment_ids').ensure_fresh_url() # type: ignore
+        return True  # optional, nice for object buttons
 
     # Make searches on the *_label fields hit the stored snake_case fields
     @api.model
@@ -103,3 +110,4 @@ class FleetIssue(models.Model):
     _sql_constraints = [
         ('unique_issue_name', 'unique(name)', 'Each issue must have a unique Issue ID.')
     ]
+

@@ -253,6 +253,107 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         _logger.info("Fetched %d rows from issue_logs (with issues_list)", len(all_rows))
         return all_rows
+    
+    def _fetch_issue_attachments(self, last_sync, page_size=1000, profile="dashboard"):
+        """
+        Step 1: fetch dashboard.issue_attachments (by created_at)
+        Step 2: batch fetch comms.attachments for the referenced ids
+        Returns rows shaped like:
+        {
+            "id": ...,
+            "created_at": "...",
+            "issue_log_id": ...,
+            "attachment_id": ...,
+            "attachment": { "id":..., "bucket_id":"...", "key":"...", "url":"...", "created_at":"..." }
+        }
+        """
+        base_url, key = self._get_config()
+
+        # ---------- Step 1: issue_attachments (dashboard profile) ----------
+        ia_endpoint = f"{base_url}/rest/v1/issue_attachments"
+        ia_headers = {
+            "apikey":          key,
+            "Authorization":   f"Bearer {key}",
+            "Accept":          "application/json",
+            "Accept-Profile":  profile,           # "dashboard"
+            "Content-Profile": profile,
+            "Prefer":          "count=exact",
+        }
+
+        all_rows, offset = [], 0
+        select_ia = "id,created_at,issue_log_id,attachment_id"
+
+        while True:
+            params = {
+                "select":     select_ia,
+                "created_at": f"gt.{last_sync}",
+                "order":      "created_at.asc",
+                "limit":      page_size,
+                "offset":     offset,
+            }
+            _logger.info("Fetching issue_attachments %d→%d…", offset+1, offset+page_size)
+            resp = requests.get(ia_endpoint, headers=ia_headers, params=params, timeout=60)
+            try:
+                resp.raise_for_status()
+            except requests.HTTPError as e:
+                # Log server message to help diagnose bad requests
+                _logger.error("issue_attachments fetch failed: %s - %s", e, resp.text)
+                raise
+            batch = resp.json() or []
+            if not batch:
+                break
+            all_rows.extend(batch)
+            if len(batch) < page_size:
+                break
+            offset += page_size
+
+        if not all_rows:
+            _logger.info("Fetched 0 rows from issue_attachments")
+            return []
+
+        # ---------- Step 2: comms.attachments (comms profile) ----------
+        att_endpoint = f"{base_url}/rest/v1/attachments"
+        att_headers = {
+            "apikey":          key,
+            "Authorization":   f"Bearer {key}",
+            "Accept":          "application/json",
+            "Accept-Profile":  "comms",
+            "Content-Profile": "comms",
+            "Prefer":          "count=exact",
+        }
+        # Collect unique ids
+        att_ids = sorted({r["attachment_id"] for r in all_rows if r.get("attachment_id")})
+        att_map = {}
+
+        # Chunk to avoid long URLs
+        CHUNK = 500
+        select_att = "id,bucket_id,key,url,created_at"
+        for i in range(0, len(att_ids), CHUNK):
+            chunk = att_ids[i:i+CHUNK]
+            # PostgREST IN syntax: id=in.(1,2,3)
+            params = {
+                "select": select_att,
+                "id":     "in.(" + ",".join(str(x) for x in chunk) + ")",
+                "limit":  CHUNK,
+            }
+            _logger.info("Fetching attachments ids %d..%d", i+1, i+len(chunk))
+            resp = requests.get(att_endpoint, headers=att_headers, params=params, timeout=60)
+            try:
+                resp.raise_for_status()
+            except requests.HTTPError as e:
+                _logger.error("attachments fetch failed: %s - %s", e, resp.text)
+                raise
+            for row in (resp.json() or []):
+                att_map[row["id"]] = row
+
+        # ---------- Merge ----------
+        for r in all_rows:
+            aid = r.get("attachment_id")
+            r["attachment"] = att_map.get(aid) if aid is not None else None
+
+        _logger.info("Fetched %d rows from issue_attachments; joined %d attachments",
+                    len(all_rows), len(att_map))
+        return all_rows
 
     @api.model
     def _upsert_product_types(self, rows):
@@ -667,6 +768,72 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         # return rows so caller can compute last_sync (created_at)
         return rows
     
+    @api.model
+    def sync_issue_attachments(self, last_sync, rows=None, profile="dashboard"):
+        """
+        Upsert into x_issue_attachment. Link by Issue.name == issue_log_id.
+        Cursor key: issue_attachments.created_at.
+        """
+        if rows is None:
+            try:
+                rows = self._fetch_issue_attachments(last_sync, page_size=1000, profile=profile)
+            except HTTPError as e:
+                # Fallback once if caller passed a non-working profile
+                if e.response.status_code == 406 and profile != "dashboard":
+                    _logger.warning("Profile '%s' rejected for issue_attachments; falling back to 'dashboard'", profile)
+                    rows = self._fetch_issue_attachments(last_sync, page_size=1000, profile="dashboard")
+                else:
+                    raise
+
+        Issue = self.env["x_fleet_issue"].sudo()
+        Att   = self.env["x_issue_attachment"].sudo()
+
+        for r in rows or []:
+            try:
+                issue_log_id = r.get("issue_log_id")
+                att          = r.get("attachment") or {}
+                ext_att_id   = att.get("id")
+                key_full     = att.get("key") or ""
+                created_at   = r.get("created_at")
+
+                if not (issue_log_id and ext_att_id and key_full):
+                    self._queue_failed_row("issue_attachments", r, str(ext_att_id or issue_log_id or "<missing>"), "missing essentials")
+                    continue
+
+                # Map to local Issue (you store issue_logs.id as x_fleet_issue.name)
+                issue = Issue.search([("name", "=", str(issue_log_id))], limit=1)
+                if not issue:
+                    self._queue_failed_row("issue_attachments", r, str(ext_att_id), f"missing x_fleet_issue for log {issue_log_id}")
+                    continue
+
+                # Split "anda-media/attachments/..." into bucket + object path
+                parts = key_full.split("/", 1)
+                if len(parts) == 2 and parts[0]:
+                    bucket = parts[0]
+                    obj_key = parts[1]
+                else:
+                    bucket = "anda-media"
+                    obj_key = key_full
+
+                vals = {
+                    "issue_id":          issue.id,
+                    "ext_attachment_id": str(ext_att_id),
+                    "bucket":            bucket,
+                    "key":               obj_key,
+                    "created_at":        _normalize_datetime(created_at) if created_at else False,
+                }
+
+                existing = Att.search([("ext_attachment_id", "=", str(ext_att_id))], limit=1)
+                if existing:
+                    existing.write(vals)
+                else:
+                    Att.create(vals)
+
+            except Exception as e:
+                self._queue_failed_row("issue_attachments", r, str(r.get("attachment", {}).get("id") or r.get("issue_log_id") or "<unknown>"), str(e))
+
+        return rows
+    
     def sync_supply_hours(self, cursor):
         """
         Stream supply_hours ordered by (updated_at, yango_driver_id, date),
@@ -775,6 +942,14 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             params.set_param('fleet_partner_dashboard.issues_cursor',
                             max(r['created_at'] for r in is_rows))
             self.env.cr.commit()
+            
+        # 6) issue_attachments — cursor by created_at
+        ia_cur = params.get_param('fleet_partner_dashboard.issue_attachments_cursor') or is_cur
+        ia_rows = self.sync_issue_attachments(ia_cur)
+        if ia_rows:
+            params.set_param('fleet_partner_dashboard.issue_attachments_cursor',
+                            max(r['created_at'] for r in ia_rows if r.get('created_at')))
+            self.env.cr.commit()
 
         _logger.info("Full multi-cursor sync complete")
         
@@ -798,6 +973,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 elif q.table == 'issues':
                     # ensure your issues path won’t requeue when from_queue=True (raise instead)
                     self.sync_issues(None, rows=[rec])  # or make a variant that raises on failure
+                elif q.table == 'issue_attachments':
+                    self.sync_issue_attachments(None, rows=[rec])
                 else:
                     raise ValueError(f"Unknown table {q.table}")
 

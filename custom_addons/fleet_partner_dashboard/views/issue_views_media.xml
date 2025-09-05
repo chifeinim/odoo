@@ -1,0 +1,55 @@
+<odoo>
+  <!-- Reuse your base form via inherit to add a Media tab -->
+  <record id="view_x_fleet_issue_form_media" model="ir.ui.view">
+    <field name="name">x_fleet_issue.form.media</field>
+    <field name="model">x_fleet_issue</field>
+    <field name="inherit_id" ref="fleet_partner_dashboard.view_x_fleet_issue_form"/>
+    <field name="arch" type="xml">
+      <xpath expr="//sheet" position="inside">
+        <notebook>
+          <page string="Media">
+            <button type="object" name="action_refresh_signed_urls" class="oe_highlight" string="Refresh Links"/>
+            <field name="ext_attachment_ids" context="{'default_issue_id': active_id}">
+              <tree editable="bottom">
+                <field name="created_at"/>
+                <field name="bucket"/>
+                <field name="key" string="Path"/>
+                <field name="kind" readonly="1"/>
+                <field name="signed_url" widget="url" readonly="1" string="Signed URL"/>
+              </tree>
+              <form>
+                <group>
+                  <field name="created_at" readonly="1"/>
+                  <field name="bucket" readonly="1"/>
+                  <field name="key" readonly="1"/>
+                  <field name="kind" readonly="1"/>
+                  <button type="object" name="ensure_fresh_url" string="Get/Refresh Link" class="btn-secondary"/>
+                </group>
+                    <div t-if="record.signed_url.value">
+                        <t t-set="src" t-value="record.signed_url.value"/>
+                        <t t-if="record.kind.raw_value == 'image'">
+                            <img t-att-src="src"
+                            t-att-alt="'Attachment: ' + (record.key.value or 'file')"
+                            style="max-width:100%;"/>
+                        </t>
+                        <t t-if="record.kind.raw_value == 'video'">
+                            <video controls="controls" t-att-src="src" style="width:100%;max-height:480px;"></video>
+                        </t>
+                        <t t-if="record.kind.raw_value == 'audio'">
+                            <audio controls="controls" t-att-src="src" style="width:100%;"></audio>
+                        </t>
+                        <t t-if="record.kind.raw_value == 'pdf'">
+                            <iframe t-att-src="src" style="width:100%;height:480px;border:0;"></iframe>
+                        </t>
+                        <t t-if="record.kind.raw_value == 'other'">
+                            <a t-att-href="src" target="_blank">Open file</a>
+                        </t>
+                    </div>
+              </form>
+            </field>
+          </page>
+        </notebook>
+      </xpath>
+    </field>
+  </record>
+</odoo>

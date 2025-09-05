@@ -13,9 +13,7 @@ class FleetSyncQueue(models.Model):
         ('orders', 'orders'),
         ('supply_hours', 'supply_hours'),
         ('issues', 'issues'),
-        # add others only if you implement retry logic for them
-        # ('drivers', 'drivers'),
-        # ('work_rules', 'work_rules'),
+        ('issue_attachments', 'issue_attachments'),
     ], required=True, index=True)
     record_key    = fields.Char(required=True, index=True)
     raw_data      = fields.Text(required=True, help="JSON-serialized source row")
