@@ -5,6 +5,90 @@ const { onMounted, onPatched, useState, useRef } = hooks;
 import { registry } from '@web/core/registry';
 
 export class OwlPerformanceDashboard extends Component {
+  formatNumber(value, digits = 0) {
+    const n = Number(value);
+    if (Number.isNaN(n)) return value ?? '';
+    return new Intl.NumberFormat('en-GB', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(n);
+  }
+
+  qualityClass(score) {
+    const s = (score || '').toString().trim().toLowerCase();
+    if (s === 'low performer') return 'text-danger font-weight-bold fw-bold';
+    if (s === 'average performer') return 'text-warning font-weight-bold fw-bold';
+    if (s === 'high performer') return 'text-success font-weight-bold fw-bold';
+    return '';
+  }
+  setSort(key) {
+    if (this.state.sortKey === key) {
+      this.state.sortDir = this.state.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.state.sortKey = key;
+      this.state.sortDir = 'asc';
+    }
+  }
+
+  // robust comparator that handles numbers, strings, booleans, and ISO-ish dates
+  _compareByKey(a, b, key) {
+    const ax = a?.[key];
+    const bx = b?.[key];
+
+    const norm = (v) => {
+      if (v === undefined || v === null) return null;
+      if (typeof v === 'boolean') return v ? 1 : 0;
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string') return v.trim();
+      return v;
+    };
+
+    let av = norm(ax);
+    let bv = norm(bx);
+
+    // nulls last
+    if (av === null && bv === null) return 0;
+    if (av === null) return 1;
+    if (bv === null) return -1;
+
+    // try date compare when key looks like a date field or value matches YYYY-MM-DD
+    const looksLikeDate = key === 'hire_date' || (/^\d{4}-\d{2}-\d{2}/.test(String(av)) && /^\d{4}-\d{2}-\d{2}/.test(String(bv)));
+    if (looksLikeDate) {
+      const ta = Date.parse(av);
+      const tb = Date.parse(bv);
+      if (!Number.isNaN(ta) && !Number.isNaN(tb)) return ta - tb;
+    }
+
+    // numeric compare
+    if (typeof av === 'number' && typeof bv === 'number') {
+      return av - bv;
+    }
+
+    // boolean already coerced to number above
+    if (typeof av === 'number' && typeof bv !== 'number') return -1;
+    if (typeof av !== 'number' && typeof bv === 'number') return 1;
+
+    // string-ish compare (case/locale aware & numeric segments)
+    return String(av).toLocaleLowerCase().localeCompare(String(bv).toLocaleLowerCase(), undefined, { numeric: true, sensitivity: 'base' });
+  }
+
+  // unified getter used by the template
+  sortedFilteredDrivers() {
+    const rows = Object.values(this.state.data || {}).filter(d =>
+      d.name?.toLowerCase().includes(this.state.search.toLowerCase())
+    );
+
+    const dir = this.state.sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      const res = this._compareByKey(a, b, this.state.sortKey);
+      if (res !== 0) return dir * res;
+      // tie-break by name for stability
+      return this._compareByKey(a, b, 'name');
+    });
+
+    return rows;
+  }
+
   setup() {
     this.state = useState({
       loading: true,
@@ -29,7 +113,7 @@ export class OwlPerformanceDashboard extends Component {
       selectedProducts: [], selectedScores: [], selectedCategories: [], selectedPeriod: 'Last Week',
       startDate: '', endDate: '',
       showProducts: false, showScores: false, showCategories: false, showPeriod: false,
-      showCharts: false, search: '',
+      showCharts: false, search: '', sortKey: 'name', sortDir: 'asc',
     });
     this.chartActive = useRef('chartActive');
     this.chartTrips  = useRef('chartTrips');
