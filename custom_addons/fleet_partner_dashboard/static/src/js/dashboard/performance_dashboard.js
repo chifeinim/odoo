@@ -285,20 +285,86 @@ export class OwlPerformanceDashboard extends Component {
 
 
   _renderCharts() {
-    const cfg = (label, data) => ({
-      type: 'line',
-      data: {
-        labels: data.map(pt => pt.period),
-        datasets: [{ label, data: data.map(pt => pt.value), fill: false }],
-      },
-      options: {
-        scales: { x: { display: true }, y: { display: true } },
-        plugins: {
-          title: { display: true, text: label },
-          legend: { display: false },
+    const cfg = (label, data) => {
+      // helper to show "DD-MMM" from a few common date-ish strings
+      const formatDMmm = (input) => {
+        if (!input) return input;
+        const s = String(input);
+
+        // ISO like 2025-09-15 or 2025-09-15T...
+        const iso = /^(\d{4})-(\d{2})-(\d{2})/;
+        // Slash like 15/09/25 or 15/09/2025 (DD/MM/YY)
+        const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/;
+
+        let d, m, y;
+
+        if (iso.test(s)) {
+          const [, Y, M, D] = s.match(iso);
+          d = +D; m = +M; y = +Y;
+        } else if (slash.test(s)) {
+          const [, D, M, Y] = s.match(slash);
+          d = +D; m = +M; y = +Y;
+          if (y < 100) y += 2000;
+        } else {
+          const t = Date.parse(s);
+          if (!Number.isNaN(t)) {
+            const dt = new Date(t);
+            d = dt.getDate(); m = dt.getMonth() + 1; y = dt.getFullYear();
+          } else {
+            return s; // fallback unchanged
+          }
+        }
+
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return `${String(d).padStart(2,'0')}-${months[m-1]}`;
+      };
+
+      return {
+        type: 'line',
+        data: {
+          labels: data.map(pt => pt.period),
+          datasets: [{ label, data: data.map(pt => pt.value), fill: false }],
         },
-      },
-    });
+        options: {
+          // Hide gridlines on both axes
+          scales: {
+            x: {
+              display: true,
+              grid: { display: false, drawBorder: false },
+              ticks: {
+                autoSkip: true,
+                maxTicksLimit: 8,
+                // Use a function (not arrow) so `this` is the scale
+                callback: function(value) {
+                  const raw = this.getLabelForValue ? this.getLabelForValue(value) : value;
+                  return formatDMmm(raw);
+                },
+              },
+            },
+            y: {
+              display: true,
+              grid: { display: false, drawBorder: true },
+              ticks: { autoSkip: true, maxTicksLimit: 6 },
+            },
+          },
+          plugins: {
+            title: { display: true, text: label },
+            legend: { display: false },
+            // (optional) make tooltip title match axis format:
+            tooltip: {
+              callbacks: {
+                title: (items) => items?.length ? formatDMmm(items[0].label) : '',
+              },
+            },
+          },
+          elements: {
+            point: { radius: 2, hitRadius: 8 },
+          },
+          maintainAspectRatio: false,
+        },
+      };
+    };
+
     const ctxA = this.chartActive.el.getContext('2d');
     const ctxT = this.chartTrips.el.getContext('2d');
     const ctxS = this.chartSupply.el.getContext('2d');
