@@ -324,7 +324,7 @@ export class OwlPerformanceDashboard extends Component {
     this._charts.active = new Chart(ctxA, cfg('Active Drivers', this.state.series.activeDrivers));
     this._charts.trips  = new Chart(ctxT, cfg('Total Trips',    this.state.series.trips));
     this._charts.supply = new Chart(ctxS, cfg('Supply Hours',   this.state.series.supplyHours));
-    this._charts.cash   = new Chart(ctxC, cfg('Cash Earned',   this.state.series.cashEarned));
+    this._charts.cash   = new Chart(ctxC, cfg('Gross Revenue',   this.state.series.cashEarned));
     this._charts.moneyPerHour = new Chart(ctxM, cfg('Avg Money / Hour',   this.state.series.moneyPerHour));
     this._charts.tripsPerHour = new Chart(ctxTP, cfg('Avg Trips / Hour', this.state.series.tripsPerHour));
     this._charts.avgSupplyHoursPerDriver = new Chart(ctxAS, cfg('Avg SH per Active Driver', this.state.series.avgSupplyHoursPerDriver));

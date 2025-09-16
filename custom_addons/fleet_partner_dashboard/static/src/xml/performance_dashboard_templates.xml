@@ -203,7 +203,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Cash Earned</h5>
+                  <h5 class="card-title">Gross Revenue</h5>
                   <h2>Kz <t t-esc="formatNumber(state.metrics.cashEarned, 0)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevCashEarned"/>
@@ -534,7 +534,7 @@
                 <t t-if="state.sortKey === 'active'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
               </th>
               <th style="cursor:pointer" t-on-click="() => setSort('cash')">
-                Cash Kz
+                Gross Revenue Kz
                 <t t-if="state.sortKey === 'cash'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
               </th>
               <th style="cursor:pointer" t-on-click="() => setSort('trips')">
