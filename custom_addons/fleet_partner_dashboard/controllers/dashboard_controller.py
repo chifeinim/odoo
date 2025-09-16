@@ -5,7 +5,8 @@ from datetime import date, datetime, timedelta, timezone
 from dateutil.parser import isoparse
 from collections import defaultdict
 from typing import Optional
-import calendar, json, re, os, requests
+import calendar, json, re, os, requests, logging
+_logger = logging.getLogger(__name__)
 
 def _humanize(s):
     if not s:
@@ -218,6 +219,8 @@ class FleetDashboardController(http.Controller):
         if start_date and end_date:
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
             dt_ = datetime.strptime(end_date,   '%Y-%m-%d').date()
+            if df > dt_:
+                df, dt_ = dt_, df
             span = (dt_ - df).days + 1
             prev_dt = df - timedelta(days=1)
             prev_df = prev_dt - timedelta(days=span - 1)
@@ -261,14 +264,44 @@ class FleetDashboardController(http.Controller):
             return {'error': 'Missing SIGNER_URL or SIGNER_API_KEY in system parameters'}
 
         def _get(path: str, params: dict) -> dict:
-            r = requests.get(
-                f"{SIGNER_URL}{path}",
-                params=params,
-                headers={'x-api-key': SIGNER_API_KEY},
-                timeout=30,
-            )
-            r.raise_for_status()
-            return r.json() if r.content else {}
+            try:
+                r = requests.get(
+                    f"{SIGNER_URL}{path}",
+                    params=params,
+                    headers={"x-api-key": SIGNER_API_KEY},
+                    timeout=30,
+                )
+
+                # Be forgiving on client errors (e.g., bad date range)
+                if 400 <= r.status_code < 500:
+                    _logger.warning(
+                        "Signer %s returned %s: %s",
+                        path, r.status_code, (r.text or "")[:200],
+                    )
+                    return {"rows": [], "count": 0}
+
+                r.raise_for_status()
+
+                # Try to parse JSON and coerce to the expected shape
+                try:
+                    data = r.json()
+                except ValueError:
+                    _logger.warning("Signer %s returned non-JSON", path)
+                    return {"rows": [], "count": 0}
+
+                if isinstance(data, dict) and "rows" in data and "count" in data:
+                    return data
+                if isinstance(data, list):
+                    return {"rows": data, "count": len(data)}
+
+                return {"rows": [], "count": 0}
+
+            except requests.Timeout:
+                _logger.warning("Signer request timed out: %s", path)
+                return {"rows": [], "count": 0}
+            except requests.RequestException as e:
+                _logger.exception("Signer request failed: %s", e)
+                return {"rows": [], "count": 0}
 
         # Pull a single combined set of driver-day rows covering prev+current
         # Decide the fetch window we send to metrics-db

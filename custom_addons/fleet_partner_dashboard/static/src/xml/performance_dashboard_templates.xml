@@ -273,7 +273,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Avg SH per Active Driver</h5>
-                  <h2><t t-esc="formatNumber(state.metrics.supplyHours, 1)"/>h</h2>
+                  <h2><t t-esc="formatNumber(state.metrics.avgSupplyHoursPerDriver, 1)"/>h</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevAvgSupplyHoursPerDriver"/>
                     <t t-set="curr"  t-value="state.metrics.avgSupplyHoursPerDriver"/>
