@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from dateutil.parser import isoparse
 from collections import defaultdict
 from typing import Optional
-import calendar, json, re
+import calendar, json, re, os, requests
 
 def _humanize(s):
     if not s:
@@ -206,57 +206,156 @@ class FleetDashboardController(http.Controller):
                         start_date: Optional[str] = None,
                         end_date: Optional[str] = None):
 
+        # --- A) Dates / windows (same semantics as before) ---
         today = date.today()
-
         mapping: dict[str, int | None] = {
             'Last Week':       7,
             'Last Month':     30,
             'Last 3 Months':  90,
             'All Time':     None,
         }
-
         if start_date and end_date:
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
-            dt = datetime.strptime(end_date,   '%Y-%m-%d').date()
-            span = (dt - df).days + 1
+            dt_ = datetime.strptime(end_date,   '%Y-%m-%d').date()
+            span = (dt_ - df).days + 1
             prev_dt = df - timedelta(days=1)
             prev_df = prev_dt - timedelta(days=span - 1)
         else:
             days = mapping.get(period, 7) if period else 7
             if days is None:
-                df = prev_df = dt = prev_dt = None
+                df = prev_df = dt_ = prev_dt = None
             else:
                 df      = today - timedelta(days=days)
-                dt      = today
+                dt_     = today
                 prev_df = today - timedelta(days=2 * days)
                 prev_dt = today - timedelta(days=days)
 
-        # ---- B) Normalize filters ----
-        products   = products   or []
-        scores     = scores     or []
-        categories = categories or []
+        # help funcs for the combined window
+        def _min_or(a, b): return min(a, b) if (a and b) else (a or b)
+        def _max_or(a, b): return max(a, b) if (a and b) else (a or b)
 
-        # ---- C) Drivers, DQS, and distributions (no per-driver queries) ----
+        big_df = df
+        big_dt = dt_ or today
+        if prev_df and prev_dt:
+            big_df = _min_or(df, prev_df)
+            big_dt = _max_or(dt_ or today, prev_dt)
+
+        # All Time → ask metrics-db for everything it has (we still need df/dt for bucketing)
+        if df is None and dt_ is None:
+            # Just pick a very wide window; metrics-db will return what it has.
+            # We’ll set df/dt to today for bucket labels.
+            df = today - timedelta(days=90)
+            dt_ = today
+            big_df = df
+            big_dt = dt_
+
+        # --- B) Config / signer endpoints ---
+        icp = request.env['ir.config_parameter'].sudo()
+        SIGNER_URL     = (icp.get_param('media_signer.base_url') or os.environ.get('SIGNER_URL', '')).rstrip('/')
+        SIGNER_API_KEY = icp.get_param('media_signer.api_key')   or os.environ.get('SIGNER_API_KEY')
+        TENANT_CODE    = icp.get_param('metrics.tenant_code')    or os.environ.get('TENANT_CODE', 'anda')
+
+        if not SIGNER_URL or not SIGNER_API_KEY:
+            return {'error': 'Missing SIGNER_URL or SIGNER_API_KEY in system parameters'}
+
+        def _get(path: str, params: dict) -> dict:
+            r = requests.get(
+                f"{SIGNER_URL}{path}",
+                params=params,
+                headers={'x-api-key': SIGNER_API_KEY},
+                timeout=30,
+            )
+            r.raise_for_status()
+            return r.json() if r.content else {}
+
+        # Pull a single combined set of driver-day rows covering prev+current
+        day_resp = _get(
+            '/metrics/driver-day',
+            {
+                'from_date': big_df.strftime('%Y-%m-%d'), # type: ignore
+                'to_date':   big_dt.strftime('%Y-%m-%d'),
+                'tenant':    TENANT_CODE,
+            }
+        )
+        day_rows = day_resp.get('rows', [])
+
+        # Pull OTRS snapshot for this tenant
+        otrs_resp = _get('/metrics/driver-otrs', {'tenant': TENANT_CODE})
+        otrs_rows = otrs_resp.get('rows', [])
+
+        # --- C) Build maps: OTRS by Yango ID, and bucket labels for current window ---
+        # OTRS score_band is one of: "Strong" | "Average" | "Weak"
+        otrs_by_driver = {}
+        for r in otrs_rows:
+            yid = r.get('driver_id')
+            band = (r.get('score_band') or '').strip().lower()  # -> strong/average/weak
+            if yid:
+                otrs_by_driver[yid] = band or 'average'
+
+        # Buckets only for current window df..dt_
+        def _bucketize_span(df_, dt__):
+            span = (dt__ - df_).days + 1
+            buckets = []
+            if span <= 30:
+                cur = df_
+                while cur <= dt__:
+                    buckets.append((cur, cur, cur.strftime('%Y-%m-%d'), 'day'))
+                    cur += timedelta(days=1)
+            elif span < 90:
+                start = df_ - timedelta(days=df_.weekday())  # Monday
+                cur = start
+                while cur <= dt__:
+                    nxt = cur + timedelta(days=6)
+                    buckets.append((cur, min(nxt, dt__), cur.strftime('%Y-%m-%d'), 'week'))
+                    cur += timedelta(days=7)
+            else:
+                y0, m0 = df_.year, df_.month
+                y1, m1 = dt__.year, dt__.month
+                start_month = y0 * 12 + (m0 - 1)
+                end_month   = y1 * 12 + (m1 - 1)
+                for ym in range(start_month, end_month + 1):
+                    y, mo = divmod(ym, 12); mo += 1
+                    start_day = date(y, mo, 1)
+                    last_day  = date(y, mo, calendar.monthrange(y, mo)[1])
+                    buckets.append((start_day, min(last_day, dt__), start_day.strftime('%Y-%m'), 'month'))
+            return buckets
+
+        buckets = _bucketize_span(df, dt_)
+        bucket_labels = [lbl for _, _, lbl, _ in buckets]
+
+        def _bucket_key(d):
+            for bstart, bend, lbl, _ in buckets:
+                if bstart <= d <= bend:
+                    return lbl
+            return None
+
+        # --- D) Drivers from Odoo + normalize filters ---
         Driver = request.env['x_fleet_driver'].sudo()
         all_drivers = Driver.search([])
         total_drivers = len(all_drivers)
 
+        products   = products   or []
+        scores     = scores     or []
+        categories = categories or []
+
+        # DQS matrix
         dqs_matrix = {
             'strong':  {'strong': 'High Performer',    'average': 'Average Performer', 'weak': 'Low Performer'},
             'average': {'strong': 'High Performer',    'average': 'Average Performer', 'weak': 'Low Performer'},
             'weak':    {'strong': 'Average Performer', 'average': 'Low Performer',     'weak': 'Low Performer'},
         }
 
+        # Build DQS map keyed by Odoo driver id, using Yango id to look up OTRS
         dqs_map = {}
         prod_counts = defaultdict(int)
         qual_counts = defaultdict(int)
         cat_counts  = defaultdict(int)
 
-        # Keep "training" part; default on-road to Average (avoids heavy per-driver queries).
         for drv in all_drivers:
-            training = (drv.training_rating or 'average').lower()
-            onroad = 'average'  # simplified to avoid per-driver scans; can be reintroduced later via aggregates
-            dqs = dqs_matrix.get(training, {}).get(onroad, 'Average Performer')
+            yid = (drv.yango_driver_id or '').strip()
+            training = (drv.training_rating or 'average').strip().lower()
+            onroad   = otrs_by_driver.get(yid, 'average')
+            dqs      = dqs_matrix.get(training, {}).get(onroad, 'Average Performer')
             dqs_map[drv.id] = dqs
 
             prod_counts[drv.product_type_id.name or 'Unspecified'] += 1
@@ -267,7 +366,7 @@ class FleetDashboardController(http.Controller):
         qual_dist = [{'label': k, 'value': v} for k, v in qual_counts.items()]
         cat_dist  = [{'label': k, 'value': v} for k, v in cat_counts.items()]
 
-        # Apply UI filters to drivers ONCE
+        # Apply UI filters to Odoo driver list
         filtered_drivers = [
             d for d in all_drivers
             if (not products   or d.product_type_id.id in products)
@@ -275,107 +374,18 @@ class FleetDashboardController(http.Controller):
             and (not categories or d.type in categories)
         ]
         filtered_ids = {d.id for d in filtered_drivers}
+        filtered_yids = { (d.yango_driver_id or '').strip(): d.id for d in filtered_drivers if d.yango_driver_id }
 
-        # ---- D) Build ONE big date window covering prev + current ----
-        def _min_or(a, b):
-            if a and b: return min(a, b)
-            return a or b
-        def _max_or(a, b):
-            if a and b: return max(a, b)
-            return a or b
+        # --- E) Aggregate metrics from driver_day rows ---
+        # Accumulators (current & previous windows)
+        cur = {'orders': 0, 'completes': 0, 'cash': 0.0, 'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0, 'sup_secs': 0.0}
+        prv = {'orders': 0, 'completes': 0, 'cash': 0.0, 'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0, 'sup_secs': 0.0}
+        cur_active_set, prv_active_set = set(), set()
 
-        big_df = df
-        big_dt = dt or today
-        if prev_df and prev_dt:
-            big_df = _min_or(df, prev_df)
-            big_dt = _max_or(dt or today, prev_dt)
+        # Per-driver current window for table
+        drv_cur = defaultdict(lambda: {'orders': 0, 'completes': 0, 'cash': 0.0, 'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0, 'sup_secs': 0.0})
 
-        # If All Time, find earliest among orders/supply via tiny min queries
-        OrderModelName = Driver._fields['order_ids'].comodel_name
-        Order = request.env[OrderModelName].sudo()
-        Supply = request.env['x_fleet_driver_supply_hours'].sudo()
-
-        if df is None and dt is None:
-            ord_oldest = Order.search_read(
-                [('order_date', '!=', False)],
-                fields=['order_date'],
-                order='order_date asc',
-                limit=1
-            )
-            sup_oldest = Supply.search_read(
-                [('date', '!=', False)],
-                fields=['date'],
-                order='date asc',
-                limit=1
-            )
-            d1 = ord_oldest and ord_oldest[0]['order_date'].date()
-            d2 = sup_oldest and sup_oldest[0]['date']
-            if d1 and d2:
-                big_df = min(d1, d2)
-            else:
-                big_df = (d1 or d2 or today)
-            big_dt = today
-            df = big_df
-            dt = big_dt
-            # prev window becomes None for All Time (as in your original behavior)
-
-        # ---- E) Build buckets ONCE for series ----
-        buckets = _bucketize_span(df, dt)
-        bucket_labels = [lbl for _, _, lbl, _ in buckets]
-
-        def _bucket_key(d):
-            for bstart, bend, lbl, _ in buckets:
-                if bstart <= d <= bend:
-                    return lbl
-            return None
-
-        # ---- F) SUPPLY HOURS: one bulk scan over [big_df..big_dt] ----
-        sup_domain = [('date', '>=', big_df), ('date', '<=', big_dt)]
-        sup_rows = Supply.with_context(prefetch_fields=False).search_read(
-            sup_domain,
-            fields=['driver_id', 'date', 'seconds'],
-        )
-
-        sup_cur_by_drv   = defaultdict(float)     # seconds (current window)
-        sup_prev_by_drv  = defaultdict(float)     # seconds (previous window)
-        sup_series_sec   = defaultdict(float)     # seconds by bucket
-        sup_tot_cur_sec  = 0.0
-        sup_tot_prev_sec = 0.0
-
-        for r in sup_rows:
-            drv = r.get('driver_id')
-            drv_id = drv and drv[0]
-            if not drv_id or drv_id not in filtered_ids:
-                continue
-            d = r['date']
-            secs = float(r.get('seconds') or 0.0)
-
-            # series bucket
-            bk = _bucket_key(d)
-            if bk:
-                sup_series_sec[bk] += secs
-
-            # window splits
-            if prev_df and prev_dt and (prev_df <= d < prev_dt):
-                sup_prev_by_drv[drv_id] += secs
-                sup_tot_prev_sec += secs
-            if df and dt and (df <= d <= dt):
-                sup_cur_by_drv[drv_id]  += secs
-                sup_tot_cur_sec  += secs
-
-        # ---- G) ORDERS: one bulk scan over [big_df..big_dt] ----
-        ord_domain = [('order_date', '>=', big_df), ('order_date', '<=', big_dt)]
-        ord_rows = Order.with_context(prefetch_fields=False).search_read(
-            ord_domain,
-            fields=['driver_id', 'order_date', 'status', 'price', 'interval_from', 'interval_to', 'events'],
-        )
-
-        cur = {'orders': 0, 'completes': 0, 'cash': 0.0, 'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0}
-        prev = {'orders': 0, 'completes': 0, 'cash': 0.0, 'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0}
-
-        drv_cur = defaultdict(lambda: {'orders': 0, 'completes': 0, 'cash': 0.0,
-                                    'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0})
-
+        # Series accumulators by bucket label (current window only)
         series_acc = {
             'orders': defaultdict(int),
             'completes': defaultdict(int),
@@ -383,117 +393,105 @@ class FleetDashboardController(http.Controller):
             'util_secs': defaultdict(float),
             'eff_secs': defaultdict(float),
             'accepts': defaultdict(int),
-            'active_sets': defaultdict(set),  # set of driver_ids with at least one complete in bucket
+            'sup_secs': defaultdict(float),
+            'active_sets': defaultdict(set),
         }
 
-        cur_active_set  = set()
-        prev_active_set = set()
-
-        for r in ord_rows:
-            drv = r.get('driver_id')
-            drv_id = drv and drv[0]
-            if not drv_id or drv_id not in filtered_ids:
+        for r in day_rows:
+            try:
+                day = datetime.strptime(r.get('day'), '%Y-%m-%d').date()
+            except Exception:
                 continue
 
-            odt = r.get('order_date')
-            if not odt:
+            # restrict to drivers present in Odoo + filtered set
+            yid = (r.get('driver_id') or '').strip()
+            odoo_id = filtered_yids.get(yid)
+            if not odoo_id:
                 continue
-            d = odt.date()
-            bk = _bucket_key(d)
 
-            status = r.get('status')
-            price  = float(r.get('price') or 0.0)
+            orders_total      = int(r.get('orders_total') or 0)
+            completes         = int(r.get('orders_completed') or 0)
+            cash_sum          = float(r.get('cash_sum') or 0.0)
+            accepts           = int(r.get('accepts') or 0)
+            util_secs         = float(r.get('interval_seconds') or 0.0)
+            eff_secs          = float(r.get('transport_seconds') or 0.0)
+            sup_secs          = float(r.get('supply_seconds') or 0.0)
 
-            # utilisation seconds from intervals
-            iv_from = r.get('interval_from')
-            iv_to   = r.get('interval_to')
-            util_s  = 0.0
-            if iv_from and iv_to:
-                util_s = max(0.0, (iv_to - iv_from).total_seconds())
-
-            # events → acceptance + transport seconds
-            evs = _safe_parse_events(r.get('events'))
-            statuses = {e.get('order_status') for e in evs if isinstance(e, dict)}
-            accepted = 1 if _accepted_statuses(statuses) else 0
-            eff_s    = _transport_secs_from_events(evs)
-
-            # series aggregates
-            if bk:
-                series_acc['orders'][bk]    += 1
-                series_acc['cash'][bk]      += price
-                series_acc['util_secs'][bk] += util_s
-                series_acc['eff_secs'][bk]  += eff_s
-                series_acc['accepts'][bk]   += accepted
-                if status == 'complete':
-                    series_acc['completes'][bk] += 1
-                    series_acc['active_sets'][bk].add(drv_id)
-
-            # window splits
-            in_prev = (prev_df and prev_dt and prev_df <= d < prev_dt)
-            in_cur  = (df and dt and df <= d <= dt)
+            in_prev = (prev_df and prev_dt and prev_df <= day < prev_dt)
+            in_cur  = (df and dt_ and df <= day <= dt_)
 
             if in_prev:
-                prev['orders']    += 1
-                prev['cash']      += price
-                prev['util_secs'] += util_s
-                prev['eff_secs']  += eff_s
-                prev['accepts']   += accepted
-                if status == 'complete':
-                    prev['completes'] += 1
-                    prev_active_set.add(drv_id)
+                prv['orders']     += orders_total
+                prv['completes']  += completes
+                prv['cash']       += cash_sum
+                prv['util_secs']  += util_secs
+                prv['eff_secs']   += eff_secs
+                prv['accepts']    += accepts
+                prv['sup_secs']   += sup_secs
+                if completes > 0:
+                    prv_active_set.add(odoo_id)
 
             if in_cur:
-                cur['orders']    += 1
-                cur['cash']      += price
-                cur['util_secs'] += util_s
-                cur['eff_secs']  += eff_s
-                cur['accepts']   += accepted
-                if status == 'complete':
-                    cur['completes'] += 1
-                    cur_active_set.add(drv_id)
+                cur['orders']     += orders_total
+                cur['completes']  += completes
+                cur['cash']       += cash_sum
+                cur['util_secs']  += util_secs
+                cur['eff_secs']   += eff_secs
+                cur['accepts']    += accepts
+                cur['sup_secs']   += sup_secs
+                if completes > 0:
+                    cur_active_set.add(odoo_id)
 
-                # per-driver detail for current window
-                x = drv_cur[drv_id]
-                x['orders']    += 1
-                x['cash']      += price
-                x['util_secs'] += util_s
-                x['eff_secs']  += eff_s
-                x['accepts']   += accepted
-                if status == 'complete':
-                    x['completes'] += 1
+                # per-driver (current)
+                x = drv_cur[odoo_id]
+                x['orders']     += orders_total
+                x['completes']  += completes
+                x['cash']       += cash_sum
+                x['util_secs']  += util_secs
+                x['eff_secs']   += eff_secs
+                x['accepts']    += accepts
+                x['sup_secs']   += sup_secs
 
-        # ---- H) Metrics (derived from aggregates) ----
+                # series by bucket
+                bk = _bucket_key(day)
+                if bk:
+                    series_acc['orders'][bk]     += orders_total
+                    series_acc['completes'][bk]  += completes
+                    series_acc['cash'][bk]       += cash_sum
+                    series_acc['util_secs'][bk]  += util_secs
+                    series_acc['eff_secs'][bk]   += eff_secs
+                    series_acc['accepts'][bk]    += accepts
+                    series_acc['sup_secs'][bk]   += sup_secs
+                    if completes > 0:
+                        series_acc['active_sets'][bk].add(odoo_id)
+
+        # --- F) Derived metrics (same names as before) ---
+        def _safe_div(a, b): 
+            return (a / b) if b else 0.0
+
         active_current   = len(cur_active_set)
-        active_previous  = len(prev_active_set)
+        active_previous  = len(prv_active_set)
         trip_current     = cur['completes']
-        trip_previous    = prev['completes']
-        supply_current   = sup_tot_cur_sec  / 3600.0
-        supply_previous  = sup_tot_prev_sec / 3600.0
+        trip_previous    = prv['completes']
+        supply_current   = cur['sup_secs'] / 3600.0
+        supply_previous  = prv['sup_secs'] / 3600.0
         cash_current     = cur['cash']
-        cash_previous    = prev['cash']
-        util_secs_current  = cur['util_secs']
-        util_secs_previous = prev['util_secs']
-        eff_secs_current   = cur['eff_secs']
-        eff_secs_previous  = prev['eff_secs']
-        accept_num_current  = cur['accepts']
-        accept_num_previous = prev['accepts']
-        order_num_current   = cur['orders']
-        order_num_previous  = prev['orders']
+        cash_previous    = prv['cash']
 
-        avg_supply        = (supply_current / active_current) if active_current else 0.0
-        avg_supply_prev   = (supply_previous / active_previous) if active_previous else 0.0
+        util_pct_current = _safe_div(cur['util_secs']/3600.0, max(supply_current, 1e-12)) * 100.0 if supply_current else 0.0
+        util_pct_prev    = _safe_div(prv['util_secs']/3600.0, max(supply_previous, 1e-12)) * 100.0 if supply_previous else 0.0
 
-        avg_util_current  = (util_secs_current/3600.0 / supply_current * 100.0) if supply_current else 0.0
-        avg_util_previous = (util_secs_previous/3600.0 / supply_previous * 100.0) if supply_previous else 0.0
+        eff_pct_current  = _safe_div(cur['eff_secs']/3600.0, max(supply_current, 1e-12)) * 100.0 if supply_current else 0.0
+        eff_pct_prev     = _safe_div(prv['eff_secs']/3600.0, max(supply_previous, 1e-12)) * 100.0 if supply_previous else 0.0
 
-        avg_eff_current   = (eff_secs_current/3600.0 / supply_current * 100.0) if supply_current else 0.0
-        avg_eff_previous  = (eff_secs_previous/3600.0 / supply_previous * 100.0) if supply_previous else 0.0
+        accept_rate_current  = _safe_div(cur['accepts'] * 100.0, max(cur['orders'], 1e-12))
+        accept_rate_previous = _safe_div(prv['accepts'] * 100.0, max(prv['orders'], 1e-12))
 
-        accept_rate_current  = (accept_num_current / order_num_current * 100.0) if order_num_current else 0.0
-        accept_rate_previous = (accept_num_previous / order_num_previous * 100.0) if order_num_previous else 0.0
+        completed_to_request_current  = _safe_div(trip_current * 100.0, max(cur['orders'], 1e-12))
+        completed_to_request_previous = _safe_div(trip_previous * 100.0, max(prv['orders'], 1e-12))
 
-        completed_to_request_current  = (trip_current / order_num_current * 100.0) if order_num_current else 0.0
-        completed_to_request_previous = (trip_previous / order_num_previous * 100.0) if order_num_previous else 0.0
+        avg_supply        = _safe_div(supply_current, active_current) if active_current else 0.0
+        avg_supply_prev   = _safe_div(supply_previous, active_previous) if active_previous else 0.0
 
         metrics = {
             'activeDrivers':     active_current,
@@ -504,16 +502,16 @@ class FleetDashboardController(http.Controller):
             'prevSupplyHours':   supply_previous,
             'cashEarned':        cash_current,
             'prevCashEarned':    cash_previous,
-            'moneyPerHour':     (cash_current / supply_current) if supply_current else 0.0,
-            'prevMoneyPerHour': (cash_previous / supply_previous) if supply_previous else 0.0,
-            'tripsPerHour':      (trip_current   / supply_current) if supply_current else 0.0,
-            'prevTripsPerHour':  (trip_previous  / supply_previous) if supply_previous else 0.0,
+            'moneyPerHour':      _safe_div(cash_current, max(supply_current, 1e-12)) if supply_current else 0.0,
+            'prevMoneyPerHour':  _safe_div(cash_previous, max(supply_previous, 1e-12)) if supply_previous else 0.0,
+            'tripsPerHour':      _safe_div(trip_current, max(supply_current, 1e-12)) if supply_current else 0.0,
+            'prevTripsPerHour':  _safe_div(trip_previous, max(supply_previous, 1e-12)) if supply_previous else 0.0,
             'avgSupplyHoursPerDriver':     avg_supply,
             'prevAvgSupplyHoursPerDriver': avg_supply_prev,
-            'avgUtilisation':     avg_util_current,
-            'prevAvgUtilisation': avg_util_previous,
-            'avgEfficiency':      avg_eff_current,
-            'prevAvgEfficiency':  avg_eff_previous,
+            'avgUtilisation':     util_pct_current,
+            'prevAvgUtilisation': util_pct_prev,
+            'avgEfficiency':      eff_pct_current,
+            'prevAvgEfficiency':  eff_pct_prev,
             'acceptanceRate':      accept_rate_current,
             'prevAcceptanceRate':  accept_rate_previous,
             'completedToRequest':  completed_to_request_current,
@@ -524,28 +522,20 @@ class FleetDashboardController(http.Controller):
             'prevPartnerFee': cash_previous * 0.03,
         }
 
-        # ---- I) Series (assembled from the per-bucket dicts) ----
-        series_active = []
-        series_trips  = []
-        series_supply = []
-        series_cash   = []
-        series_mph    = []
-        series_trph   = []
-        series_avg_supply = []
-        series_utilisation = []
-        series_efficiency  = []
-        series_acceptance  = []
-        series_completed   = []
-        series_serviceFee  = []
-        series_partnerFee  = []
+        # --- G) Series from per-bucket aggregates (current window only) ---
+        series_active, series_trips, series_supply, series_cash = [], [], [], []
+        series_mph, series_trph = [], []
+        series_avg_supply, series_utilisation, series_efficiency = [], [], []
+        series_acceptance, series_completed = [], []
+        series_serviceFee, series_partnerFee = [], []
 
         for lbl in bucket_labels:
             trips     = series_acc['completes'].get(lbl, 0)
             orders    = series_acc['orders'].get(lbl, 0)
             cash_sum  = series_acc['cash'].get(lbl, 0.0)
-            sup_hours = (sup_series_sec.get(lbl, 0.0) / 3600.0)
-            util_h    = (series_acc['util_secs'].get(lbl, 0.0) / 3600.0)
-            eff_h     = (series_acc['eff_secs'].get(lbl, 0.0) / 3600.0)
+            sup_hours = series_acc['sup_secs'].get(lbl, 0.0) / 3600.0
+            util_h    = series_acc['util_secs'].get(lbl, 0.0) / 3600.0
+            eff_h     = series_acc['eff_secs'].get(lbl, 0.0) / 3600.0
             accepts   = series_acc['accepts'].get(lbl, 0)
             active    = len(series_acc['active_sets'].get(lbl, set()))
 
@@ -556,21 +546,21 @@ class FleetDashboardController(http.Controller):
             series_serviceFee.append({'period': lbl, 'value': cash_sum * 0.1})
             series_partnerFee.append({'period': lbl, 'value': cash_sum * 0.03})
 
-            mph  = (cash_sum / sup_hours) if sup_hours else 0.0
-            trph = (trips    / sup_hours) if sup_hours else 0.0
+            mph  = _safe_div(cash_sum, max(sup_hours, 1e-12)) if sup_hours else 0.0
+            trph = _safe_div(trips,    max(sup_hours, 1e-12)) if sup_hours else 0.0
             series_mph.append({'period': lbl, 'value': mph})
             series_trph.append({'period': lbl, 'value': trph})
 
-            avg_sup = (sup_hours / active) if active else 0.0
+            avg_sup = _safe_div(sup_hours, active) if active else 0.0
             series_avg_supply.append({'period': lbl, 'value': avg_sup})
 
-            util_pct = (util_h / sup_hours * 100.0) if sup_hours else 0.0
-            eff_pct  = (eff_h  / sup_hours * 100.0) if sup_hours else 0.0
+            util_pct = _safe_div(util_h, max(sup_hours, 1e-12)) * 100.0 if sup_hours else 0.0
+            eff_pct  = _safe_div(eff_h,  max(sup_hours, 1e-12)) * 100.0 if sup_hours else 0.0
             series_utilisation.append({'period': lbl, 'value': util_pct})
             series_efficiency.append({'period': lbl, 'value': eff_pct})
-            acc_pct = (accepts / orders * 100.0) if orders else 0.0
+            acc_pct = _safe_div(accepts * 100.0, max(orders, 1e-12)) if orders else 0.0
+            c2r_pct = _safe_div(trips   * 100.0, max(orders, 1e-12)) if orders else 0.0
             series_acceptance.append({'period': lbl, 'value': acc_pct})
-            c2r_pct = (trips   / orders * 100.0) if orders else 0.0
             series_completed.append({'period': lbl, 'value': c2r_pct})
 
         series = {
@@ -589,19 +579,19 @@ class FleetDashboardController(http.Controller):
             'partnerFee':    series_partnerFee,
         }
 
-        # ---- J) Per-driver detail table (from aggregates; no re-filtering) ----
+        # --- H) Per-driver detail table (from aggregates; current window only) ---
         data = {}
         for drv in filtered_drivers:
-            sums = drv_cur.get(drv.id, {'orders': 0, 'completes': 0, 'cash': 0.0,
-                                        'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0})
-            hours = (sup_cur_by_drv.get(drv.id, 0.0) / 3600.0)
-            trips = sums['completes']
-            orders = sums['orders']
-            cash   = sums['cash']
+            s = drv_cur.get(drv.id, {'orders': 0, 'completes': 0, 'cash': 0.0,
+                                    'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0, 'sup_secs': 0.0})
+            hours = s['sup_secs'] / 3600.0
+            trips = s['completes']
+            orders = s['orders']
+            cash   = s['cash']
 
-            accept_rate = (sums['accepts'] / orders * 100.0) if orders else 0.0
-            efficiency  = ((sums['eff_secs']/3600.0)/hours*100.0) if hours else 0.0
-            utilisation = ((sums['util_secs']/3600.0)/hours*100.0) if hours else 0.0
+            accept_rate = _safe_div(s['accepts'] * 100.0, max(orders, 1e-12)) if orders else 0.0
+            efficiency  = _safe_div((s['eff_secs']/3600.0) * 100.0, max(hours, 1e-12)) if hours else 0.0
+            utilisation = _safe_div((s['util_secs']/3600.0) * 100.0, max(hours, 1e-12)) if hours else 0.0
 
             data[drv.id] = {
                 'id':             drv.id,
@@ -616,11 +606,11 @@ class FleetDashboardController(http.Controller):
                 'trips':          trips,
                 'hours':          hours,
                 'acceptance_rate': accept_rate,
-                'trips_per_hour': (trips / hours) if hours else 0.0,
-                'money_per_hour': (cash  / hours) if hours else 0.0,
+                'trips_per_hour': _safe_div(trips, max(hours, 1e-12)) if hours else 0.0,
+                'money_per_hour': _safe_div(cash,  max(hours, 1e-12)) if hours else 0.0,
                 'utilisation':    utilisation,
                 'efficiency':     efficiency,
-                'completed_to_request': (trips / orders * 100.0) if orders else 0.0,
+                'completed_to_request': _safe_div(trips * 100.0, max(orders, 1e-12)) if orders else 0.0,
                 'service_fee':    cash * 0.10,
                 'partner_fee':    cash * 0.03,
             }
