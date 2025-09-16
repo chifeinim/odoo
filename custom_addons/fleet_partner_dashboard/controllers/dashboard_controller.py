@@ -214,6 +214,7 @@ class FleetDashboardController(http.Controller):
             'Last 3 Months':  90,
             'All Time':     None,
         }
+        want_all_time = False
         if start_date and end_date:
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
             dt_ = datetime.strptime(end_date,   '%Y-%m-%d').date()
@@ -224,6 +225,7 @@ class FleetDashboardController(http.Controller):
             days = mapping.get(period, 7) if period else 7
             if days is None:
                 df = prev_df = dt_ = prev_dt = None
+                want_all_time = True
             else:
                 df      = today - timedelta(days=days)
                 dt_     = today
@@ -269,15 +271,44 @@ class FleetDashboardController(http.Controller):
             return r.json() if r.content else {}
 
         # Pull a single combined set of driver-day rows covering prev+current
+        # Decide the fetch window we send to metrics-db
+        if want_all_time:
+            fetch_from = "2000-01-01"                       # safely early
+            fetch_to   = today.strftime("%Y-%m-%d")         # today
+        else:
+            # Use the combined prev+current window you already computed
+            fetch_from = big_df.strftime('%Y-%m-%d') # type: ignore
+            fetch_to   = big_dt.strftime('%Y-%m-%d')
+
         day_resp = _get(
             '/metrics/driver-day',
             {
-                'from_date': big_df.strftime('%Y-%m-%d'), # type: ignore
-                'to_date':   big_dt.strftime('%Y-%m-%d'),
+                'from_date': fetch_from,
+                'to_date':   fetch_to,
                 'tenant':    TENANT_CODE,
             }
         )
         day_rows = day_resp.get('rows', [])
+        
+        if want_all_time:
+            if day_rows:
+                all_days = []
+                for r in day_rows:
+                    dstr = r.get('day')
+                    if dstr:
+                        try:
+                            all_days.append(datetime.strptime(dstr, '%Y-%m-%d').date())
+                        except Exception:
+                            pass
+                if all_days:
+                    df  = min(all_days)
+                    dt_ = max(all_days)
+                else:
+                    df = dt_ = today
+            else:
+                df = dt_ = today
+            prev_df = prev_dt = None
+            big_df, big_dt = df, dt_
 
         # Pull OTRS snapshot for this tenant
         otrs_resp = _get('/metrics/driver-otrs', {'tenant': TENANT_CODE})
