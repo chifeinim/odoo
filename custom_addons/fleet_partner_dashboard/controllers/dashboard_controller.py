@@ -553,6 +553,9 @@ class FleetDashboardController(http.Controller):
 
         completed_to_request_current  = _safe_div(trip_current * 100.0, max(cur['orders'], 1e-12))
         completed_to_request_previous = _safe_div(trip_previous * 100.0, max(prv['orders'], 1e-12))
+        
+        completion_rate_current  = _safe_div(trip_current * 100.0, max(cur['accepts'], 1e-12))
+        completion_rate_previous = _safe_div(trip_previous * 100.0, max(prv['accepts'], 1e-12))
 
         avg_supply        = _safe_div(supply_current, active_current) if active_current else 0.0
         avg_supply_prev   = _safe_div(supply_previous, active_previous) if active_previous else 0.0
@@ -580,6 +583,8 @@ class FleetDashboardController(http.Controller):
             'prevAcceptanceRate':  accept_rate_previous,
             'completedToRequest':  completed_to_request_current,
             'prevCompletedToRequest': completed_to_request_previous,
+            'completionRate':       completion_rate_current,
+            'prevCompletionRate':   completion_rate_previous,
             'serviceFee': cash_current * 0.1,
             'prevServiceFee': cash_previous * 0.1,
             'partnerFee': cash_current * 0.03,
@@ -590,7 +595,7 @@ class FleetDashboardController(http.Controller):
         series_active, series_trips, series_supply, series_cash = [], [], [], []
         series_mph, series_trph = [], []
         series_avg_supply, series_utilisation, series_efficiency = [], [], []
-        series_acceptance, series_completed = [], []
+        series_acceptance, series_completed, series_completion = [], [], []
         series_serviceFee, series_partnerFee = [], []
 
         for lbl in bucket_labels:
@@ -624,8 +629,10 @@ class FleetDashboardController(http.Controller):
             series_efficiency.append({'period': lbl, 'value': eff_pct})
             acc_pct = _safe_div(accepts * 100.0, max(orders, 1e-12)) if orders else 0.0
             c2r_pct = _safe_div(trips   * 100.0, max(orders, 1e-12)) if orders else 0.0
+            cmp_r_pct = _safe_div(trips   * 100.0, max(accepts, 1e-12)) if accepts else 0.0
             series_acceptance.append({'period': lbl, 'value': acc_pct})
             series_completed.append({'period': lbl, 'value': c2r_pct})
+            series_completion.append({'period': lbl, 'value': cmp_r_pct})
 
         series = {
             'activeDrivers': series_active,
@@ -639,6 +646,7 @@ class FleetDashboardController(http.Controller):
             'efficiency':    series_efficiency,
             'acceptanceRate': series_acceptance,
             'completedToRequest': series_completed,
+            'completionRate': series_completion,
             'serviceFee':    series_serviceFee,
             'partnerFee':    series_partnerFee,
         }
@@ -675,6 +683,7 @@ class FleetDashboardController(http.Controller):
                 'utilisation':    utilisation,
                 'efficiency':     efficiency,
                 'completed_to_request': _safe_div(trips * 100.0, max(orders, 1e-12)) if orders else 0.0,
+                'completion_rate': _safe_div(trips * 100.0, max(s['accepts'], 1e-12)) if s['accepts'] else 0.0,
                 'service_fee':    cash * 0.10,
                 'partner_fee':    cash * 0.03,
             }

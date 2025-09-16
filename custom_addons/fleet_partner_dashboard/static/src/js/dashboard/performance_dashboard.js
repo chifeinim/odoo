@@ -97,8 +97,8 @@ export class OwlPerformanceDashboard extends Component {
         activeDrivers: [], trips: [], supplyHours: [],
         cashEarned: [], moneyPerHour: [], tripsPerHour: [],
         avgSupplyHoursPerDriver: [], utilisation: [], efficiency: [],
-        acceptanceRate: [], completedToRequest: [], serviceFee: [],
-        partnerFee: [],
+        acceptanceRate: [], completedToRequest: [], completionRate: [],
+        serviceFee: [], partnerFee: [],
       },
       allDrivers: 0,
       distributions: { product: [], quality: [], category: [] },
@@ -126,11 +126,13 @@ export class OwlPerformanceDashboard extends Component {
     this.chartEfficiency = useRef('chartEfficiency');
     this.chartAcceptance = useRef('chartAcceptance');
     this.chartCompletedToRequest = useRef('chartCompletedToRequest');
+    this.chartCompletionRate = useRef('chartCompletionRate');
     this.chartServiceFee = useRef('chartServiceFee');
     this.chartPartnerFee = useRef('chartPartnerFee');
     this.chartQuality  = useRef('chartQuality');
     this.chartProduct  = useRef('chartProduct');
     this.chartCategory = useRef('chartCategory');
+    
     this._charts     = {};
 
     onMounted(async () => {
@@ -315,10 +317,11 @@ export class OwlPerformanceDashboard extends Component {
     const ctxE = this.chartEfficiency.el.getContext('2d');
     const ctxAcc = this.chartAcceptance.el.getContext('2d');
     const ctxCTR = this.chartCompletedToRequest.el.getContext('2d');
+    const ctxCRate = this.chartCompletionRate.el.getContext('2d');
     const ctxSF = this.chartServiceFee.el.getContext('2d');
     const ctxPF = this.chartPartnerFee.el.getContext('2d');
 
-    ['active','trips','supply','cash','moneyPerHour','tripsPerHour','avgSupplyHoursPerDriver', 'utilisation', 'efficiency','acceptanceRate','completedToRequest','serviceFee','partnerFee'].forEach(k => {
+    ['active','trips','supply','cash','moneyPerHour','tripsPerHour','avgSupplyHoursPerDriver', 'utilisation', 'efficiency','acceptanceRate','completedToRequest','completionRate','serviceFee','partnerFee'].forEach(k => {
       if (this._charts[k]) { this._charts[k].destroy(); }
     });
     this._charts.active = new Chart(ctxA, cfg('Active Drivers', this.state.series.activeDrivers));
@@ -332,6 +335,8 @@ export class OwlPerformanceDashboard extends Component {
     this._charts.efficiency = new Chart(ctxE ,cfg('Average Efficiency %', this.state.series.efficiency));
     this._charts.acceptanceRate = new Chart(ctxAcc,cfg('Average Acceptance Rate %', this.state.series.acceptanceRate));
     this._charts.completedToRequest = new Chart(ctxCTR,cfg('Average Completed to Request %', this.state.series.completedToRequest));
+    this._charts.completionRate = new Chart(ctxCRate,cfg('Average Completion Rate %', this.state.series.completionRate));
+
     this._charts.serviceFee = new Chart(ctxSF,cfg('Service Fee', this.state.series.serviceFee));
     this._charts.partnerFee = new Chart(ctxPF,cfg('Partner Fee', this.state.series.partnerFee));
   }
