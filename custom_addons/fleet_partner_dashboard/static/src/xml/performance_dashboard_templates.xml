@@ -204,7 +204,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Cash Earned</h5>
-                  <h2>Kz <t t-esc="state.metrics.cashEarned.toFixed(2)"/></h2>
+                  <h2>Kz <t t-esc="state.metrics.cashEarned.toFixed(0)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevCashEarned"/>
                     <t t-set="curr"  t-value="state.metrics.cashEarned"/>
@@ -229,7 +229,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Avg Money / Hour</h5>
-                  <h2>Kz <t t-esc="state.metrics.moneyPerHour.toFixed(2)"/></h2>
+                  <h2>Kz <t t-esc="state.metrics.moneyPerHour.toFixed(0)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevMoneyPerHour"/>
                     <t t-set="curr"  t-value="state.metrics.moneyPerHour"/>
@@ -380,7 +380,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Service Fee</h5>
-                  <h2>Kz <t t-esc="state.metrics.serviceFee.toFixed(2)"/></h2>
+                  <h2>Kz <t t-esc="state.metrics.serviceFee.toFixed(0)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevServiceFee"/>
                     <t t-set="curr"  t-value="state.metrics.serviceFee"/>
@@ -407,7 +407,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Partner Fee</h5>
-                  <h2>Kz <t t-esc="state.metrics.partnerFee.toFixed(2)"/></h2>
+                  <h2>Kz <t t-esc="state.metrics.partnerFee.toFixed(0)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevPartnerFee"/>
                     <t t-set="curr"  t-value="state.metrics.partnerFee"/>
