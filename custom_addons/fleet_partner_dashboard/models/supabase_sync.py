@@ -235,7 +235,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         while True:
             params = {
                 "select": select,
-                "created_at": f"gte.{last_sync}",
+                "created_at": f"gt.{last_sync}",
                 "order": "created_at.asc,id.asc",
                 "limit": page_size,
                 "offset": offset,
