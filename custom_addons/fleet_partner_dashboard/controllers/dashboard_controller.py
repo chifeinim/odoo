@@ -33,94 +33,54 @@ def _parse_events(o):
 def _order_statuses(o):
     return {e.get('order_status') for e in _parse_events(o)}
 
-def _transport_seconds(o):
-    """If there’s a transporting→(complete|cancelled) pair, return the  
-       seconds between them, else 0."""
-    evs = _parse_events(o)
-    if 'transporting' not in _order_statuses(o):
-        return 0.0
-    t0 = next((e['event_at'] for e in evs if e['order_status']=='transporting'), None)
-    terminal = 'complete' if any(e['order_status']=='complete' for e in evs) else 'cancelled'
-    t1 = next((e['event_at'] for e in evs if e['order_status']==terminal), None)
-    if not (t0 and t1):
-        return 0.0
-    d0 = parse_iso_with_frac(t0)
-    d1 = parse_iso_with_frac(t1)
-    return (d1 - d0).total_seconds()
+def _last_week_range(today: date) -> tuple[date, date]:
+    """Previous full Monday–Sunday week."""
+    last_monday = today - timedelta(days=today.weekday() + 7)
+    last_sunday = last_monday + timedelta(days=6)
+    return last_monday, last_sunday
 
-def _safe_parse_events(evs):
-    if not evs:
-        return []
-    if isinstance(evs, str):
-        try:
-            return json.loads(evs) or []
-        except Exception:
-            return []
-    return evs if isinstance(evs, list) else []
+def _last_month_range(today: date) -> tuple[date, date]:
+    """Previous full calendar month."""
+    first_this_month = date(today.year, today.month, 1)
+    last_of_last_month = first_this_month - timedelta(days=1)
+    first_of_last_month = date(last_of_last_month.year, last_of_last_month.month, 1)
+    return first_of_last_month, last_of_last_month
 
-def _accepted_statuses(statuses):
-    # acceptance: reached any of driving|waiting|transporting
-    return bool(statuses & {'driving', 'waiting', 'transporting'})
+def _last_n_months_range(today: date, n: int) -> tuple[date, date]:
+    """Previous N full calendar months, ending with last month."""
+    first_this_month = date(today.year, today.month, 1)
+    end = first_this_month - timedelta(days=1)  # last day of last month
+    # compute first day N-1 months before `end`'s month
+    total = end.year * 12 + (end.month - 1) - (n - 1)
+    start_year, start_month_index = divmod(total, 12)
+    start_month = start_month_index + 1
+    start = date(start_year, start_month, 1)
+    return start, end
 
-def _transport_secs_from_events(evs_list):
-    # transporting -> (complete|cancelled)
-    if not evs_list:
-        return 0.0
-    statuses = {e.get('order_status') for e in evs_list if isinstance(e, dict)}
-    if 'transporting' not in statuses:
-        return 0.0
-    t0 = next((e.get('event_at') for e in evs_list if e.get('order_status') == 'transporting'), None)
-    terminal = 'complete' if 'complete' in statuses else ('cancelled' if 'cancelled' in statuses else None)
-    t1 = next((e.get('event_at') for e in evs_list if e.get('order_status') == terminal), None) if terminal else None
-    if not (t0 and t1):
-        return 0.0
-    d0 = parse_iso_with_frac(t0)
-    d1 = parse_iso_with_frac(t1)
-    return max(0.0, (d1 - d0).total_seconds())
-
-def _bucketize_span(df, dt):
-    """Return [(start, end, label, kind)] as day/week/month buckets."""
-    span = (dt - df).days + 1
-    buckets = []
-    if span <= 30:
-        cur = df
-        while cur <= dt:
-            buckets.append((cur, cur, cur.strftime('%Y-%m-%d'), 'day'))
-            cur += timedelta(days=1)
-    elif span < 90:
-        start = df - timedelta(days=df.weekday())  # Monday-start week
-        cur = start
-        while cur <= dt:
-            nxt = cur + timedelta(days=6)
-            buckets.append((cur, min(nxt, dt), cur.strftime('%Y-%m-%d'), 'week'))
-            cur += timedelta(days=7)
-    else:
-        y0, m0 = df.year, df.month
-        y1, m1 = dt.year, dt.month
-        start_month = y0 * 12 + (m0 - 1)
-        end_month   = y1 * 12 + (m1 - 1)
-        for ym in range(start_month, end_month + 1):
-            y, mo = divmod(ym, 12)
-            mo += 1
-            start_day = date(y, mo, 1)
-            last_day  = date(y, mo, calendar.monthrange(y, mo)[1])
-            buckets.append((start_day, min(last_day, dt), start_day.strftime('%Y-%m'), 'month'))
-    return buckets
+def _previous_period(df: date, dt_: date) -> tuple[date, date]:
+    """Immediately preceding period of equal length to df..dt_."""
+    length = (dt_ - df).days + 1
+    prev_dt = df - timedelta(days=1)
+    prev_df = prev_dt - timedelta(days=length - 1)
+    return prev_df, prev_dt
 
 class FleetDashboardController(http.Controller):
 
     @http.route('/fleet_partner_dashboard/data', type='json', auth='user')
     def dashboard_data(self):
-        windows = [
-            (7,   'Last 7 Days'),
-            (30,  'Last Month'),
-            (90,  'Last 3 Months'),
-            (None,'All Time'),
-        ]
+
         today = date.today()
         Issue = request.env['x_fleet_issue'].sudo()
         Driver = request.env['x_fleet_driver'].sudo()
         drivers = Driver.search([], order='name')
+
+        # windows now define labels and explicit (start, end) ranges
+        windows = [
+            ('Last Week',      *_last_week_range(today)),
+            ('Last Month',     *_last_month_range(today)),
+            ('Last 3 Months',  *_last_n_months_range(today, 3)),
+            ('All Time',       None, None),
+        ]
 
         # per-driver breakdown (with human labels)
         result = []
@@ -129,24 +89,22 @@ class FleetDashboardController(http.Controller):
             row = {'name': drv.name, 'phone': drv.phone or '', 'periods': []}
 
             # counts for sorting
+            lw_df, lw_dt = _last_week_range(today)
+            last7_count = len(issues.filtered(lambda i: i.date_reported and lw_df <= i.date_reported.date() <= lw_dt))
             total_count = len(issues)
-            cutoff_7 = today - timedelta(days=7)
-            last7_count = len(issues.filtered(lambda i: i.date_reported and i.date_reported.date() >= cutoff_7))
 
-            for days, label in windows:
-                if days is None:
-                    subset = issues
+            for label, start, end in windows:
+                if start and end:
+                    subset = issues.filtered(lambda i: i.date_reported and start <= i.date_reported.date() <= end)
                 else:
-                    cutoff = today - timedelta(days=days)
-                    subset = issues.filtered(lambda i: i.date_reported and i.date_reported.date() >= cutoff)
+                    subset = issues
                 cats = [{
-                    'name':  issue.main_category,         # raw (snake_case) – kept if you need it later
-                    'label': _humanize(issue.main_category),  # human-friendly for display
+                    'name':  issue.main_category,
+                    'label': _humanize(issue.main_category),
                     'color': issue.color,
                 } for issue in subset]
                 row['periods'].append({'label': label, 'cats': cats})
 
-            # store sort helpers (not rendered by the UI)
             row['_last7'] = last7_count
             row['_total'] = total_count
             result.append(row)
@@ -163,23 +121,29 @@ class FleetDashboardController(http.Controller):
         # global category summary (with human labels)
         unique_cats = sorted(set(Issue.search([]).mapped('main_category')))
         cats_summary = []
+
+        # use (Last 3 Months, Last Month, Last Week) in that order for sorting signals
+        range_map = {
+            'Last 3 Months': _last_n_months_range(today, 3),
+            'Last Month':    _last_month_range(today),
+            'Last Week':     _last_week_range(today),
+        }
+
         for cat in unique_cats:
             counts = []
-            for days, _ in reversed(windows[:3]):  # 90, 30, 7
-                if days is None:
-                    domain = [('main_category', '=', cat)]
-                else:
-                    cutoff = today - timedelta(days=days)
-                    domain = [('main_category', '=', cat), ('date_reported', '>=', cutoff)]
+            for lbl in ('Last 3 Months', 'Last Month', 'Last Week'):
+                df_, dt_ = range_map[lbl]
+                domain = [('main_category', '=', cat), ('date_reported', '>=', df_), ('date_reported', '<=', dt_)]
                 counts.append(Issue.search_count(domain))
             cats_summary.append({'name': cat, 'label': _humanize(cat), 'counts': counts})
-        # sort by newest window desc, then next desc…
-        cats_summary.sort(key=lambda x: (-x['counts'][0], -x['counts'][1], -x['counts'][2]))
+
+        # sort by newest window desc, then next…
+        cats_summary.sort(key=lambda x: (-x['counts'][2], -x['counts'][1], -x['counts'][0]))
 
         return {
-            'windows':      [lbl for _, lbl in windows],
-            'drivers':      result,
-            'catsSummary':  cats_summary,
+            'windows': [w[0] for w in windows],  # ['Last Week', 'Last Month', 'Last 3 Months', 'All Time']
+            'drivers': result,
+            'catsSummary': cats_summary,
         }
 
     @http.route('/fleet_partner_dashboard', type='http', auth='user')
@@ -209,31 +173,29 @@ class FleetDashboardController(http.Controller):
 
         # --- A) Dates / windows (same semantics as before) ---
         today = date.today()
-        mapping: dict[str, int | None] = {
-            'Last Week':       7,
-            'Last Month':     30,
-            'Last 3 Months':  90,
-            'All Time':     None,
-        }
         want_all_time = False
+
         if start_date and end_date:
+            # keep custom range behavior the same (respect user input)
             df = datetime.strptime(start_date, '%Y-%m-%d').date()
             dt_ = datetime.strptime(end_date,   '%Y-%m-%d').date()
             if df > dt_:
                 df, dt_ = dt_, df
-            span = (dt_ - df).days + 1
-            prev_dt = df - timedelta(days=1)
-            prev_df = prev_dt - timedelta(days=span - 1)
+            prev_df, prev_dt = _previous_period(df, dt_)
         else:
-            days = mapping.get(period, 7) if period else 7
-            if days is None:
+            if period == 'All Time':
                 df = prev_df = dt_ = prev_dt = None
                 want_all_time = True
+            elif period == 'Last Month':
+                df, dt_ = _last_month_range(today)
+                prev_df, prev_dt = _previous_period(df, dt_)
+            elif period == 'Last 3 Months':
+                df, dt_ = _last_n_months_range(today, 3)
+                prev_df, prev_dt = _previous_period(df, dt_)
             else:
-                df      = today - timedelta(days=days)
-                dt_     = today
-                prev_df = today - timedelta(days=2 * days)
-                prev_dt = today - timedelta(days=days)
+                # default to 'Last Week'
+                df, dt_ = _last_week_range(today)
+                prev_df, prev_dt = _previous_period(df, dt_)
 
         # help funcs for the combined window
         def _min_or(a, b): return min(a, b) if (a and b) else (a or b)
