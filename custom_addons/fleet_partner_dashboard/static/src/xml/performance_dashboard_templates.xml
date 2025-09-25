@@ -177,7 +177,7 @@
               <div class="card text-center h-100">
                 <div class="card-body">
                   <h5 class="card-title">Supply Hours</h5>
-                  <h2><t t-esc="formatNumber(state.metrics.supplyHours, 1)"/>h</h2>
+                  <h2><t t-esc="formatNumber(state.metrics.supplyHours, 0)"/>h</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevSupplyHours"/>
                     <t t-set="curr"  t-value="state.metrics.supplyHours"/>
@@ -228,7 +228,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Avg Money / Hour</h5>
+                  <h5 class="card-title">Revenue / Hour</h5>
                   <h2>Kz <t t-esc="formatNumber(state.metrics.moneyPerHour, 0)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevMoneyPerHour"/>
@@ -249,7 +249,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Avg Trips / Hour</h5>
+                  <h5 class="card-title">Trips / Hour</h5>
                   <h2><t t-esc="formatNumber(state.metrics.tripsPerHour, 2)"/></h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevTripsPerHour"/>
@@ -272,7 +272,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Avg SH per Active Driver</h5>
+                  <h5 class="card-title">SH per Active Driver</h5>
                   <h2><t t-esc="formatNumber(state.metrics.avgSupplyHoursPerDriver, 1)"/>h</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevAvgSupplyHoursPerDriver"/>
@@ -293,7 +293,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Avg Utilisation</h5>
+                  <h5 class="card-title">Utilisation</h5>
                   <h2><t t-esc="formatNumber(state.metrics.avgUtilisation, 1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevAvgUtilisation"/>
@@ -314,7 +314,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Avg Efficiency</h5>
+                  <h5 class="card-title">Efficiency</h5>
                   <h2><t t-esc="formatNumber(state.metrics.avgEfficiency, 1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevAvgEfficiency"/>
@@ -337,7 +337,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Avg Acceptance Rate</h5>
+                  <h5 class="card-title">Acceptance Rate</h5>
                   <h2><t t-esc="formatNumber(state.metrics.acceptanceRate, 1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev" t-value="state.metrics.prevAcceptanceRate"/>
@@ -358,7 +358,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Avg Completed to Request</h5>
+                  <h5 class="card-title">Completed to Request</h5>
                   <h2><t t-esc="formatNumber(state.metrics.completedToRequest, 1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev" t-value="state.metrics.prevCompletedToRequest"/>
@@ -379,7 +379,7 @@
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
-                  <h5 class="card-title">Avg Completion Rate</h5>
+                  <h5 class="card-title">Completion Rate</h5>
                   <h2><t t-esc="formatNumber(state.metrics.completionRate, 1)"/>%</h2>
                   <p class="card-text">
                     <t t-set="prev"  t-value="state.metrics.prevCompletionRate"/>

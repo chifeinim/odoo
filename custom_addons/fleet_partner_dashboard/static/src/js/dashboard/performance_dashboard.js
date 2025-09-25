@@ -109,7 +109,7 @@ export class OwlPerformanceDashboard extends Component {
         { key: 'High Performer',    label: 'High Performer' },
       ],
       categories: [],
-      timePeriods: ['Last Week','Last Month','Last 3 Months','All Time'],
+      timePeriods: ['Last Week','Last Month','Last 3 Months'],
       selectedProducts: [], selectedScores: [], selectedCategories: [], selectedPeriod: 'Last Week',
       startDate: '', endDate: '',
       showProducts: false, showScores: false, showCategories: false, showPeriod: false,
@@ -328,14 +328,14 @@ export class OwlPerformanceDashboard extends Component {
     this._charts.trips  = new Chart(ctxT, cfg('Total Trips',    this.state.series.trips));
     this._charts.supply = new Chart(ctxS, cfg('Supply Hours',   this.state.series.supplyHours));
     this._charts.cash   = new Chart(ctxC, cfg('Gross Revenue',   this.state.series.cashEarned));
-    this._charts.moneyPerHour = new Chart(ctxM, cfg('Avg Money / Hour',   this.state.series.moneyPerHour));
-    this._charts.tripsPerHour = new Chart(ctxTP, cfg('Avg Trips / Hour', this.state.series.tripsPerHour));
-    this._charts.avgSupplyHoursPerDriver = new Chart(ctxAS, cfg('Avg SH per Active Driver', this.state.series.avgSupplyHoursPerDriver));
-    this._charts.utilisation = new Chart(ctxU ,cfg('Average Utilisation %', this.state.series.utilisation));
-    this._charts.efficiency = new Chart(ctxE ,cfg('Average Efficiency %', this.state.series.efficiency));
-    this._charts.acceptanceRate = new Chart(ctxAcc,cfg('Average Acceptance Rate %', this.state.series.acceptanceRate));
-    this._charts.completedToRequest = new Chart(ctxCTR,cfg('Average Completed to Request %', this.state.series.completedToRequest));
-    this._charts.completionRate = new Chart(ctxCRate,cfg('Average Completion Rate %', this.state.series.completionRate));
+    this._charts.moneyPerHour = new Chart(ctxM, cfg('Revenue / Hour',   this.state.series.moneyPerHour));
+    this._charts.tripsPerHour = new Chart(ctxTP, cfg('Trips / Hour', this.state.series.tripsPerHour));
+    this._charts.avgSupplyHoursPerDriver = new Chart(ctxAS, cfg('SH per Active Driver', this.state.series.avgSupplyHoursPerDriver));
+    this._charts.utilisation = new Chart(ctxU ,cfg('Utilisation %', this.state.series.utilisation));
+    this._charts.efficiency = new Chart(ctxE ,cfg('Efficiency %', this.state.series.efficiency));
+    this._charts.acceptanceRate = new Chart(ctxAcc,cfg('Acceptance Rate %', this.state.series.acceptanceRate));
+    this._charts.completedToRequest = new Chart(ctxCTR,cfg('Completed to Request %', this.state.series.completedToRequest));
+    this._charts.completionRate = new Chart(ctxCRate,cfg('Completion Rate %', this.state.series.completionRate));
 
     this._charts.serviceFee = new Chart(ctxSF,cfg('Service Fee', this.state.series.serviceFee));
     this._charts.partnerFee = new Chart(ctxPF,cfg('Partner Fee', this.state.series.partnerFee));
