@@ -34,7 +34,7 @@ class FleetIssue(models.Model):
 
     # NEW: boolean instead of selection
     can_work = fields.Boolean(string="Can Work", default=True, tracking=True)
-    note = fields.Char(string="Note", tracking=True)
+    note = fields.Char(string="Reporter Note", tracking=True)
     can_work_label = fields.Char(string="Can Work", compute="_compute_can_work_label")
     
     ext_attachment_ids = fields.One2many('x_issue_attachment', 'issue_id', string='Media')
