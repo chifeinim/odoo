@@ -11,12 +11,13 @@
         <field name="color" invisible="1"/>
         <field name="name"/>
         <field name="date_reported"/>
+        <field name="resolved_on" string="Resolved on" readonly="1"/>
         <field name="driver_id"/>
         <field name="main_category_label" string="Main Category" readonly="1"/>
         <field name="sub_category_label" string="Sub-Category" readonly="1"/>
         <field name="sub_sub_category_label" string="Sub-Sub-Category" readonly="1"/>
-        <field name="status"/>
         <field name="can_work_label" readonly="1"/>
+        <field name="note"/>
       </tree>
     </field>
   </record>
@@ -40,7 +41,9 @@
           </group>
           <group>
             <field name="status"/>
+            <field name="resolved_on" readonly="1"/>
             <field name="can_work" widget="boolean_toggle" string="Can Work"/>
+            <field name="note"/>
           </group>
         </sheet>
         <div class="oe_chatter">
@@ -58,31 +61,28 @@
     <field name="model">x_fleet_issue</field>
     <field name="arch" type="xml">
       <search string="Search Issues">
-
-        <!-- Search Fields -->
         <field name="name" string="Issue ID"/>
         <field name="driver_id"/>
         <field name="main_category_label" string="Main Category"/>
         <field name="sub_category_label" string="Sub-Category"/>
         <field name="sub_sub_category_label" string="Sub-Sub-Category"/>
 
-        <!-- Filters -->
         <filter name="unresolved" string="Unresolved" domain="[('status','=','unresolved')]"/>
         <filter name="can_work_true" string="Can Work" domain="[('can_work','=',True)]"/>
         <filter name="can_work_false" string="Cannot Work" domain="[('can_work','=',False)]"/>
 
-        <!-- Group By -->
         <separator/>
         <group expand="0" string="Group By">
           <filter string="Driver" name="grp_driver" context="{'group_by':'driver_id'}"/>
           <filter string="Main Category" name="grp_maincat" context="{'group_by':'main_category'}"/>
-          <filter string="Date" name="grp_date" context="{'group_by':'date_reported'}"/>
+          <filter string="Date Reported" name="grp_date" context="{'group_by':'date_reported'}"/>
+          <!-- Optional: group by resolution date -->
+          <filter string="Resolved on" name="grp_resolved_on" context="{'group_by':'resolved_on'}"/>
         </group>
       </search>
     </field>
   </record>
 
-  <!-- Action -->
   <record id="action_x_fleet_issue" model="ir.actions.act_window">
     <field name="name">Issues</field>
     <field name="res_model">x_fleet_issue</field>

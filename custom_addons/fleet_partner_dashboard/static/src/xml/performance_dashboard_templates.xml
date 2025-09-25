@@ -553,12 +553,8 @@
                 Category
                 <t t-if="state.sortKey === 'type'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
               </th>
-              <th style="cursor:pointer" t-on-click="() => setSort('active')">
-                Active in Period
-                <t t-if="state.sortKey === 'active'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
-              </th>
               <th style="cursor:pointer" t-on-click="() => setSort('cash')">
-                Gross Revenue Kz
+                GMV (Kz)
                 <t t-if="state.sortKey === 'cash'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
               </th>
               <th style="cursor:pointer" t-on-click="() => setSort('trips')">
@@ -616,7 +612,6 @@
                 <td><t t-esc="d.hire_date"/></td>
                 <td><t t-esc="d.product_type"/></td>
                 <td><t t-esc="d.type"/></td>
-                <td><t t-esc="d.active"/></td>
                 <td><t t-esc="formatNumber(d.cash, 0)"/></td>
                 <td><t t-esc="formatNumber(d.trips, 0)"/></td>
                 <td><t t-esc="formatNumber(d.hours, 0)"/>h</td>

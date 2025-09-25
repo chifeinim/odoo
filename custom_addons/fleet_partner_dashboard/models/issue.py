@@ -9,7 +9,7 @@ class FleetIssue(models.Model):
     _order = 'date_reported desc'
 
     name = fields.Char(string="Issue ID", copy=False, default='New')
-    date_reported = fields.Datetime(string="Reported On", default=fields.Datetime.now)
+    date_reported = fields.Datetime(string="Reported on", default=fields.Datetime.now)
     driver_id = fields.Many2one('x_fleet_driver', string="Driver", required=True, ondelete='cascade')
 
     # free-form classification columns
@@ -29,8 +29,12 @@ class FleetIssue(models.Model):
     status   = fields.Selection([('unresolved','Unresolved'),('resolved','Resolved')],
                                 default='unresolved', tracking=True)
 
+    # NEW: resolved timestamp
+    resolved_on = fields.Datetime(string="Resolved on", readonly=True, copy=False, tracking=True)
+
     # NEW: boolean instead of selection
     can_work = fields.Boolean(string="Can Work", default=True, tracking=True)
+    note = fields.Char(string="Note", tracking=True)
     can_work_label = fields.Char(string="Can Work", compute="_compute_can_work_label")
     
     ext_attachment_ids = fields.One2many('x_issue_attachment', 'issue_id', string='Media')
@@ -41,8 +45,23 @@ class FleetIssue(models.Model):
     def create(self, vals):
         if vals.get('name','New') == 'New':
             vals['name'] = self.env['ir.sequence'].next_by_code('x_fleet_issue') or 'New'
-        return super().create(vals)
+        rec = super().create(vals)
+        # stamp resolution time once, if created already resolved
+        if rec.status == 'resolved' and not rec.resolved_on:
+            rec.resolved_on = fields.Datetime.now()
+        return rec
     
+    def write(self, vals):
+        res = super().write(vals)
+        # if status changed, set/clear resolved_on accordingly
+        if 'status' in vals:
+            for rec in self:
+                if rec.status == 'resolved' and not rec.resolved_on:
+                    rec.resolved_on = fields.Datetime.now()
+                elif rec.status == 'unresolved' and rec.resolved_on:
+                    rec.resolved_on = False
+        return res
+
     @api.model
     def _compute_can_work_label(self):
         for rec in self:
@@ -76,16 +95,13 @@ class FleetIssue(models.Model):
             rec.sub_sub_category_label = self._humanize(rec.sub_sub_category)
             
     def action_refresh_signed_urls(self):
-        # refresh all linked attachments in one go
         self.mapped('ext_attachment_ids').ensure_fresh_url() # type: ignore
-        return True  # optional, nice for object buttons
+        return True
 
-    # Make searches on the *_label fields hit the stored snake_case fields
     @api.model
     def _search_main_category_label(self, operator, value):
         norm = self._slug(value)
         like = norm.replace('_', '%') if norm else norm
-        # OR: raw ilike, normalized ilike, and wildcarded normalized
         return ['|', '|',
                 ('main_category', 'ilike', value),
                 ('main_category', 'ilike', norm or value),
@@ -110,4 +126,3 @@ class FleetIssue(models.Model):
     _sql_constraints = [
         ('unique_issue_name', 'unique(name)', 'Each issue must have a unique Issue ID.')
     ]
-

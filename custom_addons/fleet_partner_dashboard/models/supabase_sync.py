@@ -744,13 +744,14 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             il = rec.get('issues_list') or {}
             raw = {
                 'name':              ext_id,  # keep as text; unique enforced by SQL constraint
-                'date_reported':     _normalize_datetime(rec['date_reported']) if rec.get('date_reported') else None,
+                'date_reported':     _normalize_datetime(rec['created_at']) if rec.get('created_at') else None,
                 'main_category':     il.get('main_category'),
                 'sub_category':      il.get('sub_category'),
                 'sub_sub_category':  il.get('sub_sub_category'),
                 'status':            rec.get('status'),     # 'unresolved' / 'resolved' expected
                 'can_work':          rec.get('can_work'),   # boolean from issue_logs
                 'driver_id':         drv.id,
+                'note':              rec.get('note')
             }
             vals = {k: v for k, v in raw.items() if v is not None}
 
