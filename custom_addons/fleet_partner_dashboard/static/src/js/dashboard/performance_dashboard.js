@@ -29,6 +29,21 @@ export class OwlPerformanceDashboard extends Component {
       this.state.sortDir = 'asc';
     }
   }
+  qualityBgStyle(score) {
+    const s = (score || '').toString().trim().toLowerCase();
+    // Prefer Bootstrap 5 “subtle” background tokens if present, with hex fallbacks
+    const common = 'color:#000; font-weight:600;'; // keep text black & bold
+    if (s === 'low performer') {
+      return `${common} background-color: var(--bs-danger-bg-subtle, #f8d7da);`;
+    }
+    if (s === 'average performer') {
+      return `${common} background-color: var(--bs-warning-bg-subtle, #fff3cd);`;
+    }
+    if (s === 'high performer') {
+      return `${common} background-color: var(--bs-success-bg-subtle, #d4edda);`;
+    }
+    return '';
+  }
 
   // robust comparator that handles numbers, strings, booleans, and ISO-ish dates
   _compareByKey(a, b, key) {

@@ -611,7 +611,7 @@
             <t t-foreach="sortedFilteredDrivers()" t-as="d" t-key="d.id">
               <tr>
                 <td><t t-esc="d.name"/></td>
-                <td t-att-class="qualityClass(d.quality_score)"><t t-esc="d.quality_score"/></td>
+                <td t-att-style="qualityBgStyle(d.quality_score)"><t t-esc="d.quality_score"/></td>
                 <td><t t-esc="d.phone"/></td>
                 <td><t t-esc="d.hire_date"/></td>
                 <td><t t-esc="d.product_type"/></td>
