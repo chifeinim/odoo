@@ -104,6 +104,30 @@ export class OwlPerformanceDashboard extends Component {
     return rows;
   }
 
+  _buildDistributions(rows) {
+    const countBy = (key) => {
+      const m = new Map();
+      for (const r of rows) {
+        const label = (r?.[key] ?? '').toString() || 'Unknown';
+        m.set(label, (m.get(label) || 0) + 1);
+      }
+      return Array.from(m, ([label, value]) => ({ label, value }));
+    };
+
+    return {
+      quality:  countBy('quality_score'),
+      product:  countBy('product_type'),
+      category: countBy('type'),
+    };
+  }
+  
+  _filteredRows() {
+    const rows = Object.values(this.state.data || {});
+    const q = (this.state.search || '').toLowerCase();
+    if (!q) return rows;
+    return rows.filter((d) => d.name?.toLowerCase().includes(q));
+  }
+
   setup() {
     this.state = useState({
       loading: true,
@@ -193,18 +217,14 @@ export class OwlPerformanceDashboard extends Component {
   _renderDistributionCharts() {
     const makePie = (ctx, title, dist, colors, chartKey) => {
       if (this._charts[chartKey]) this._charts[chartKey].destroy();
-      const labels = (dist || []).map(d => d.label);
-      const data   = (dist || []).map(d => d.value);
+      const labels = dist.map(d => d.label);
+      const data   = dist.map(d => d.value);
 
       this._charts[chartKey] = new Chart(ctx, {
         type: 'pie',
         data: {
           labels,
-          datasets: [{
-            label: title,
-            data,
-            backgroundColor: (colors || []).slice(0, labels.length),
-          }],
+          datasets: [{ label: title, data, backgroundColor: colors.slice(0, labels.length) }],
         },
         options: {
           maintainAspectRatio: false,
@@ -215,8 +235,8 @@ export class OwlPerformanceDashboard extends Component {
               callbacks: {
                 label: (c) => {
                   const val   = c.raw ?? 0;
-                  const total = c.dataset.data.reduce((a, b) => a + b, 0) || 1;
-                  const pct   = ((val / total) * 100).toFixed(1);
+                  const total = c.dataset.data.reduce((a,b)=>a+b,0) || 1;
+                  const pct   = ((val/total)*100).toFixed(1);
                   return `${c.label}: ${val} (${pct}%)`;
                 },
               },
@@ -226,7 +246,9 @@ export class OwlPerformanceDashboard extends Component {
       });
     };
 
-    const { product = [], quality = [], category = [] } = this.state.distributions || {};
+    // ★ derive from currently visible rows
+    const rows = this._filteredRows();
+    const { product, quality, category } = this._buildDistributions(rows);
 
     const prodColors = ['#FF6384','#36A2EB','#FFCE56','#8E44AD','#2ECC71','#E67E22'];
     const qualColors = ['#4BC0C0','#9966FF','#FF9F40'];
