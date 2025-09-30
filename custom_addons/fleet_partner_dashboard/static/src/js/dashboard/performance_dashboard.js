@@ -13,6 +13,9 @@ export class OwlPerformanceDashboard extends Component {
       maximumFractionDigits: digits,
     }).format(n);
   }
+  digits(s) {
+    return (s || '').replace(/\D/g, '');
+  }
 
   qualityClass(score) {
     const s = (score || '').toString().trim().toLowerCase();
@@ -90,18 +93,21 @@ export class OwlPerformanceDashboard extends Component {
 
   // unified getter used by the template
   sortedFilteredDrivers() {
-    const rows = Object.values(this.state.data || {}).filter(d =>
-      d.name?.toLowerCase().includes(this.state.search.toLowerCase())
-    );
+    const q  = (this.state.search || '').trim().toLowerCase();
+    const qd = this.digits(q);
+
+    const rows = Object.values(this.state.data || {}).filter(d => {
+      const nameHit  = (d.name || '').toLowerCase().includes(q);
+      const phoneHit = qd ? this.digits(d.phone).includes(qd) : false;
+      return q ? (nameHit || phoneHit) : true;
+    });
 
     const dir = this.state.sortDir === 'asc' ? 1 : -1;
     rows.sort((a, b) => {
       const res = this._compareByKey(a, b, this.state.sortKey);
       if (res !== 0) return dir * res;
-      // tie-break by name for stability
       return this._compareByKey(a, b, 'name');
     });
-
     return rows;
   }
 
@@ -124,9 +130,15 @@ export class OwlPerformanceDashboard extends Component {
   
   _filteredRows() {
     const rows = Object.values(this.state.data || {});
-    const q = (this.state.search || '').toLowerCase();
+    const q  = (this.state.search || '').trim().toLowerCase();
     if (!q) return rows;
-    return rows.filter((d) => d.name?.toLowerCase().includes(q));
+    const qd = this.digits(q);
+
+    return rows.filter(d => {
+      const nameHit  = (d.name || '').toLowerCase().includes(q);
+      const phoneHit = qd ? this.digits(d.phone).includes(qd) : false;
+      return nameHit || phoneHit;
+    });
   }
 
   pagedDrivers() {

@@ -523,7 +523,7 @@
         <div class="form-group mb-3">
           <input type="text"
                  class="form-control"
-                 placeholder="Search driver…"
+                 placeholder="Search name or phone..."
                  t-att-value="state.search"
                  t-on-input="onSearchChange"/>
         </div>
