@@ -524,7 +524,8 @@
           <input type="text"
                  class="form-control"
                  placeholder="Search driver…"
-                 t-model="state.search"/>
+                 t-att-value="state.search"
+                 t-on-input="onSearchChange"/>
         </div>
         <table class="table table-striped table-hover mb-0">
           <thead class="table-light">
@@ -604,7 +605,7 @@
             </tr>
           </thead>
           <tbody>
-            <t t-foreach="sortedFilteredDrivers()" t-as="d" t-key="d.id">
+            <t t-foreach="pagedDrivers()" t-as="d" t-key="d.id">
               <tr>
                 <td><t t-esc="d.name"/></td>
                 <td t-att-style="qualityBgStyle(d.quality_score)"><t t-esc="d.quality_score"/></td>
@@ -628,6 +629,24 @@
             </t>
           </tbody>
         </table>
+        <!-- ⬇️ New: pagination controls -->
+        <div class="d-flex align-items-center justify-content-between py-2">
+          <div>
+            <t t-set="total" t-value="totalDriverCount()"/>
+            <t t-set="start" t-value="Math.min(total, ((state.page-1)*state.pageSize)+1)"/>
+            <t t-set="end"   t-value="Math.min(total, (state.page*state.pageSize))"/>
+            <small class="text-muted">
+              Showing <t t-esc="start"/>–<t t-esc="end"/> of <t t-esc="total"/>
+            </small>
+          </div>
+          <div class="btn-group">
+            <button class="btn btn-outline-secondary" t-att-disabled="state.page === 1" t-on-click="prevPage">Prev</button>
+            <button class="btn btn-outline-secondary disabled">
+              Page <t t-esc="state.page"/> / <t t-esc="pageCount()"/>
+            </button>
+            <button class="btn btn-outline-secondary" t-att-disabled="state.page >= pageCount()" t-on-click="nextPage">Next</button>
+          </div>
+        </div>
       </t>
     </div>
   </t>

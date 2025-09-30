@@ -28,6 +28,7 @@ export class OwlPerformanceDashboard extends Component {
       this.state.sortKey = key;
       this.state.sortDir = 'asc';
     }
+    this.state.page = 1;
   }
   qualityBgStyle(score) {
     const s = (score || '').toString().trim().toLowerCase();
@@ -128,6 +129,28 @@ export class OwlPerformanceDashboard extends Component {
     return rows.filter((d) => d.name?.toLowerCase().includes(q));
   }
 
+  pagedDrivers() {
+    const rows = this.sortedFilteredDrivers();
+    const start = (this.state.page - 1) * this.state.pageSize;
+    return rows.slice(start, start + this.state.pageSize);
+  }
+
+  totalDriverCount() {
+    return this.sortedFilteredDrivers().length;
+  }
+
+  pageCount() {
+    return Math.max(1, Math.ceil(this.totalDriverCount() / this.state.pageSize));
+  }
+
+  goToPage(p) {
+    const pc = this.pageCount();
+    this.state.page = Math.min(pc, Math.max(1, p));
+  }
+  
+  prevPage = () => this.goToPage(this.state.page - 1);
+  nextPage = () => this.goToPage(this.state.page + 1);
+
   setup() {
     this.state = useState({
       loading: true,
@@ -153,6 +176,7 @@ export class OwlPerformanceDashboard extends Component {
       startDate: '', endDate: '',
       showProducts: false, showScores: false, showCategories: false, showPeriod: false,
       showCharts: false, search: '', sortKey: 'name', sortDir: 'asc',
+      pageSize: 100, page: 1,
     });
     this.chartActive = useRef('chartActive');
     this.chartTrips  = useRef('chartTrips');
@@ -383,22 +407,30 @@ export class OwlPerformanceDashboard extends Component {
     const idx = list.indexOf(value);
     if (idx === -1) list.push(value);
     else            list.splice(idx, 1);
+    this.state.page = 1;
     this._fetchData();
   }
   changePeriod(p) {
     this.state.selectedPeriod = p;
     this.state.showPeriod    = false;
+    this.state.page = 1;
     this._fetchData();
   }
   toggleDropdown(f) { this.state[f] = !this.state[f]; }
   toggleView()      { this.state.showCharts = !this.state.showCharts; }
   onStartDateChange(ev) {
     this.state.startDate = ev.target.value;
+    this.state.page = 1;
     if (this.state.startDate && this.state.endDate) this._fetchData();
   }
   onEndDateChange(ev) {
     this.state.endDate = ev.target.value;
+    this.state.page = 1;
     if (this.state.startDate && this.state.endDate) this._fetchData();
+  }
+  onSearchChange(ev) {
+    this.state.search = ev.target.value || '';
+    this.state.page = 1;
   }
 }
 
