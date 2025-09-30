@@ -651,13 +651,14 @@ class FleetDashboardController(http.Controller):
             }
 
         return {
-            'metrics': metrics,
-            'series':  series,
-            'data':    data,
-            'allDrivers': total_drivers,
+            'metrics':       metrics,
+            'series':        series,
+            'data':          drivers_data,
+            'allDrivers':    total_drivers,
             'distributions': {
-                'product':  prod_dist,
-                'quality':  qual_dist,
+                'product': prod_dist,
+                'quality': qual_dist,
                 'category': cat_dist,
             },
         }
+
