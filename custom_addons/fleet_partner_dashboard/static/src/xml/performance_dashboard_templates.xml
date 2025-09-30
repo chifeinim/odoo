@@ -641,22 +641,46 @@
             </small>
           </div>
           <div class="btn-group">
-            <button class="btn btn-primary" t-att-disabled="state.page === 1" t-on-click="() => goToPage(1)">« First</button>
-            <button class="btn btn-primary" t-att-disabled="state.page === 1" t-on-click="prevPage">‹ Prev</button>
+            <!-- First/Prev use outline so the active page stands out -->
+            <button class="btn btn-outline-primary"
+                    t-att-disabled="state.page === 1"
+                    t-on-click="() => goToPage(1)">« First</button>
+
+            <button class="btn btn-outline-primary"
+                    t-att-disabled="state.page === 1"
+                    t-on-click="prevPage">‹ Prev</button>
+
             <!-- Numbered page buttons -->
             <t t-foreach="pageWindow()" t-as="pg" t-key="pg">
               <t t-if="pg === '…'">
-                <button class="btn btn-primary" disabled="disabled">…</button>
+                <button class="btn btn-outline-primary" disabled="disabled">…</button>
+              </t>
+              <t t-elif="state.page === pg">
+                <!-- ACTIVE page: solid blue, disabled, aria-current -->
+                <button class="btn btn-primary active"
+                        disabled="disabled"
+                        aria-current="page">
+                  <t t-esc="pg"/>
+                </button>
               </t>
               <t t-else="">
-                <button t-attf-class="btn btn-primary #{state.page === pg ? 'active' : ''}"
-                        t-on-click="() => goToPage(pg)">
+                <!-- Other pages: outline blue -->
+                <button class="btn btn-outline-primary"
+                        t-on-click="() => goToPage(pg)"
+                        t-att-aria-label="'Go to page ' + pg">
                   <t t-esc="pg"/>
                 </button>
               </t>
             </t>
-            <button class="btn btn-primary" t-att-disabled="state.page >= pageCount()" t-on-click="nextPage">Next ›</button>
-            <button class="btn btn-primary" t-att-disabled="state.page >= pageCount()" t-on-click="() => goToPage(pageCount())">Last »</button>
+
+            <!-- Next/Last use outline too -->
+            <button class="btn btn-outline-primary"
+                    t-att-disabled="state.page >= pageCount()"
+                    t-on-click="nextPage">Next ›</button>
+
+            <button class="btn btn-outline-primary"
+                    t-att-disabled="state.page >= pageCount()"
+                    t-on-click="() => goToPage(pageCount())">Last »</button>
           </div>
         </div>
       </t>
