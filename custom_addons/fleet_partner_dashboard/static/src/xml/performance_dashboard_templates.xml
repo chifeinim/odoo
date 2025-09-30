@@ -629,7 +629,8 @@
             </t>
           </tbody>
         </table>
-        <!-- ⬇️ New: pagination controls -->
+
+        <!-- Pagination -->
         <div class="d-flex align-items-center justify-content-between py-2">
           <div>
             <t t-set="total" t-value="totalDriverCount()"/>
@@ -640,11 +641,22 @@
             </small>
           </div>
           <div class="btn-group">
-            <button class="btn btn-outline-secondary" t-att-disabled="state.page === 1" t-on-click="prevPage">Prev</button>
-            <button class="btn btn-outline-secondary disabled">
-              Page <t t-esc="state.page"/> / <t t-esc="pageCount()"/>
-            </button>
-            <button class="btn btn-outline-secondary" t-att-disabled="state.page >= pageCount()" t-on-click="nextPage">Next</button>
+            <button class="btn btn-primary" t-att-disabled="state.page === 1" t-on-click="() => goToPage(1)">« First</button>
+            <button class="btn btn-primary" t-att-disabled="state.page === 1" t-on-click="prevPage">‹ Prev</button>
+            <!-- Numbered page buttons -->
+            <t t-foreach="pageWindow()" t-as="pg" t-key="pg">
+              <t t-if="pg === '…'">
+                <button class="btn btn-primary" disabled="disabled">…</button>
+              </t>
+              <t t-else="">
+                <button t-attf-class="btn btn-primary #{state.page === pg ? 'active' : ''}"
+                        t-on-click="() => goToPage(pg)">
+                  <t t-esc="pg"/>
+                </button>
+              </t>
+            </t>
+            <button class="btn btn-primary" t-att-disabled="state.page >= pageCount()" t-on-click="nextPage">Next ›</button>
+            <button class="btn btn-primary" t-att-disabled="state.page >= pageCount()" t-on-click="() => goToPage(pageCount())">Last »</button>
           </div>
         </div>
       </t>

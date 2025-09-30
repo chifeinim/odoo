@@ -131,8 +131,23 @@ export class OwlPerformanceDashboard extends Component {
 
   pagedDrivers() {
     const rows = this.sortedFilteredDrivers();
+    const pc = Math.max(1, Math.ceil(rows.length / this.state.pageSize));
+    if (this.state.page > pc) this.state.page = pc;
     const start = (this.state.page - 1) * this.state.pageSize;
     return rows.slice(start, start + this.state.pageSize);
+  }
+
+  pageWindow() {
+    const pc = this.pageCount();
+    const p  = this.state.page;
+    const nums = new Set([1, pc, p-2, p-1, p, p+1, p+2].filter(x => x >= 1 && x <= pc));
+    const arr = [...nums].sort((a,b)=>a-b);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      out.push(arr[i]);
+      if (i < arr.length - 1 && arr[i+1] !== arr[i] + 1) out.push('…');
+    }
+    return out;
   }
 
   totalDriverCount() {
@@ -140,14 +155,14 @@ export class OwlPerformanceDashboard extends Component {
   }
 
   pageCount() {
-    return Math.max(1, Math.ceil(this.totalDriverCount() / this.state.pageSize));
+    return Math.max(1, Math.ceil(this.sortedFilteredDrivers().length / this.state.pageSize));
   }
 
   goToPage(p) {
     const pc = this.pageCount();
     this.state.page = Math.min(pc, Math.max(1, p));
   }
-  
+
   prevPage = () => this.goToPage(this.state.page - 1);
   nextPage = () => this.goToPage(this.state.page + 1);
 
