@@ -183,69 +183,87 @@
 
         <!-- MODAL (driver detail) -->
         <t t-if="state.showModal">
-          <div class="modal d-block" tabindex="-1" t-ref="lp_modal" style="background:rgba(0,0,0,0.4)">
+        <div class="modal d-block" tabindex="-1" t-ref="lp_modal" style="background:rgba(0,0,0,0.4)">
             <div class="modal-dialog modal-xl" style="max-width: 80vw;">
-              <div class="modal-content">
+            <div class="modal-content">
                 <div class="modal-header">
-                  <h5 class="modal-title">Driver Details</h5>
-                  <button type="button" class="btn-close" aria-label="Close" t-on-click="closeModal"></button>
+                <h5 class="modal-title">Driver Details</h5>
+                <!-- removed small top-right close button -->
                 </div>
                 <div class="modal-body">
-                  <div class="row">
+                <div class="row">
                     <!-- LEFT: identity -->
                     <div class="col-md-3">
-                      <div><strong>Name:</strong> <t t-esc="state.modalDriver.name"/></div>
-                      <div><strong>Phone:</strong> <t t-esc="state.modalDriver.phone"/></div>
-                      <div><strong>Product:</strong> <t t-esc="state.modalDriver.product_type"/></div>
-                      <div><strong>Hire Date:</strong> <t t-esc="state.modalDriver.hire_date"/></div>
-                      <div><strong>Risk:</strong> <t t-esc="state.modalDriver.risk"/></div>
-                      <div><strong>Driver Quality:</strong> <t t-esc="state.modalDriver.quality_score"/></div>
+                    <div><strong>Name:</strong> <t t-esc="state.modalDriver.name"/></div>
+                    <div><strong>Phone:</strong> <t t-esc="state.modalDriver.phone"/></div>
+                    <div><strong>Product:</strong> <t t-esc="state.modalDriver.product_type"/></div>
+                    <div><strong>Hire Date:</strong> <t t-esc="state.modalDriver.hire_date"/></div>
+                    <div><strong>Risk:</strong> <t t-esc="state.modalDriver.risk"/></div>
+                    <div><strong>Driver Quality:</strong> <t t-esc="state.modalDriver.quality_score"/></div>
                     </div>
-                    <!-- CENTER/RIGHT: scorecards OR charts -->
-                    <div class="col-md-9">
-                      <div class="d-flex justify-content-end mb-2">
-                        <button class="btn btn-primary" t-on-click="toggleModalView">
-                          <t t-esc="state.showCharts ? 'Show Cards' : 'Show Charts'"/>
-                        </button>
-                      </div>
-                      <t t-if="!state.showCharts">
-                        <!-- simple scorecards -->
-                        <div class="row g-3">
-                          <div class="col-md-4"><div class="card"><div class="card-body"><h6>Gross Revenue</h6><h3><t t-esc="formatNumber(state.modalDriver.cash,0)"/></h3></div></div></div>
-                          <div class="col-md-4"><div class="card"><div class="card-body"><h6>Trips</h6><h3><t t-esc="formatNumber(state.modalDriver.trips)"/></h3></div></div></div>
-                          <div class="col-md-4"><div class="card"><div class="card-body"><h6>Hours Online</h6><h3><t t-esc="formatNumber(state.modalDriver.hours,1)"/></h3></div></div></div>
-                          <div class="col-md-4"><div class="card"><div class="card-body"><h6>Acceptance %</h6><h3><t t-esc="formatNumber(state.modalDriver.acceptance_rate,1)"/>%</h3></div></div></div>
-                          <div class="col-md-4"><div class="card"><div class="card-body"><h6>Completion %</h6><h3><t t-esc="formatNumber(state.modalDriver.completion_rate,1)"/>%</h3></div></div></div>
-                        </div>
-                      </t>
-                      <t t-else="">
-                        <!-- space for bar charts; you can wire this to a per-driver series later -->
-                        <div class="alert alert-info">Charts placeholder – we can wire per-driver series when ready.</div>
-                      </t>
-                    </div>
-                  </div>
 
-                  <!-- Issues table -->
-                  <div class="mt-4">
+                    <!-- CENTER/RIGHT: cards OR charts -->
+                    <div class="col-md-9">
+                    <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-primary" t-on-click="toggleModalView">
+                        <t t-esc="state.showCharts ? 'Show Cards' : 'Show Charts'"/>
+                        </button>
+                    </div>
+
+                    <t t-if="!state.showCharts">
+                        <!-- cards fed by /driver_detail totals -->
+                        <div class="row g-3">
+                        <div class="col-md-4"><div class="card"><div class="card-body"><h6>Gross Revenue</h6><h3><t t-esc="formatNumber(state.modalDriver.cards?.cash || 0, 0)"/></h3></div></div></div>
+                        <div class="col-md-4"><div class="card"><div class="card-body"><h6>Trips</h6><h3><t t-esc="formatNumber(state.modalDriver.cards?.trips || 0)"/></h3></div></div></div>
+                        <div class="col-md-4"><div class="card"><div class="card-body"><h6>Hours Online</h6><h3><t t-esc="formatNumber(state.modalDriver.cards?.hours || 0, 1)"/></h3></div></div></div>
+                        <div class="col-md-4"><div class="card"><div class="card-body"><h6>Acceptance %</h6><h3><t t-esc="formatNumber(state.modalDriver.cards?.acceptance_rate || 0, 1)"/>%</h3></div></div></div>
+                        <div class="col-md-4"><div class="card"><div class="card-body"><h6>Completion %</h6><h3><t t-esc="formatNumber(state.modalDriver.cards?.completion_rate || 0, 1)"/>%</h3></div></div></div>
+                        </div>
+                    </t>
+                    <t t-else="">
+                        <!-- charts (bar) -->
+                        <div class="row g-3">
+                        <div class="col-md-6"><div class="card"><div class="card-body"><h6>Gross Revenue</h6><canvas id="lp_chart_cash" height="160"></canvas></div></div></div>
+                        <div class="col-md-6"><div class="card"><div class="card-body"><h6>Trips</h6><canvas id="lp_chart_trips" height="160"></canvas></div></div></div>
+                        <div class="col-md-6"><div class="card"><div class="card-body"><h6>Hours Online</h6><canvas id="lp_chart_hours" height="160"></canvas></div></div></div>
+                        <div class="col-md-6"><div class="card"><div class="card-body"><h6>Acceptance Rate %</h6><canvas id="lp_chart_acc" height="160"></canvas></div></div></div>
+                        <div class="col-md-6"><div class="card"><div class="card-body"><h6>Completion Rate %</h6><canvas id="lp_chart_comp" height="160"></canvas></div></div></div>
+                        </div>
+                    </t>
+                    </div>
+                </div>
+
+                <!-- Issues table (newest first, full notes) -->
+                <div class="mt-4">
                     <h6>Issues</h6>
                     <div class="table-responsive">
-                      <table class="table table-sm">
+                    <table class="table table-sm">
                         <thead><tr><th>Issue</th><th>Date Reported</th><th>Reporter Note</th></tr></thead>
                         <tbody>
-                          <!-- You can feed this later via another endpoint; for now, notes column is designed to expand -->
-                          <tr><td colspan="3"><em>Hook this to a /driver/:id/issues endpoint (sorted newest first).</em></td></tr>
+                        <t t-if="!state.modalDriver.issues || !state.modalDriver.issues.length">
+                            <tr><td colspan="3"><em>No issues in this window.</em></td></tr>
+                        </t>
+                        <t t-else="">
+                            <t t-foreach="state.modalDriver.issues" t-as="it" t-key="it.date_reported + it.category_path">
+                            <tr style="vertical-align: top;">
+                                <td style="white-space: nowrap;"><t t-esc="it.category_path"/></td>
+                                <td style="white-space: nowrap;"><t t-esc="it.date_reported"/></td>
+                                <td style="white-space: pre-wrap;"><t t-esc="it.note"/></td>
+                            </tr>
+                            </t>
+                        </t>
                         </tbody>
-                      </table>
+                    </table>
                     </div>
-                  </div>
+                </div>
                 </div>
 
                 <div class="modal-footer">
-                  <button class="btn btn-secondary" t-on-click="closeModal">Close</button>
+                <button class="btn btn-secondary" t-on-click="closeModal">Close</button>
                 </div>
-              </div>
             </div>
-          </div>
+            </div>
+        </div>
         </t>
       </t>
     </div>

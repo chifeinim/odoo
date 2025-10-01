@@ -12,6 +12,18 @@ export class OwlLowPerformersDashboard extends Component {
   }
   digits(s) { return (s || '').replace(/\D/g, ''); }
 
+  renderBarChart(canvas, series, title) {
+    if (!canvas || !series) return;
+    const labels = series.map(p => p.period);
+    const values = series.map(p => p.value);
+    // eslint-disable-next-line no-undef
+    new window.Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: { labels, datasets: [{ label: title, data: values }] },
+        options: { responsive: true, plugins: { legend: { display: false } } }
+    });
+  }
+
   setup() {
     this.state = useState({
       loading: true,
@@ -46,11 +58,41 @@ export class OwlLowPerformersDashboard extends Component {
       this.state.categories   = categories;
       this.state.risks        = risks || this.state.risks;
       this.state.timePeriods  = time_periods || this.state.timePeriods;
-      // default: all categories except 'archive'
+      // default: all categories except 'archive' and 'new'
       const lower = (s) => (s || '').toString().trim().toLowerCase();
-      this.state.selectedCategories = categories.filter(c => lower(c) !== 'archive');
+      this.state.selectedCategories = categories.filter(c => {
+        const x = lower(c);
+        return x !== 'archive' && x !== 'new';
+      });
       await this._fetchData();
     });
+
+    onPatched(() => {
+        if (this.state.showModal && this.state.showCharts && this.state.modalDriver?.series) {
+            const s = this.state.modalDriver.series;
+            this.renderBarChart(this.el.querySelector('#lp_chart_cash'),   s.cashEarned,      'Gross Revenue');
+            this.renderBarChart(this.el.querySelector('#lp_chart_trips'),  s.trips,           'Trips');
+            this.renderBarChart(this.el.querySelector('#lp_chart_hours'),  s.supplyHours,     'Hours Online');
+            this.renderBarChart(this.el.querySelector('#lp_chart_acc'),    s.acceptanceRate,  'Acceptance Rate %');
+            this.renderBarChart(this.el.querySelector('#lp_chart_comp'),   s.completionRate,  'Completion Rate %');
+        }
+    });
+  }
+
+  async openDriver(d) {
+    this.state.modalDriver = { ...d, cards: null, series: null, issues: [] };
+    this.state.showModal = true;
+    this.state.showCharts = false;
+
+    // fetch per-driver detail for the current table window from meta
+    const meta = this.state.meta || {}; // we’ll store this on fetch
+    const start = meta.table_from, end = meta.table_to;
+    const res = await this.env.services.rpc('/fleet_low_performers/driver_detail', {
+        driver_id: d.id, start_date: start, end_date: end,
+    });
+    this.state.modalDriver.cards  = res.cards || null;
+    this.state.modalDriver.series = res.series || null;
+    this.state.modalDriver.issues = res.issues || [];
   }
 
   async _fetchData() {
@@ -66,6 +108,7 @@ export class OwlLowPerformersDashboard extends Component {
     };
     const resp = await this.env.services.rpc('/fleet_low_performers/data', params);
     this.state.data    = resp.data || {};
+    this.state.meta    = resp.meta || null;
     this.state.loading = false;
   }
 
@@ -141,6 +184,8 @@ export class OwlLowPerformersDashboard extends Component {
   openDriver(d) { this.state.modalDriver = d; this.state.showModal = true; this.state.showCharts = false; }
   closeModal() { this.state.showModal = false; this.state.modalDriver = null; }
   toggleModalView() { this.state.showCharts = !this.state.showCharts; }
+
+
 }
 
 OwlLowPerformersDashboard.template = 'owl.OwlLowPerformersDashboard';

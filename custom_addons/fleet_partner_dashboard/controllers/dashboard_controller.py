@@ -842,19 +842,15 @@ class FleetDashboardController(http.Controller):
 
         # --- F) Compute risk from last 7 days ---
         def _risk_for(rows7: list) -> Optional[str]:
-            # average per *calendar* day across 7 days (missing days count as 0)
-            # sum trips and supply seconds
-            trips = sum(int(r.get('completes') or 0) for r in rows7)
-            sup_secs = sum(float(r.get('sup_seconds') or 0.0) for r in rows7)
+            trips     = sum(int(r.get('orders_completed') or 0) for r in rows7)
+            sup_secs  = sum(float(r.get('supply_seconds') or 0.0) for r in rows7)
             avg_trips = trips / 7.0
             avg_hours = (sup_secs / 3600.0) / 7.0
-            # High precedence if any metric <= 2
             if avg_hours <= 2.0 or avg_trips <= 2.0:
                 return 'High'
-            # Medium if either is in (2,5)
             if (2.0 < avg_hours < 5.0) or (2.0 < avg_trips < 5.0):
                 return 'Medium'
-            return None  # not a low performer
+            return None
 
         # --- G) Build table data for selected window, filtered to High/Medium ---
         Issue = request.env['x_fleet_issue'].sudo()
@@ -873,17 +869,17 @@ class FleetDashboardController(http.Controller):
             if categories and drv.type not in categories:
                 continue
 
-            # Aggregates in the TABLE window
+            # Aggregates in the TABLE window (use same field names as performance_data)
             rows = table_by_drv.get(drv.id, [])
-            orders   = sum(int(r.get('orders') or 0)       for r in rows)
-            accepts  = sum(int(r.get('accepts') or 0)      for r in rows)
-            completes= sum(int(r.get('completes') or 0)    for r in rows)
-            cash     = sum(float(r.get('cash') or 0.0)     for r in rows)
-            sup_secs = sum(float(r.get('sup_seconds') or 0.0) for r in rows)
+            orders_total  = sum(int(r.get('orders_total') or 0)      for r in rows)
+            accepts       = sum(int(r.get('accepts') or 0)           for r in rows)
+            completes     = sum(int(r.get('orders_completed') or 0)  for r in rows)
+            cash_sum      = sum(float(r.get('cash_sum') or 0.0)      for r in rows)
+            sup_seconds   = sum(float(r.get('supply_seconds') or 0.0) for r in rows)
 
-            hours = sup_secs / 3600.0
-            acc_pct = _safe_div(accepts * 100.0, max(orders, 1e-12)) if orders else 0.0
-            cmp_pct = _safe_div(completes * 100.0, max(accepts, 1e-12)) if accepts else 0.0
+            hours  = sup_seconds / 3600.0
+            acc_pct = _safe_div(accepts * 100.0, max(orders_total, 1e-12)) if orders_total else 0.0
+            cmp_pct = _safe_div(completes * 100.0, max(accepts, 1e-12))     if accepts else 0.0
 
             # Issues flag within the TABLE window
             issues_flag = False
@@ -901,7 +897,7 @@ class FleetDashboardController(http.Controller):
                 'risk': rid,
                 'trips': completes,
                 'hours': hours,
-                'cash': cash,
+                'cash': cash_sum,
                 'acceptance_rate': acc_pct,
                 'completion_rate': cmp_pct,
                 'issues_reported': 'Yes' if issues_flag else 'No',
@@ -921,3 +917,189 @@ class FleetDashboardController(http.Controller):
                 'risk_to':    risk_dt.strftime('%Y-%m-%d'),
             },
         }
+        
+    @http.route('/fleet_low_performers/driver_detail', type='json', auth='user')
+    def low_perf_driver_detail(self, driver_id: int, start_date: str, end_date: str):
+        """
+        Return per-driver aggregates for the selected date window, bucketed series
+        using the same bucketing rule as performance dashboard, and the driver's issues
+        (newest first) with "Main, Sub, Sub Sub" text.
+        """
+        today = date.today()
+        df = datetime.strptime(start_date, '%Y-%m-%d').date()
+        dt_ = datetime.strptime(end_date,   '%Y-%m-%d').date()
+        # Avoid partial today from metrics-db
+        dt_ = min(dt_, today - timedelta(days=1))
+
+        icp = request.env['ir.config_parameter'].sudo()
+        SIGNER_URL     = (icp.get_param('media_signer.base_url') or os.environ.get('SIGNER_URL', '')).rstrip('/')
+        SIGNER_API_KEY = icp.get_param('media_signer.api_key')   or os.environ.get('SIGNER_API_KEY')
+        TENANT_CODE    = icp.get_param('metrics.tenant_code')    or os.environ.get('TENANT_CODE', 'anda')
+        if not SIGNER_URL or not SIGNER_API_KEY:
+            return {'error': 'Missing signer config'}
+
+        def _get(path: str, params: dict) -> dict:
+            try:
+                r = requests.get(f"{SIGNER_URL}{path}", params=params, headers={"x-api-key": SIGNER_API_KEY}, timeout=30)
+                if 400 <= r.status_code < 500:
+                    _logger.warning("Signer %s returned %s: %s", path, r.status_code, (r.text or "")[:200])
+                    return {"rows": [], "count": 0}
+                r.raise_for_status()
+                try:
+                    data = r.json()
+                except ValueError:
+                    return {"rows": [], "count": 0}
+                if isinstance(data, dict) and "rows" in data and "count" in data:
+                    return data
+                if isinstance(data, list):
+                    return {"rows": data, "count": len(data)}
+                return {"rows": [], "count": 0}
+            except requests.RequestException:
+                _logger.exception("Signer request failed")
+                return {"rows": [], "count": 0}
+
+        # map this driver to its Yango id
+        Driver = request.env['x_fleet_driver'].sudo()
+        drv = Driver.browse(int(driver_id))
+        yid = (drv.yango_driver_id or '').strip()
+        if not drv or not yid:
+            return {'data': {}, 'series': {}, 'issues': []}
+
+        # Pull rows for just this driver
+        day_resp = _get('/metrics/driver-day', {
+            'from_date': df.strftime('%Y-%m-%d'),
+            'to_date':   dt_.strftime('%Y-%m-%d'),
+            'tenant':    TENANT_CODE,
+            'driver_id': yid,    # if signer supports filtering by driver_id; if not, we’ll filter after
+        })
+        rows = day_resp.get('rows', [])
+        # Filter to this yid if API ignores driver_id
+        rows = [r for r in rows if (r.get('driver_id') or '').strip() == yid]
+
+        # Bucketing rule exactly like performance dashboard
+        def _bucketize_span(df_, dt__):
+            span = (dt__ - df_).days + 1
+            buckets = []
+            if span <= 30:
+                cur = df_
+                while cur <= dt__:
+                    buckets.append((cur, cur, cur.strftime('%Y-%m-%d'), 'day'))
+                    cur += timedelta(days=1)
+            elif span < 90:
+                start = df_ - timedelta(days=df_.weekday())
+                cur = start
+                while cur <= dt__:
+                    nxt = cur + timedelta(days=6)
+                    buckets.append((cur, min(nxt, dt__), cur.strftime('%Y-%m-%d'), 'week'))
+                    cur += timedelta(days=7)
+            else:
+                y0, m0 = df_.year, df_.month
+                y1, m1 = dt__.year, dt__.month
+                start_month = y0 * 12 + (m0 - 1)
+                end_month   = y1 * 12 + (m1 - 1)
+                for ym in range(start_month, end_month + 1):
+                    y, mo = divmod(ym, 12); mo += 1
+                    start_day = date(y, mo, 1)
+                    last_day  = date(y, mo, calendar.monthrange(y, mo)[1])
+                    buckets.append((start_day, min(last_day, dt__), start_day.strftime('%Y-%m'), 'month'))
+            return buckets
+
+        buckets = _bucketize_span(df, dt_)
+        labels = [lbl for _, _, lbl, _ in buckets]
+
+        # Prepare series accumulators
+        acc = {
+            'orders': defaultdict(int),
+            'completes': defaultdict(int),
+            'cash': defaultdict(float),
+            'accepts': defaultdict(int),
+            'sup_secs': defaultdict(float),
+            'util_secs': defaultdict(float),
+            'eff_secs': defaultdict(float),
+        }
+
+        def _bucket_label(d):
+            for b0, b1, lbl, _ in buckets:
+                if b0 <= d <= b1:
+                    return lbl
+            return None
+
+        # Aggregate per bucket
+        totals = {'orders':0,'completes':0,'cash':0.0,'accepts':0,'sup_secs':0.0,'util_secs':0.0,'eff_secs':0.0}
+        for r in rows:
+            try:
+                d = datetime.strptime(r.get('day'), '%Y-%m-%d').date()
+            except Exception:
+                continue
+            lbl = _bucket_label(d)
+            if not lbl:
+                continue
+
+            orders_total = int(r.get('orders_total') or 0)
+            completes    = int(r.get('orders_completed') or 0)
+            cash_sum     = float(r.get('cash_sum') or 0.0)
+            accepts      = int(r.get('accepts') or 0)
+            sup_secs     = float(r.get('supply_seconds') or 0.0)
+            util_secs    = float(r.get('interval_seconds') or 0.0)
+            eff_secs     = float(r.get('transport_seconds') or 0.0)
+
+            acc['orders'][lbl]    += orders_total
+            acc['completes'][lbl] += completes
+            acc['cash'][lbl]      += cash_sum
+            acc['accepts'][lbl]   += accepts
+            acc['sup_secs'][lbl]  += sup_secs
+            acc['util_secs'][lbl] += util_secs
+            acc['eff_secs'][lbl]  += eff_secs
+
+            totals['orders']    += orders_total
+            totals['completes'] += completes
+            totals['cash']      += cash_sum
+            totals['accepts']   += accepts
+            totals['sup_secs']  += sup_secs
+            totals['util_secs'] += util_secs
+            totals['eff_secs']  += eff_secs
+
+        # Build series (values already bucketed)
+        series = {
+            'trips':        [{'period': L, 'value': acc['completes'].get(L, 0)} for L in labels],
+            'supplyHours':  [{'period': L, 'value': acc['sup_secs'].get(L, 0.0)/3600.0} for L in labels],
+            'cashEarned':   [{'period': L, 'value': acc['cash'].get(L, 0.0)} for L in labels],
+            'acceptanceRate': [
+                {'period': L, 'value': _safe_div(acc['accepts'].get(L,0)*100.0, max(acc['orders'].get(L,0), 1e-12))}
+                for L in labels
+            ],
+            'completionRate': [
+                {'period': L, 'value': _safe_div(acc['completes'].get(L,0)*100.0, max(acc['accepts'].get(L,0), 1e-12))}
+                for L in labels
+            ],
+        }
+
+        # Totals for the cards
+        hours = totals['sup_secs'] / 3600.0
+        cards = {
+            'cash': totals['cash'],
+            'trips': totals['completes'],
+            'hours': hours,
+            'acceptance_rate': _safe_div(totals['accepts'] * 100.0, max(totals['orders'], 1e-12)) if totals['orders'] else 0.0,
+            'completion_rate': _safe_div(totals['completes'] * 100.0, max(totals['accepts'], 1e-12)) if totals['accepts'] else 0.0,
+        }
+
+        # Issues — same pattern as dashboard_data()
+        Issue = request.env['x_fleet_issue'].sudo()
+        issues = Issue.search([
+            ('driver_id', '=', drv.id),
+            ('date_reported', '>=', datetime.combine(df, datetime.min.time())),
+            ('date_reported', '<=', datetime.combine(dt_, datetime.max.time())),
+        ], order='date_reported desc, id desc')
+
+        def _cat_path(i):
+            parts = [p for p in [i.main_category, i.sub_category, i.sub_sub_category] if p]
+            return ', '.join(parts)
+
+        issue_rows = [{
+            'category_path': _cat_path(i),
+            'date_reported': i.date_reported and i.date_reported.strftime('%Y-%m-%d %H:%M'),
+            'note':          (i.note or '').strip(),
+        } for i in issues]
+
+        return {'cards': cards, 'series': series, 'issues': issue_rows}
