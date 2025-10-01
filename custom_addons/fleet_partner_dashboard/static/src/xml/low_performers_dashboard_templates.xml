@@ -300,7 +300,7 @@
                     <h6>Issues</h6>
                     <div class="table-responsive">
                     <table class="table table-sm">
-                        <thead><tr><th>Issue</th><th>Date Reported</th><th>Reporter Note</th></tr></thead>
+                        <thead><tr><th>Category</th><th>Date Reported</th><th>Reporter Note</th></tr></thead>
                         <tbody>
                         <t t-if="!state.modalDriver.issues || !state.modalDriver.issues.length">
                             <tr><td colspan="3"><em>No issues in this window.</em></td></tr>
