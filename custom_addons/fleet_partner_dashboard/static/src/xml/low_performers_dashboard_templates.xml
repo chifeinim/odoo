@@ -300,7 +300,7 @@
                     <h6>Issues</h6>
                     <div class="table-responsive">
                     <table class="table table-sm">
-                        <thead><tr><th>Category</th><th>Date Reported</th><th>Reporter Note</th></tr></thead>
+                        <thead><tr><th>Category</th><th>Date Reported</th><th>Date Resolved</th><th>Reporter Note</th></tr></thead>
                         <tbody>
                         <t t-if="!state.modalDriver.issues || !state.modalDriver.issues.length">
                             <tr><td colspan="3"><em>No issues in this window.</em></td></tr>
@@ -310,6 +310,7 @@
                             <tr style="vertical-align: top;">
                                 <td style="white-space: nowrap;"><t t-esc="it.category_path"/></td>
                                 <td style="white-space: nowrap;"><t t-esc="it.date_reported"/></td>
+                                <td style="white-space: nowrap;"><t t-esc="it.date_resolved or ''"/></td>
                                 <td style="white-space: pre-wrap;"><t t-esc="it.note"/></td>
                             </tr>
                             </t>

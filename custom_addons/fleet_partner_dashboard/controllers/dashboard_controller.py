@@ -1099,6 +1099,7 @@ class FleetDashboardController(http.Controller):
         issue_rows = [{
             'category_path': _cat_path(i),
             'date_reported': i.date_reported and i.date_reported.strftime('%Y-%m-%d %H:%M'),
+            'date_resolved': i.resolved_on and i.resolved_on.strftime('%Y-%m-%d %H:%M') or '',
             'note':          (i.note or '').strip(),
         } for i in issues]
 

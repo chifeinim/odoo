@@ -103,7 +103,7 @@ export class OwlLowPerformersDashboard extends Component {
       infoText:
         'Shows drivers flagged as Medium/High risk based on the last 7 days (ending yesterday).\n' +
         'High risk: avg daily hours ≤ 2 OR avg daily trips ≤ 2.\n' +
-        'Medium risk: 2 < hours < 5 OR 2 < trips < 5.',
+        'Medium risk: 2 < avg daily hours < 5 OR 2 < avg daily trips < 5.',
       showProducts: false, showScores: false, showCategories: false, showRisks: false, showPeriod: false,
       search: '',
       sortKey: 'name', sortDir: 'asc',
