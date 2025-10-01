@@ -33,11 +33,28 @@ def _parse_events(o):
 def _order_statuses(o):
     return {e.get('order_status') for e in _parse_events(o)}
 
+def _safe_div(a, b):
+    return (a / b) if b else 0.0
+
 def _last_week_range(today: date) -> tuple[date, date]:
     """Previous full Monday–Sunday week."""
     last_monday = today - timedelta(days=today.weekday() + 7)
     last_sunday = last_monday + timedelta(days=6)
     return last_monday, last_sunday
+
+def _this_week_range(today: date) -> tuple[date, date]:
+    """Current Mon–Sun week, but end at yesterday to avoid partial 'today' metrics."""
+    monday = today - timedelta(days=today.weekday())
+    end = min(monday + timedelta(days=6), today - timedelta(days=1))
+    if end < monday:
+        end = monday  # if it's Monday, clamp to Monday
+    return monday, end
+
+def _last_7_days_excl_today(today: date) -> tuple[date, date]:
+    """Last 7 calendar days, ending yesterday."""
+    end = today - timedelta(days=1)
+    start = end - timedelta(days=6)
+    return start, end
 
 def _last_month_range(today: date) -> tuple[date, date]:
     """Previous full calendar month."""
@@ -661,4 +678,246 @@ class FleetDashboardController(http.Controller):
                 'category': cat_dist,
             },
         }
+        
+    @http.route('/fleet_low_performers/filters', type='json', auth='user')
+    def low_perf_filters(self):
+        Product = request.env['x_fleet_product_type'].sudo()
+        pts = Product.search([], order='name')
+        product_types = [{'id': p.id, 'name': p.name} for p in pts]
 
+        Driver = request.env['x_fleet_driver'].sudo()
+        categories = [k for k, _ in Driver._fields['type'].selection]  # same as perf dash
+        # risk filter options
+        risks = [{'key': 'High', 'label': 'High'}, {'key': 'Medium', 'label': 'Medium'}]
+        periods = ['This Week', 'Last Week', 'Last Month', 'Last 3 Months']
+
+        return {
+            'product_types': product_types,
+            'categories':    categories,
+            'risks':         risks,
+            'time_periods':  periods,
+        }
+        
+    @http.route('/fleet_low_performers/data', type='json', auth='user')
+    def low_perf_data(self,
+                    period: Optional[str] = None,
+                    products=None, scores=None, categories=None, risks=None,
+                    start_date: Optional[str] = None,
+                    end_date: Optional[str] = None):
+        """
+        Build the Low Performers table dataset.
+
+        - Risk is computed from the last 7 days (ending yesterday) using:
+            High    if avg daily hours <= 2 OR avg daily trips <= 2
+            Medium  if (2 < avg daily hours < 5) OR (2 < avg daily trips < 5)
+        (High takes precedence if one metric <= 2.)
+        - Table metrics (trips, hours, cash, rates, issues_flag) are computed
+        for the user-selected date window below.
+        """
+        today = date.today()
+
+        # --- A) Date window for the TABLE (not the risk) ---
+        if start_date and end_date:
+            df = datetime.strptime(start_date, '%Y-%m-%d').date()
+            dt_ = datetime.strptime(end_date,   '%Y-%m-%d').date()
+            if df > dt_:
+                df, dt_ = dt_, df
+        else:
+            if period == 'This Week':
+                df, dt_ = _this_week_range(today)
+            elif period == 'Last Month':
+                df, dt_ = _last_month_range(today)
+            elif period == 'Last 3 Months':
+                df, dt_ = _last_n_months_range(today, 3)
+            else:
+                # default Last Week (Mon–Sun)
+                df, dt_ = _last_week_range(today)
+
+        # Clamp table end to yesterday to avoid partial 'today' metrics from metrics-db
+        dt_ = min(dt_, today - timedelta(days=1))
+
+        # --- B) Config + signer fetch (mirrors performance_data) ---
+        icp = request.env['ir.config_parameter'].sudo()
+        SIGNER_URL     = (icp.get_param('media_signer.base_url') or os.environ.get('SIGNER_URL', '')).rstrip('/')
+        SIGNER_API_KEY = icp.get_param('media_signer.api_key')   or os.environ.get('SIGNER_API_KEY')
+        TENANT_CODE    = icp.get_param('metrics.tenant_code')    or os.environ.get('TENANT_CODE', 'anda')
+        if not SIGNER_URL or not SIGNER_API_KEY:
+            return {'error': 'Missing SIGNER_URL or SIGNER_API_KEY in system parameters'}
+
+        def _get(path: str, params: dict) -> dict:
+            try:
+                r = requests.get(
+                    f"{SIGNER_URL}{path}",
+                    params=params,
+                    headers={"x-api-key": SIGNER_API_KEY},
+                    timeout=30,
+                )
+                if 400 <= r.status_code < 500:
+                    _logger.warning("Signer %s returned %s: %s", path, r.status_code, (r.text or "")[:200])
+                    return {"rows": [], "count": 0}
+                r.raise_for_status()
+                try:
+                    data = r.json()
+                except ValueError:
+                    _logger.warning("Signer %s returned non-JSON", path)
+                    return {"rows": [], "count": 0}
+                if isinstance(data, dict) and "rows" in data and "count" in data:
+                    return data
+                if isinstance(data, list):
+                    return {"rows": data, "count": len(data)}
+                return {"rows": [], "count": 0}
+            except requests.Timeout:
+                _logger.warning("Signer request timed out: %s", path)
+                return {"rows": [], "count": 0}
+            except requests.RequestException as e:
+                _logger.exception("Signer request failed: %s", e)
+                return {"rows": [], "count": 0}
+
+        # --- C) Pull driver-day rows for:
+        #       (1) the table window df..dt_
+        #       (2) the risk window (last 7 days ending yesterday)
+        risk_df, risk_dt = _last_7_days_excl_today(today)
+
+        def _pull_day_rows(_from: date, _to: date):
+            resp = _get('/metrics/driver-day', {
+                'from_date': _from.strftime('%Y-%m-%d'),
+                'to_date':   _to.strftime('%Y-%m-%d'),
+                'tenant':    TENANT_CODE,
+            })
+            return resp.get('rows', [])
+
+        table_rows = _pull_day_rows(df, dt_)
+        risk_rows  = _pull_day_rows(risk_df, risk_dt)
+
+        # --- D) Odoo drivers + filters (same model fields you use elsewhere) ---
+        Driver = request.env['x_fleet_driver'].sudo()
+        all_drivers = Driver.search([])
+        products   = products   or []
+        scores     = scores     or []
+        categories = categories or []
+        risks      = risks      or []  # ['High','Medium'] or empty (treated as both)
+
+        # DQS matrix & OTRS (copied from performance_data)
+        otrs_resp = _get('/metrics/driver-otrs', {'tenant': TENANT_CODE})
+        otrs_rows = otrs_resp.get('rows', [])
+        otrs_by_driver = {}
+        for r in otrs_rows:
+            yid = (r.get('driver_id') or '').strip()
+            band = (r.get('score_band') or '').strip().lower()  # strong/average/weak
+            if yid:
+                otrs_by_driver[yid] = band or 'average'
+
+        dqs_matrix = {
+            'strong':  {'strong': 'High Performer',    'average': 'Average Performer', 'weak': 'Low Performer'},
+            'average': {'strong': 'High Performer',    'average': 'Average Performer', 'weak': 'Low Performer'},
+            'weak':    {'strong': 'Average Performer', 'average': 'Low Performer',     'weak': 'Low Performer'},
+        }
+        dqs_map = {}
+        for drv in all_drivers:
+            yid = (drv.yango_driver_id or '').strip()
+            training = (drv.training_rating or 'average').strip().lower()
+            onroad   = otrs_by_driver.get(yid, 'average')
+            dqs_map[drv.id] = dqs_matrix.get(training, {}).get(onroad, 'Average Performer')
+
+        # --- E) Index rows by odoo driver id (metrics rows use Yango driver_id) ---
+        # day row fields we expect: driver_id (yango id), day, completes, orders, accepts, sup_seconds, util_seconds, eff_seconds, cash
+        def _by_odoo_id(rows):
+            # map Yango ID -> Odoo driver ids
+            y2o = {}
+            for d in all_drivers:
+                y = (d.yango_driver_id or '').strip()
+                if y:
+                    y2o[y] = d.id
+            out = defaultdict(list)
+            for r in rows:
+                y = (r.get('driver_id') or '').strip()
+                oid = y2o.get(y)
+                if not oid:
+                    continue
+                out[oid].append(r)
+            return out
+
+        table_by_drv = _by_odoo_id(table_rows)
+        risk_by_drv  = _by_odoo_id(risk_rows)
+
+        # --- F) Compute risk from last 7 days ---
+        def _risk_for(rows7: list) -> Optional[str]:
+            # average per *calendar* day across 7 days (missing days count as 0)
+            # sum trips and supply seconds
+            trips = sum(int(r.get('completes') or 0) for r in rows7)
+            sup_secs = sum(float(r.get('sup_seconds') or 0.0) for r in rows7)
+            avg_trips = trips / 7.0
+            avg_hours = (sup_secs / 3600.0) / 7.0
+            # High precedence if any metric <= 2
+            if avg_hours <= 2.0 or avg_trips <= 2.0:
+                return 'High'
+            # Medium if either is in (2,5)
+            if (2.0 < avg_hours < 5.0) or (2.0 < avg_trips < 5.0):
+                return 'Medium'
+            return None  # not a low performer
+
+        # --- G) Build table data for selected window, filtered to High/Medium ---
+        Issue = request.env['x_fleet_issue'].sudo()
+        data = {}
+        for drv in all_drivers:
+            rid = _risk_for(risk_by_drv.get(drv.id, []))
+            if rid not in ('High', 'Medium'):
+                continue
+            if risks and rid not in risks:
+                continue
+            if products and drv.product_type_id.id not in products:
+                continue
+            if scores and dqs_map.get(drv.id) not in scores:
+                continue
+            # Categories (archive normally unticked on frontend)
+            if categories and drv.type not in categories:
+                continue
+
+            # Aggregates in the TABLE window
+            rows = table_by_drv.get(drv.id, [])
+            orders   = sum(int(r.get('orders') or 0)       for r in rows)
+            accepts  = sum(int(r.get('accepts') or 0)      for r in rows)
+            completes= sum(int(r.get('completes') or 0)    for r in rows)
+            cash     = sum(float(r.get('cash') or 0.0)     for r in rows)
+            sup_secs = sum(float(r.get('sup_seconds') or 0.0) for r in rows)
+
+            hours = sup_secs / 3600.0
+            acc_pct = _safe_div(accepts * 100.0, max(orders, 1e-12)) if orders else 0.0
+            cmp_pct = _safe_div(completes * 100.0, max(accepts, 1e-12)) if accepts else 0.0
+
+            # Issues flag within the TABLE window
+            issues_flag = False
+            if df and dt_:
+                issues_flag = bool(Issue.search_count([
+                    ('driver_id', '=', drv.id),
+                    ('date_reported', '>=', datetime.combine(df, datetime.min.time())),
+                    ('date_reported', '<=', datetime.combine(dt_, datetime.max.time())),
+                ]))
+
+            data[drv.id] = {
+                'id': drv.id,
+                'name': drv.name,
+                'phone': drv.phone or '',
+                'risk': rid,
+                'trips': completes,
+                'hours': hours,
+                'cash': cash,
+                'acceptance_rate': acc_pct,
+                'completion_rate': cmp_pct,
+                'issues_reported': 'Yes' if issues_flag else 'No',
+                'product_type': drv.product_type_id.name or '',
+                'type': drv.type or '',
+                'quality_score': dqs_map.get(drv.id),
+                'hire_date': drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
+            }
+
+        # Frontend does sorting/paging; we just ship the rows
+        return {
+            'data': data,
+            'meta': {
+                'table_from': df.strftime('%Y-%m-%d'),
+                'table_to':   dt_.strftime('%Y-%m-%d'),
+                'risk_from':  risk_df.strftime('%Y-%m-%d'),
+                'risk_to':    risk_dt.strftime('%Y-%m-%d'),
+            },
+        }

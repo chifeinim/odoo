@@ -26,10 +26,12 @@
             'fleet_partner_dashboard/static/src/lib/chart.umd.min.js',
             'fleet_partner_dashboard/static/src/js/dashboard/driver_dashboard.js',
             'fleet_partner_dashboard/static/src/js/dashboard/performance_dashboard.js',
+            'fleet_partner_dashboard/static/src/js/dashboard/low_performers_dashboard.js',
         ],
         'web.assets_qweb': [
             'fleet_partner_dashboard/static/src/xml/driver_dashboard_templates.xml',
             'fleet_partner_dashboard/static/src/xml/performance_dashboard_templates.xml',
+            'fleet_partner_dashboard/static/src/xml/low_performers_dashboard_templates.xml',
         ],
     },
     'installable': True,

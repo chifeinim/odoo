@@ -64,6 +64,11 @@
             parent="menu_fleet_dashboard_page"
             sequence="20"
             action="action_performance_dashboard"/>
+  <menuitem id="menu_low_performers_dashboard"
+            name="Low Performers"
+            parent="menu_fleet_dashboard_page"
+            sequence="30"
+            action="action_low_performers_dashboard"/>
 
   <!-- Issues -->
   <menuitem id="menu_fleet_issue"

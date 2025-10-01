@@ -13,5 +13,11 @@
       <field name="target">main</field>
     </record>
 
+    <record id="action_low_performers_dashboard" model="ir.actions.client">
+      <field name="name">Low Performers</field>
+      <field name="tag">owl.low_performers_dashboard</field>
+      <field name="target">main</field>
+    </record>
+
   </data>
 </odoo>
