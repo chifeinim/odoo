@@ -126,26 +126,37 @@
               </tr>
             </thead>
             <tbody>
-              <t t-foreach="pagedDrivers()" t-as="d" t-key="d.id">
+            <t t-foreach="pagedDrivers()" t-as="d" t-key="d.id">
                 <tr>
-                  <td>
+                <td>
                     <a href="#" t-on-click="() => openDriver(d)"><t t-esc="d.name"/></a>
-                  </td>
-                  <td><t t-esc="d.phone"/></td>
-                  <td>
-                    <t t-set="bg" t-value="d.risk === 'High' ? '#f8d7da' : '#fff3cd'"/>
-                    <span class="px-2 py-1 rounded" t-att-style="'background:'+bg+';color:#000;font-weight:600;'">
-                      <t t-esc="d.risk"/>
-                    </span>
-                  </td>
-                  <td><t t-esc="formatNumber(d.trips)"/></td>
-                  <td><t t-esc="formatNumber(d.hours, 1)"/></td>
-                  <td><t t-esc="formatNumber(d.cash, 0)"/></td>
-                  <td><t t-esc="formatNumber(d.acceptance_rate, 1)"/>%</td>
-                  <td><t t-esc="formatNumber(d.completion_rate, 1)"/>%</td>
-                  <td><t t-esc="d.issues_reported"/></td>
+                </td>
+                <td><t t-esc="d.phone"/></td>
+
+                <!-- RISK: full-cell color -->
+                <td
+                t-att-class="(d.risk === 'High' ? 'bg-danger text-dark fw-bold' : (d.risk === 'Medium' ? 'bg-warning text-dark fw-bold' : ''))"
+                t-att-style="d.risk === 'High' ? 'background-color:#f8d7da !important;' : (d.risk === 'Medium' ? 'background-color:#fff3cd !important;' : '')"
+                >
+                <t t-esc="d.risk"/>
+                </td>
+
+                <td><t t-esc="formatNumber(d.trips)"/></td>
+                <td><t t-esc="formatNumber(d.hours, 1)"/></td>
+                <td><t t-esc="formatNumber(d.cash, 0)"/></td>
+                <td><t t-esc="formatNumber(d.acceptance_rate, 1)"/>%</td>
+                <td><t t-esc="formatNumber(d.completion_rate, 1)"/>%</td>
+
+                <!-- ISSUES: red only when Yes -->
+                <td
+                t-att-class="d.issues_reported === 'Yes' ? 'bg-danger text-dark fw-bold' : ''"
+                t-att-style="d.issues_reported === 'Yes' ? 'background-color:#f8d7da !important;' : ''"
+                t-att-aria-label="'Issues reported: ' + d.issues_reported"
+                >
+                <t t-esc="d.issues_reported"/>
+                </td>
                 </tr>
-              </t>
+            </t>
             </tbody>
           </table>
         </div>

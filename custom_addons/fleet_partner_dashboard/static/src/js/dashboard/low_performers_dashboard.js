@@ -79,22 +79,6 @@ export class OwlLowPerformersDashboard extends Component {
     });
   }
 
-  async openDriver(d) {
-    this.state.modalDriver = { ...d, cards: null, series: null, issues: [] };
-    this.state.showModal = true;
-    this.state.showCharts = false;
-
-    // fetch per-driver detail for the current table window from meta
-    const meta = this.state.meta || {}; // we’ll store this on fetch
-    const start = meta.table_from, end = meta.table_to;
-    const res = await this.env.services.rpc('/fleet_low_performers/driver_detail', {
-        driver_id: d.id, start_date: start, end_date: end,
-    });
-    this.state.modalDriver.cards  = res.cards || null;
-    this.state.modalDriver.series = res.series || null;
-    this.state.modalDriver.issues = res.issues || [];
-  }
-
   async _fetchData() {
     this.state.loading = true;
     const params = {
@@ -181,11 +165,23 @@ export class OwlLowPerformersDashboard extends Component {
   onSearchChange(ev) { this.state.search = ev.target.value || ''; this.state.page = 1; }
 
   // modal
-  openDriver(d) { this.state.modalDriver = d; this.state.showModal = true; this.state.showCharts = false; }
+  async openDriver(d) {
+    this.state.modalDriver = { ...d, cards: null, series: null, issues: [] };
+    this.state.showModal = true;
+    this.state.showCharts = false;
+
+    // fetch per-driver detail for the current table window from meta
+    const meta = this.state.meta || {}; // we’ll store this on fetch
+    const start = meta.table_from, end = meta.table_to;
+    const res = await this.env.services.rpc('/fleet_low_performers/driver_detail', {
+        driver_id: d.id, start_date: start, end_date: end,
+    });
+    this.state.modalDriver.cards  = res.cards || null;
+    this.state.modalDriver.series = res.series || null;
+    this.state.modalDriver.issues = res.issues || [];
+  }
   closeModal() { this.state.showModal = false; this.state.modalDriver = null; }
   toggleModalView() { this.state.showCharts = !this.state.showCharts; }
-
-
 }
 
 OwlLowPerformersDashboard.template = 'owl.OwlLowPerformersDashboard';
