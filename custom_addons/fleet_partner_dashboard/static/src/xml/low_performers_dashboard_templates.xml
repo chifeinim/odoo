@@ -4,7 +4,13 @@
     <div class="o_fleet_dashboard" style="height: calc(100vh - 70px); overflow-y: auto; padding: 1rem;">
       <t t-if="state.loading"><div>Loading…</div></t>
       <t t-else="">
-        <h1 class="mb-4">Low Performers</h1>
+        <h1 class="mb-4 d-flex align-items-center">
+        <span>Low Performers</span>
+        <i class="fa fa-info-circle text-muted"
+            t-att-title="state.infoText"
+            style="cursor: help; font-size: 0.9em; margin-left: 8px;"
+            aria-label="Information"></i>
+        </h1>
 
         <!-- FILTER BAR -->
         <div class="mb-3 p-3 bg-light rounded d-flex align-items-center gap-2 flex-wrap">
