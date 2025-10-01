@@ -80,6 +80,23 @@
             </div>
           </div>
 
+            <!-- Issues Reported -->
+            <div class="dropdown" t-att-class="{'show': state.showIssues}">
+            <button class="btn btn-primary dropdown-toggle" t-on-click="() => toggleDropdown('showIssues')">
+                Issues Reported
+                <t t-if="state.selectedIssues.length">(<t t-esc="state.selectedIssues.length"/>)</t>
+            </button>
+            <div class="dropdown-menu" t-att-class="{'show': state.showIssues}">
+                <t t-foreach="[{key:'Yes',label:'Yes'},{key:'No',label:'No'}]" t-as="opt" t-key="opt.key">
+                <button class="dropdown-item"
+                        t-att-class="{'active': state.selectedIssues.includes(opt.key)}"
+                        t-on-click="() => toggleFilter('selectedIssues', opt.key)">
+                    <t t-esc="opt.label"/>
+                </button>
+                </t>
+            </div>
+            </div>
+
           <!-- Period -->
           <div class="dropdown" t-att-class="{'show': state.showPeriod}">
             <button class="btn btn-primary dropdown-toggle" t-on-click="() => toggleDropdown('showPeriod')">

@@ -12,15 +12,54 @@ export class OwlLowPerformersDashboard extends Component {
   }
   digits(s) { return (s || '').replace(/\D/g, ''); }
 
+  constructor(...args) {
+    super(...args);
+    this._charts = {}; // cache per-canvas to destroy before re-draw
+  }
+
   renderBarChart(canvas, series, title) {
     if (!canvas || !series) return;
+    const id = canvas.id || Math.random().toString(36).slice(2);
+    canvas.id = id;
+
+    // destroy existing chart on this canvas
+    if (this._charts[id]) {
+        try { this._charts[id].destroy(); } catch (e) {}
+    }
+
     const labels = series.map(p => p.period);
     const values = series.map(p => p.value);
+
     // eslint-disable-next-line no-undef
-    new window.Chart(canvas.getContext('2d'), {
+    this._charts[id] = new window.Chart(canvas.getContext('2d'), {
         type: 'bar',
-        data: { labels, datasets: [{ label: title, data: values }] },
-        options: { responsive: true, plugins: { legend: { display: false } } }
+        data: {
+        labels,
+        datasets: [{
+            label: title,
+            data: values,
+            borderWidth: 0,    // no borders around bars
+        }]
+        },
+        options: {
+        responsive: true,
+        plugins: {
+            legend: { display: false },
+            title:  { display: false },
+            tooltip:{ enabled: true },
+        },
+        scales: {
+            x: {
+            grid: { display: false, drawBorder: false },
+            ticks: { display: true },
+            },
+            y: {
+            grid: { display: false, drawBorder: false },
+            ticks: { display: true }, // set to false if you want *no* y-axis marks either
+            },
+        },
+        layout: { padding: 0 },
+        }
     });
   }
 
@@ -38,6 +77,7 @@ export class OwlLowPerformersDashboard extends Component {
       selectedScores: [],
       selectedCategories: [],   // NOTE: we’ll default to all EXCEPT 'archive' after we fetch categories
       selectedRisks: ['High','Medium'],
+      selectedIssues: [],
       selectedPeriod: 'Last Week',
       startDate: '', endDate: '',
       // UI
@@ -117,18 +157,28 @@ export class OwlLowPerformersDashboard extends Component {
   }
 
   sortedFilteredDrivers() {
-    const q = (this.state.search || '').trim().toLowerCase();
+    const q  = (this.state.search || '').trim().toLowerCase();
     const qd = this.digits(q);
+    const issuesSel = this.state.selectedIssues; // [] | ['Yes'] | ['No'] | ['Yes','No']
+
     const rows = Object.values(this.state.data || {}).filter(d => {
-      const nameHit  = (d.name || '').toLowerCase().includes(q);
-      const phoneHit = qd ? this.digits(d.phone).includes(qd) : false;
-      return q ? (nameHit || phoneHit) : true;
+        // name/phone search
+        const nameHit  = (d.name || '').toLowerCase().includes(q);
+        const phoneHit = qd ? this.digits(d.phone).includes(qd) : false;
+        if (q && !(nameHit || phoneHit)) return false;
+
+        // issues filter
+        if (issuesSel.length) {
+        if (!issuesSel.includes(d.issues_reported)) return false; // 'Yes' or 'No'
+        }
+        return true;
     });
+
     const dir = this.state.sortDir === 'asc' ? 1 : -1;
     rows.sort((a, b) => {
-      const res = this._compareByKey(a, b, this.state.sortKey);
-      if (res !== 0) return dir * res;
-      return this._compareByKey(a, b, 'name');
+        const res = this._compareByKey(a, b, this.state.sortKey);
+        if (res !== 0) return dir * res;
+        return this._compareByKey(a, b, 'name');
     });
     return rows;
   }
@@ -181,7 +231,14 @@ export class OwlLowPerformersDashboard extends Component {
     this.state.modalDriver.issues = res.issues || [];
   }
   closeModal() { this.state.showModal = false; this.state.modalDriver = null; }
-  toggleModalView() { this.state.showCharts = !this.state.showCharts; }
+  toggleModalView() {
+    this.state.showCharts = !this.state.showCharts;
+    if (!this.state.showCharts) {
+        // going back to cards — destroy charts
+        Object.values(this._charts).forEach(ch => { try { ch.destroy(); } catch(e){} });
+        this._charts = {};
+    }
+  }
 }
 
 OwlLowPerformersDashboard.template = 'owl.OwlLowPerformersDashboard';
