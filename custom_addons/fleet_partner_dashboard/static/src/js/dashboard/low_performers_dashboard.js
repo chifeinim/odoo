@@ -10,6 +10,19 @@ export class OwlLowPerformersDashboard extends Component {
     const n = Number(v); if (Number.isNaN(n)) return v ?? '';
     return new Intl.NumberFormat('en-GB', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
   }
+
+  sortArrow(key) {
+    return this.state.sortKey === key ? (this.state.sortDir === 'asc' ? '▲' : '▼') : '';
+  }
+  formatPeriodLabel(p) {
+    // Accepts 'YYYY-MM-DD' (daily) or 'YYYY-MM' (monthly). Falls back to raw.
+    const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(String(p || ''));
+    if (!m) return p;
+    const y = +m[1], mo = +m[2], d = m[3] ? +m[3] : 1;
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mon = months[mo - 1] || '';
+    return m[3] ? `${d}-${mon}` : `${mon}-${y}`;   // daily -> 23-sep, monthly -> sep-2025
+  }
   digits(s) { return (s || '').replace(/\D/g, ''); }
 
   constructor(...args) {
@@ -22,40 +35,46 @@ export class OwlLowPerformersDashboard extends Component {
     const id = canvas.id || Math.random().toString(36).slice(2);
     canvas.id = id;
 
-    // destroy existing chart on this canvas
-    if (this._charts[id]) {
-        try { this._charts[id].destroy(); } catch (e) {}
+    if (this._charts?.[id]) {
+        try { this._charts[id].destroy(); } catch(e) {}
+    } else {
+        this._charts = this._charts || {};
     }
 
-    const labels = series.map(p => p.period);
-    const values = series.map(p => p.value);
+    const labelsRaw = series.map(p => p.period);
+    const labelsFmt = labelsRaw.map(p => this.formatPeriodLabel(p));
+    const values    = series.map(p => p.value);
 
     // eslint-disable-next-line no-undef
     this._charts[id] = new window.Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
-        labels,
-        datasets: [{
-            label: title,
-            data: values,
-            borderWidth: 0,    // no borders around bars
-        }]
+        labels: labelsFmt,               // show formatted labels on axis
+        datasets: [{ label: title, data: values, borderWidth: 0 }]
         },
         options: {
         responsive: true,
         plugins: {
             legend: { display: false },
             title:  { display: false },
-            tooltip:{ enabled: true },
+            tooltip: {
+            enabled: true,
+            callbacks: {
+                title: (items) => items?.length ? items[0].label : '',
+                label: (ctx) => `${title}: ${ctx.parsed.y}`,
+            }
+            },
         },
         scales: {
             x: {
             grid: { display: false, drawBorder: false },
-            ticks: { display: true },
+            ticks: {
+                callback: (val, idx) => labelsFmt[idx], // ensure we keep 23-sep format
+            },
             },
             y: {
             grid: { display: false, drawBorder: false },
-            ticks: { display: true }, // set to false if you want *no* y-axis marks either
+            ticks: { display: true },
             },
         },
         layout: { padding: 0 },
