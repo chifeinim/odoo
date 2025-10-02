@@ -101,7 +101,7 @@ export class OwlLowPerformersDashboard extends Component {
       startDate: '', endDate: '',
       // UI
       infoText:
-        'Shows drivers flagged as Medium/High risk based on the last 7 days (ending yesterday).\n' +
+        'Shows drivers flagged as Medium/High risk based on the last 7 days (ending yesterday), averaging over 6 days.\n' +
         'High risk: avg daily hours ≤ 2 OR avg daily trips ≤ 2.\n' +
         'Medium risk: 2 < avg daily hours < 5 OR 2 < avg daily trips < 5.',
       showProducts: false, showScores: false, showCategories: false, showRisks: false, showPeriod: false,
@@ -125,7 +125,7 @@ export class OwlLowPerformersDashboard extends Component {
       const lower = (s) => (s || '').toString().trim().toLowerCase();
       this.state.selectedCategories = categories.filter(c => {
         const x = lower(c);
-        return x !== 'archive' && x !== 'new';
+        return x !== 'archive' && x !== 'new' && x !== 'churn' && x !== 'other';
       });
       await this._fetchData();
     });

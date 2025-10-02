@@ -844,8 +844,9 @@ class FleetDashboardController(http.Controller):
         def _risk_for(rows7: list) -> Optional[str]:
             trips     = sum(int(r.get('orders_completed') or 0) for r in rows7)
             sup_secs  = sum(float(r.get('supply_seconds') or 0.0) for r in rows7)
-            avg_trips = trips / 7.0
-            avg_hours = (sup_secs / 3600.0) / 7.0
+            # divide by 6 instead of 7, since drivers are only expected to work 6 days a week
+            avg_trips = trips / 6.0
+            avg_hours = (sup_secs / 3600.0) / 6.0
             if avg_hours <= 2.0 or avg_trips <= 2.0:
                 return 'High'
             if (2.0 < avg_hours < 5.0) or (2.0 < avg_trips < 5.0):
