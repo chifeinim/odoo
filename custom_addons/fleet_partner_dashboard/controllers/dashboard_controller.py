@@ -460,7 +460,7 @@ class FleetDashboardController(http.Controller):
             eff_secs          = float(r.get('transport_seconds') or 0.0)
             sup_secs          = float(r.get('supply_seconds') or 0.0)
 
-            in_prev = (prev_df and prev_dt and prev_df <= day < prev_dt)
+            in_prev = (prev_df and prev_dt and prev_df <= day <= prev_dt)
             in_cur  = (df and dt_ and df <= day <= dt_)
 
             if in_prev:
