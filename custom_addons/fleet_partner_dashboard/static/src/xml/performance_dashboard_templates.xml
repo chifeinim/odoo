@@ -289,51 +289,7 @@
                 </div>
               </div>
             </div>
-            <!-- Average Utilisation % -->
-            <div class="col-md-4 mb-3">
-              <div class="card text-center h-100">
-                <div class="card-body">
-                  <h5 class="card-title">Utilisation</h5>
-                  <h2><t t-esc="formatNumber(state.metrics.avgUtilisation, 1)"/>%</h2>
-                  <p class="card-text">
-                    <t t-set="prev"  t-value="state.metrics.prevAvgUtilisation"/>
-                    <t t-set="curr"  t-value="state.metrics.avgUtilisation"/>
-                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
-                    <t t-if="delta >= 0">
-                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
-                    </t>
-                    <t t-else="">
-                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
-                    </t>
-                     from last period
-                  </p>
-                </div>
-              </div>
-            </div>
-            <!-- Average Efficiency % -->
-            <div class="col-md-4 mb-3">
-              <div class="card text-center h-100">
-                <div class="card-body">
-                  <h5 class="card-title">Efficiency</h5>
-                  <h2><t t-esc="formatNumber(state.metrics.avgEfficiency, 1)"/>%</h2>
-                  <p class="card-text">
-                    <t t-set="prev"  t-value="state.metrics.prevAvgEfficiency"/>
-                    <t t-set="curr"  t-value="state.metrics.avgEfficiency"/>
-                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
-                    <t t-if="delta >= 0">
-                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
-                    </t>
-                    <t t-else="">
-                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
-                    </t>
-                     from last period
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>          
-          <!-- fourth row: Average Acceptance Rate % -->
-          <div class="row mb-4">
+            <!-- Average Acceptance Rate % -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
@@ -354,6 +310,72 @@
                 </div>
               </div>
             </div>
+            <!-- Cancelled by Driver % -->
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Cancelled by Driver</h5>
+                  <h2><t t-esc="formatNumber(state.metrics.cancelledByDriverPct, 1)"/>%</h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevCancelledByDriverPct"/>
+                    <t t-set="curr"  t-value="state.metrics.cancelledByDriverPct"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-danger">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-success">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                    </t>
+                    &#160;from last period
+                  </p>
+                </div>
+              </div>
+            </div>
+            <!-- Average Utilisation %
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Utilisation</h5>
+                  <h2><t t-esc="formatNumber(state.metrics.avgUtilisation, 1)"/>%</h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevAvgUtilisation"/>
+                    <t t-set="curr"  t-value="state.metrics.avgUtilisation"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                    </t>
+                     from last period
+                  </p>
+                </div>
+              </div>
+            </div> -->
+            <!-- Average Efficiency %
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Efficiency</h5>
+                  <h2><t t-esc="formatNumber(state.metrics.avgEfficiency, 1)"/>%</h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevAvgEfficiency"/>
+                    <t t-set="curr"  t-value="state.metrics.avgEfficiency"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                    </t>
+                     from last period
+                  </p>
+                </div>
+              </div>
+            </div> -->
+          </div>          
+          <!-- fourth row: -->
+          <div class="row mb-4">
             <!-- Completed to Request % -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
@@ -448,7 +470,7 @@
                 </div>
               </div>
             </div>
-            <!-- All Drivers -->
+            <!-- All Drivers 
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
@@ -456,7 +478,7 @@
                   <h2><t t-esc="state.allDrivers"/></h2>
                 </div>
               </div>
-            </div>
+            </div> -->
           </div>
 
 
@@ -469,31 +491,36 @@
               <canvas t-ref="chartActive" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
-              <canvas t-ref="chartTrips"  style="height:200px"></canvas>
+              <canvas t-ref="chartTrips" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartSupply" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
-              <canvas t-ref="chartCash"   style="height:200px"></canvas>
+              <canvas t-ref="chartCash" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartMoneyPerHour" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
-              <canvas t-ref="chartTripsPerHour" style="height:200px"/>
+              <canvas t-ref="chartTripsPerHour" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartAvgSupply" style="height:200px"></canvas>
             </div>
+            <!--
             <div class="col-md-4">
               <canvas t-ref="chartUtilisation" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartEfficiency" style="height:200px"></canvas>
             </div>
+            -->
             <div class="col-md-4">
               <canvas t-ref="chartAcceptance" style="height:200px"></canvas>
+            </div>
+            <div class="col-md-4">
+              <canvas t-ref="chartCancelledByDriver" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartCompletedToRequest" style="height:200px"></canvas>
@@ -508,17 +535,16 @@
               <canvas t-ref="chartPartnerFee" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
-              <canvas t-ref="chartQuality"  style="height:200px"></canvas>
+              <canvas t-ref="chartQuality" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
-              <canvas t-ref="chartProduct"  style="height:200px"></canvas>
+              <canvas t-ref="chartProduct" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartCategory" style="height:200px"></canvas>
             </div>
           </div>
         </t>
-
         <!-- SEARCH + TABLE -->
         <div class="form-group mb-3">
           <input type="text"
@@ -574,6 +600,7 @@
                 Money/Hour
                 <t t-if="state.sortKey === 'money_per_hour'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
               </th>
+              <!--
               <th style="cursor:pointer" t-on-click="() => setSort('utilisation')">
                 Utilisation
                 <t t-if="state.sortKey === 'utilisation'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
@@ -582,9 +609,14 @@
                 Efficiency
                 <t t-if="state.sortKey === 'efficiency'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
               </th>
+              -->
               <th style="cursor:pointer" t-on-click="() => setSort('acceptance_rate')">
                 Acceptance Rate
                 <t t-if="state.sortKey === 'acceptance_rate'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+              </th>
+              <th style="cursor:pointer" t-on-click="() => setSort('cancelled_by_driver')">
+                Cancelled by Driver
+                <t t-if="state.sortKey === 'cancelled_by_driver'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
               </th>
               <th style="cursor:pointer" t-on-click="() => setSort('completed_to_request')">
                 Completed to Request
@@ -594,6 +626,7 @@
                 Completion Rate
                 <t t-if="state.sortKey === 'completion_rate'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
               </th>
+              <!--
               <th style="cursor:pointer" t-on-click="() => setSort('service_fee')">
                 Service Fee Kz
                 <t t-if="state.sortKey === 'service_fee'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
@@ -602,6 +635,7 @@
                 Partner Fee Kz
                 <t t-if="state.sortKey === 'partner_fee'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
               </th>
+              -->
             </tr>
           </thead>
           <tbody>
@@ -618,13 +652,18 @@
                 <td><t t-esc="formatNumber(d.hours, 0)"/>h</td>
                 <td><t t-esc="formatNumber(d.trips_per_hour, 0)"/></td>
                 <td><t t-esc="formatNumber(d.money_per_hour, 0)"/></td>
+                <!--
                 <td><t t-esc="formatNumber(d.utilisation, 1)"/>%</td>
                 <td><t t-esc="formatNumber(d.efficiency, 1)"/>%</td>
+                -->
                 <td><t t-esc="formatNumber(d.acceptance_rate, 1)"/>%</td>
+                <td><t t-esc="formatNumber(d.cancelled_by_driver, 1)"/>%</td>
                 <td><t t-esc="formatNumber(d.completed_to_request, 1)"/>%</td>
                 <td><t t-esc="formatNumber(d.completion_rate, 1)"/>%</td>
+                <!--
                 <td><t t-esc="formatNumber(d.service_fee, 0)"/></td>
                 <td><t t-esc="formatNumber(d.partner_fee, 0)"/></td>
+                -->
               </tr>
             </t>
           </tbody>

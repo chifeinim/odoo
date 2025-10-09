@@ -188,6 +188,7 @@ export class OwlPerformanceDashboard extends Component {
         avgSupplyHoursPerDriver: [], utilisation: [], efficiency: [],
         acceptanceRate: [], completedToRequest: [], completionRate: [],
         serviceFee: [], partnerFee: [],
+        cancelledByDriverPct: [],
       },
       allDrivers: 0,
       distributions: { product: [], quality: [], category: [] },
@@ -222,6 +223,7 @@ export class OwlPerformanceDashboard extends Component {
     this.chartQuality  = useRef('chartQuality');
     this.chartProduct  = useRef('chartProduct');
     this.chartCategory = useRef('chartCategory');
+    this.chartCancelledByDriver = useRef('chartCancelledByDriver');
     
     this._charts     = {};
 
@@ -314,119 +316,76 @@ export class OwlPerformanceDashboard extends Component {
   }
 
   _renderCharts() {
-    const cfg = (label, data) => {
-      // helper to show "DD-MMM" from a few common date-ish strings
-      const formatDMmm = (input) => {
-        if (!input) return input;
-        const s = String(input);
-
-        // ISO like 2025-09-15 or 2025-09-15T...
-        const iso = /^(\d{4})-(\d{2})-(\d{2})/;
-        // Slash like 15/09/25 or 15/09/2025 (DD/MM/YY)
-        const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/;
-
-        let d, m, y;
-
-        if (iso.test(s)) {
-          const [, Y, M, D] = s.match(iso);
-          d = +D; m = +M; y = +Y;
-        } else if (slash.test(s)) {
-          const [, D, M, Y] = s.match(slash);
-          d = +D; m = +M; y = +Y;
-          if (y < 100) y += 2000;
-        } else {
-          const t = Date.parse(s);
-          if (!Number.isNaN(t)) {
-            const dt = new Date(t);
-            d = dt.getDate(); m = dt.getMonth() + 1; y = dt.getFullYear();
-          } else {
-            return s; // fallback unchanged
-          }
-        }
-
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        return `${String(d).padStart(2,'0')}-${months[m-1]}`;
-      };
-
-      return {
-        type: 'line',
-        data: {
-          labels: data.map(pt => pt.period),
-          datasets: [{ label, data: data.map(pt => pt.value), fill: false }],
-        },
-        options: {
-          // Hide gridlines on both axes
-          scales: {
-            x: {
-              display: true,
-              grid: { display: false, drawBorder: false },
-              ticks: {
-                autoSkip: true,
-                maxTicksLimit: 8,
-                // Use a function (not arrow) so `this` is the scale
-                callback: function(value) {
-                  const raw = this.getLabelForValue ? this.getLabelForValue(value) : value;
-                  return formatDMmm(raw);
-                },
-              },
-            },
-            y: {
-              display: true,
-              grid: { display: false, drawBorder: true },
-              ticks: { autoSkip: true, maxTicksLimit: 6 },
-            },
-          },
-          plugins: {
-            title: { display: true, text: label },
-            legend: { display: false },
-            // (optional) make tooltip title match axis format:
-            tooltip: {
-              callbacks: {
-                title: (items) => items?.length ? formatDMmm(items[0].label) : '',
+    const cfg = (label, data) => ({
+      type: 'line',
+      data: {
+        labels: data.map(pt => pt.period),
+        datasets: [{ label, data: data.map(pt => pt.value), fill: false }],
+      },
+      options: {
+        scales: {
+          x: {
+            display: true,
+            grid: { display: false, drawBorder: false },
+            ticks: {
+              autoSkip: true,
+              maxTicksLimit: 8,
+              callback: function (value) {
+                const raw = this.getLabelForValue ? this.getLabelForValue(value) : value;
+                // simple DD-MMM shortener
+                const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (!m) return raw;
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                return `${m[3]}-${months[+m[2]-1]}`;
               },
             },
           },
-          elements: {
-            point: { radius: 2, hitRadius: 8 },
-          },
-          maintainAspectRatio: false,
+          y: { display: true, grid: { display: false, drawBorder: true }, ticks: { autoSkip: true, maxTicksLimit: 6 } },
         },
-      };
-    };
-
-    const ctxA = this.chartActive.el.getContext('2d');
-    const ctxT = this.chartTrips.el.getContext('2d');
-    const ctxS = this.chartSupply.el.getContext('2d');
-    const ctxC = this.chartCash.el.getContext('2d');
-    const ctxM = this.chartMoneyPerHour.el.getContext('2d');
-    const ctxTP = this.chartTripsPerHour.el.getContext('2d');
-    const ctxAS = this.chartAvgSupply.el.getContext('2d');
-    const ctxU = this.chartUtilisation.el.getContext('2d');
-    const ctxE = this.chartEfficiency.el.getContext('2d');
-    const ctxAcc = this.chartAcceptance.el.getContext('2d');
-    const ctxCTR = this.chartCompletedToRequest.el.getContext('2d');
-    const ctxCRate = this.chartCompletionRate.el.getContext('2d');
-    const ctxSF = this.chartServiceFee.el.getContext('2d');
-    const ctxPF = this.chartPartnerFee.el.getContext('2d');
-
-    ['active','trips','supply','cash','moneyPerHour','tripsPerHour','avgSupplyHoursPerDriver', 'utilisation', 'efficiency','acceptanceRate','completedToRequest','completionRate','serviceFee','partnerFee'].forEach(k => {
-      if (this._charts[k]) { this._charts[k].destroy(); }
+        plugins: {
+          title: { display: true, text: label },
+          legend: { display: false },
+        },
+        elements: { point: { radius: 2, hitRadius: 8 } },
+        maintainAspectRatio: false,
+      },
     });
-    this._charts.active = new Chart(ctxA, cfg('Active Drivers', this.state.series.activeDrivers));
-    this._charts.trips  = new Chart(ctxT, cfg('Total Trips',    this.state.series.trips));
-    this._charts.supply = new Chart(ctxS, cfg('Supply Hours',   this.state.series.supplyHours));
-    this._charts.cash   = new Chart(ctxC, cfg('Gross Revenue',   this.state.series.cashEarned));
-    this._charts.moneyPerHour = new Chart(ctxM, cfg('Revenue / Hour',   this.state.series.moneyPerHour));
-    this._charts.tripsPerHour = new Chart(ctxTP, cfg('Trips / Hour', this.state.series.tripsPerHour));
-    this._charts.avgSupplyHoursPerDriver = new Chart(ctxAS, cfg('SH per Active Driver', this.state.series.avgSupplyHoursPerDriver));
-    this._charts.utilisation = new Chart(ctxU ,cfg('Utilisation %', this.state.series.utilisation));
-    this._charts.efficiency = new Chart(ctxE ,cfg('Efficiency %', this.state.series.efficiency));
-    this._charts.acceptanceRate = new Chart(ctxAcc,cfg('Acceptance Rate %', this.state.series.acceptanceRate));
-    this._charts.completedToRequest = new Chart(ctxCTR,cfg('Completed to Request %', this.state.series.completedToRequest));
-    this._charts.completionRate = new Chart(ctxCRate,cfg('Completion Rate %', this.state.series.completionRate));
 
-    this._charts.serviceFee = new Chart(ctxSF,cfg('Service Fee', this.state.series.serviceFee));
-    this._charts.partnerFee = new Chart(ctxPF,cfg('Partner Fee', this.state.series.partnerFee));
+    const ctx = (ref) => (ref && ref.el) ? ref.el.getContext('2d') : null;
+
+    // Destroy any existing charts
+    [
+      'active','trips','supply','cash','moneyPerHour','tripsPerHour',
+      'avgSupplyHoursPerDriver','utilisation','efficiency',
+      'acceptanceRate','completedToRequest','completionRate',
+      'serviceFee','partnerFee','cancelledByDriverPct'
+    ].forEach(k => { if (this._charts[k]) { this._charts[k].destroy(); delete this._charts[k]; } });
+
+    // Define all potential charts with their refs + data
+    const charts = [
+      ['active', ctx(this.chartActive), 'Active Drivers', this.state.series.activeDrivers],
+      ['trips', ctx(this.chartTrips), 'Total Trips', this.state.series.trips],
+      ['supply', ctx(this.chartSupply), 'Supply Hours', this.state.series.supplyHours],
+      ['cash', ctx(this.chartCash), 'Gross Revenue', this.state.series.cashEarned],
+      ['moneyPerHour', ctx(this.chartMoneyPerHour), 'Revenue / Hour', this.state.series.moneyPerHour],
+      ['tripsPerHour', ctx(this.chartTripsPerHour), 'Trips / Hour', this.state.series.tripsPerHour],
+      ['avgSupplyHoursPerDriver', ctx(this.chartAvgSupply), 'SH per Active Driver', this.state.series.avgSupplyHoursPerDriver],
+      // commented canvases may return null and will be skipped:
+      ['utilisation', ctx(this.chartUtilisation), 'Utilisation %', this.state.series.utilisation],
+      ['efficiency', ctx(this.chartEfficiency), 'Efficiency %', this.state.series.efficiency],
+      ['acceptanceRate', ctx(this.chartAcceptance), 'Acceptance Rate %', this.state.series.acceptanceRate],
+      ['completedToRequest', ctx(this.chartCompletedToRequest), 'Completed to Request %', this.state.series.completedToRequest],
+      ['completionRate', ctx(this.chartCompletionRate), 'Completion Rate %', this.state.series.completionRate],
+      ['cancelledByDriverPct', ctx(this.chartCancelledByDriver), 'Cancelled by Driver %', this.state.series.cancelledByDriverPct],
+      ['serviceFee', ctx(this.chartServiceFee), 'Service Fee', this.state.series.serviceFee],
+      ['partnerFee', ctx(this.chartPartnerFee), 'Partner Fee', this.state.series.partnerFee],
+    ];
+
+    // Create charts only when the canvas exists
+    for (const [key, context, label, data] of charts) {
+      if (!context) continue; // canvas not in DOM (e.g., commented out)
+      this._charts[key] = new Chart(context, cfg(label, data));
+    }
   }
 
   toggleFilter(listName, value) {
