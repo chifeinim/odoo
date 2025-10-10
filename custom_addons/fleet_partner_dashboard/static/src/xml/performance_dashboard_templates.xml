@@ -418,9 +418,7 @@
                 </div>
               </div>
             </div>
-          </div>
-          <!-- fifth row: Service Fee -->
-          <div class="row mb-4">
+            <!-- Service Fee -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
@@ -445,6 +443,9 @@
                 </div>
               </div>
             </div>
+          </div>
+          <!-- fifth row: -->
+          <div class="row mb-4">
             <!-- Partner Fee -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
