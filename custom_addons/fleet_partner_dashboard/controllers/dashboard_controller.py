@@ -549,6 +549,15 @@ class FleetDashboardController(http.Controller):
 
         avg_supply        = _safe_div(supply_current, active_current) if active_current else 0.0
         avg_supply_prev   = _safe_div(supply_previous, active_previous) if active_previous else 0.0
+        
+        current_range = {
+            'start': df and df.strftime('%Y-%m-%d'),
+            'end':   dt_ and dt_.strftime('%Y-%m-%d'),
+        }
+        previous_range = {
+            'start': prev_df and prev_df.strftime('%Y-%m-%d'),
+            'end':   prev_dt and prev_dt.strftime('%Y-%m-%d'),
+        }
 
         metrics = {
             'activeDrivers':     active_current,
@@ -690,12 +699,14 @@ class FleetDashboardController(http.Controller):
                 'service_fee':    cash * 0.10,
                 'partner_fee':    cash * 0.03,
             }
-
+        
         return {
             'metrics': metrics,
             'series':  series,
             'data':    data,
             'allDrivers': total_drivers,
+            'range': current_range,
+            'prev_range': previous_range,
             'distributions': {
                 'product':  prod_dist,
                 'quality':  qual_dist,

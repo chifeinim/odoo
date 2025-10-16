@@ -263,6 +263,10 @@ export class OwlPerformanceDashboard extends Component {
     this.state.data          = resp.data;
     this.state.allDrivers    = resp.allDrivers;
     this.state.distributions = resp.distributions;
+    if (resp.range) {
+      this.state.startDate = resp.range.start || '';
+      this.state.endDate   = resp.range.end   || '';
+    }
     this.state.loading       = false;
     // onPatched() will run next and draw charts if needed
   }
@@ -400,17 +404,21 @@ export class OwlPerformanceDashboard extends Component {
     this.state.selectedPeriod = p;
     this.state.showPeriod    = false;
     this.state.page = 1;
+    this.state.startDate = '';
+    this.state.endDate = '';
     this._fetchData();
   }
   toggleDropdown(f) { this.state[f] = !this.state[f]; }
   toggleView()      { this.state.showCharts = !this.state.showCharts; }
   onStartDateChange(ev) {
     this.state.startDate = ev.target.value;
+    this.state.selectedPeriod = 'Custom Range';
     this.state.page = 1;
     if (this.state.startDate && this.state.endDate) this._fetchData();
   }
   onEndDateChange(ev) {
     this.state.endDate = ev.target.value;
+    this.state.selectedPeriod = 'Custom Range';
     this.state.page = 1;
     if (this.state.startDate && this.state.endDate) this._fetchData();
   }
