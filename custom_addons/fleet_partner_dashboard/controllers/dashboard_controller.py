@@ -952,6 +952,7 @@ class FleetDashboardController(http.Controller):
                 'risk_from':  risk_df.strftime('%Y-%m-%d'),
                 'risk_to':    risk_dt.strftime('%Y-%m-%d'),
             },
+            'range': {'start': df.strftime('%Y-%m-%d'), 'end': dt_.strftime('%Y-%m-%d')},
         }
         
     @http.route('/fleet_low_performers/driver_detail', type='json', auth='user')

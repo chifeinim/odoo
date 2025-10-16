@@ -121,9 +121,13 @@
 
           <!-- Manual dates -->
           <div class="d-flex align-items-center gap-2 ms-auto">
-            <input type="date" class="form-control" style="min-width: 180px" t-on-change="onStartDateChange"/>
+            <input type="date" class="form-control" style="min-width: 180px"
+                  t-att-value="state.startDate"
+                  t-on-change="onStartDateChange"/>
             <span>to</span>
-            <input type="date" class="form-control" style="min-width: 180px" t-on-change="onEndDateChange"/>
+            <input type="date" class="form-control" style="min-width: 180px"
+                  t-att-value="state.endDate"
+                  t-on-change="onEndDateChange"/>
           </div>
         </div>
 

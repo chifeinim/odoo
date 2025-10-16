@@ -156,6 +156,13 @@ export class OwlLowPerformersDashboard extends Component {
     const resp = await this.env.services.rpc('/fleet_low_performers/data', params);
     this.state.data    = resp.data || {};
     this.state.meta    = resp.meta || null;
+    if (this.state.meta?.table_from) this.state.startDate = this.state.meta.table_from;
+    if (this.state.meta?.table_to)   this.state.endDate   = this.state.meta.table_to;
+    // Also support an optional 'range' alias if you add it server-side
+    if (resp.range) {
+      this.state.startDate = resp.range.start || this.state.startDate;
+      this.state.endDate   = resp.range.end   || this.state.endDate;
+    }
     this.state.loading = false;
   }
 
@@ -232,9 +239,27 @@ export class OwlLowPerformersDashboard extends Component {
     const i = list.indexOf(value); if (i === -1) list.push(value); else list.splice(i, 1);
     this.state.page = 1; this._fetchData();
   }
-  changePeriod(p) { this.state.selectedPeriod = p; this.state.showPeriod = false; this.state.page = 1; this._fetchData(); }
-  onStartDateChange(ev) { this.state.startDate = ev.target.value; this.state.page = 1; if (this.state.startDate && this.state.endDate) this._fetchData(); }
-  onEndDateChange(ev) { this.state.endDate = ev.target.value; this.state.page = 1; if (this.state.startDate && this.state.endDate) this._fetchData(); }
+  changePeriod(p) {
+    this.state.selectedPeriod = p;
+    this.state.showPeriod = false;
+    this.state.page = 1;
+    // NEW: clear manual dates; fetch will repopulate with the server’s df/dt_
+    this.state.startDate = '';
+    this.state.endDate = '';
+    this._fetchData();
+  }
+  onStartDateChange(ev) {
+    this.state.startDate = ev.target.value;
+    this.state.selectedPeriod = 'Custom Range';   // NEW
+    this.state.page = 1;
+    if (this.state.startDate && this.state.endDate) this._fetchData();
+  }
+  onEndDateChange(ev) {
+    this.state.endDate = ev.target.value;
+    this.state.selectedPeriod = 'Custom Range';   // NEW
+    this.state.page = 1;
+    if (this.state.startDate && this.state.endDate) this._fetchData();
+  }
   onSearchChange(ev) { this.state.search = ev.target.value || ''; this.state.page = 1; }
 
   // modal
