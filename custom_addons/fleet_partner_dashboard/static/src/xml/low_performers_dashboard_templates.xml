@@ -106,7 +106,7 @@
           <!-- Period -->
           <div class="dropdown" t-att-class="{'show': state.showPeriod}">
             <button class="btn btn-primary dropdown-toggle" t-on-click="() => toggleDropdown('showPeriod')">
-              Date
+              <t t-esc="periodButtonLabel()"/>
             </button>
             <div class="dropdown-menu" t-att-class="{'show': state.showPeriod}">
               <t t-foreach="state.timePeriods" t-as="p" t-key="p">

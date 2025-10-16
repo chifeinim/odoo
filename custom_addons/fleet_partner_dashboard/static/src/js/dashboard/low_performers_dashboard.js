@@ -10,7 +10,22 @@ export class OwlLowPerformersDashboard extends Component {
     const n = Number(v); if (Number.isNaN(n)) return v ?? '';
     return new Intl.NumberFormat('en-GB', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n);
   }
-
+  formatDateYMDToDMY(ymd) {
+    if (!ymd) return '';
+    const [y,m,d] = ymd.split('-').map(Number);
+    if (!y || !m || !d) return ymd;
+    return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
+  }
+  periodButtonLabel() {
+    const p = this.state.selectedPeriod || '';
+    if (p && p !== 'Custom Range') return p;
+    if (this.state.startDate && this.state.endDate) {
+      const a = this.formatDateYMDToDMY(this.state.startDate);
+      const b = this.formatDateYMDToDMY(this.state.endDate);
+      return `${a} – ${b}`;
+    }
+    return 'Date';
+  }
   sortArrow(key) {
     return this.state.sortKey === key ? (this.state.sortDir === 'asc' ? '▲' : '▼') : '';
   }
