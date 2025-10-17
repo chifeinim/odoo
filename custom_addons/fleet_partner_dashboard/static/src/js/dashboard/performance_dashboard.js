@@ -17,6 +17,13 @@ export class OwlPerformanceDashboard extends Component {
     return (s || '').replace(/\D/g, '');
   }
 
+  periodButtonLabel() {
+    const p = this.state.draftSelectedPeriod || '';
+    if (!p) return 'Date';
+    if (p === 'Custom Range') return 'Custom Range';
+    return p; // 'Last Week', 'Last Month', etc.
+  }
+
   qualityClass(score) {
     const s = (score || '').toString().trim().toLowerCase();
     if (s === 'low performer') return 'text-danger font-weight-bold fw-bold';
@@ -67,14 +74,17 @@ export class OwlPerformanceDashboard extends Component {
     );
   }
   applyFilters = async () => {
-    // copy drafts → applied, then fetch once
-    this.state.selectedProducts = [...this.state.draftSelectedProducts];
-    this.state.selectedScores = [...this.state.draftSelectedScores];
-    this.state.selectedCategories = [...this.state.draftSelectedCategories];
-    this.state.selectedPeriod = this.state.draftSelectedPeriod;
-    this.state.startDate = this.state.draftStartDate;
-    this.state.endDate = this.state.draftEndDate;
-    this.state.page = 1;
+   this.state.selectedProducts   = [...this.state.draftSelectedProducts];
+   this.state.selectedScores     = [...this.state.draftSelectedScores];
+   this.state.selectedCategories = [...this.state.draftSelectedCategories];
+   this.state.selectedPeriod     = this.state.draftSelectedPeriod;
+   if (this.state.draftSelectedPeriod === 'Custom Range') {
+     this.state.startDate = this.state.draftStartDate;
+     this.state.endDate   = this.state.draftEndDate;
+   } else {
+     this.state.startDate = '';
+     this.state.endDate   = '';
+   }
     await this._fetchData();
     // backend returns resp.range; keep drafts aligned with what actually applied
     this.state.draftSelectedProducts = [...this.state.selectedProducts];
@@ -453,6 +463,8 @@ export class OwlPerformanceDashboard extends Component {
     this.state.draftSelectedPeriod = p;
     this.state.showPeriod = false;
     this.state.page = 1;
+    this.state.draftStartDate = '';
+    this.state.draftEndDate   = '';
   }
   toggleDropdown(f) { this.state[f] = !this.state[f]; }
   toggleView()      { this.state.showCharts = !this.state.showCharts; }

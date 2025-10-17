@@ -17,15 +17,51 @@ export class OwlLowPerformersDashboard extends Component {
     return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
   }
   periodButtonLabel() {
-    const p = this.state.selectedPeriod || '';
-    if (p && p !== 'Custom Range') return p;
-    if (this.state.startDate && this.state.endDate) {
-      const a = this.formatDateYMDToDMY(this.state.startDate);
-      const b = this.formatDateYMDToDMY(this.state.endDate);
-      return `${a} – ${b}`;
-    }
-    return 'Date';
+    const p = this.state.draftSelectedPeriod || '';
+    if (!p) return 'Date';
+    if (p === 'Custom Range') return 'Custom Range';
+    return p; // 'This Week', 'Last Week', 'Last Month', 'Last 3 Months'
   }
+  _isSameArray(a, b) {
+    if (a === b) return true;
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    const A = [...a].sort(); const B = [...b].sort();
+    return A.every((v, i) => String(v) === String(B[i]));
+  }
+  isDirty() {
+    return !(
+      this._isSameArray(this.state.draftSelectedProducts, this.state.selectedProducts) &&
+      this._isSameArray(this.state.draftSelectedScores, this.state.selectedScores) &&
+      this._isSameArray(this.state.draftSelectedCategories, this.state.selectedCategories) &&
+      this._isSameArray(this.state.draftSelectedRisks, this.state.selectedRisks) &&
+      this._isSameArray(this.state.draftSelectedIssues, this.state.selectedIssues) &&
+      this.state.draftSelectedPeriod === this.state.selectedPeriod &&
+      this.state.draftStartDate === this.state.startDate &&
+      this.state.draftEndDate === this.state.endDate
+    );
+  }
+  applyFilters = async () => {
+    this.state.selectedProducts    = [...this.state.draftSelectedProducts];
+    this.state.selectedScores      = [...this.state.draftSelectedScores];
+    this.state.selectedCategories  = [...this.state.draftSelectedCategories];
+    this.state.selectedRisks       = [...this.state.draftSelectedRisks];
+    this.state.selectedIssues      = [...this.state.draftSelectedIssues];
+    this.state.selectedPeriod      = this.state.draftSelectedPeriod;
+    this.state.startDate           = this.state.draftStartDate;
+    this.state.endDate             = this.state.draftEndDate;
+    this.state.page = 1;
+    await this._fetchData();
+    // sync drafts with applied (and any server-corrected dates)
+    this.state.draftSelectedProducts = [...this.state.selectedProducts];
+    this.state.draftSelectedScores = [...this.state.selectedScores];
+    this.state.draftSelectedCategories = [...this.state.selectedCategories];
+    this.state.draftSelectedRisks = [...this.state.selectedRisks];
+    this.state.draftSelectedIssues = [...this.state.selectedIssues];
+    this.state.draftSelectedPeriod = this.state.selectedPeriod;
+    this.state.draftStartDate = this.state.startDate;
+    this.state.draftEndDate = this.state.endDate;
+  };
   sortArrow(key) {
     return this.state.sortKey === key ? (this.state.sortDir === 'asc' ? '▲' : '▼') : '';
   }
@@ -114,6 +150,14 @@ export class OwlLowPerformersDashboard extends Component {
       selectedIssues: [],
       selectedPeriod: 'Last Week',
       startDate: '', endDate: '',
+      draftSelectedProducts: [],
+      draftSelectedScores: [],
+      draftSelectedCategories: [],
+      draftSelectedIssues: [],
+      draftSelectedRisks: ['High','Medium'],
+      draftSelectedPeriod: 'Last Week',
+      draftStartDate: '',
+      draftEndDate: '',
       // UI
       infoText:
         'Shows drivers flagged as Medium/High risk based on the last 7 days (ending yesterday), averaging over 6 days.\n' +
@@ -143,6 +187,13 @@ export class OwlLowPerformersDashboard extends Component {
         return x !== 'archive' && x !== 'new' && x !== 'churn' && x !== 'other';
       });
       await this._fetchData();
+      this.state.draftSelectedProducts = [...this.state.selectedProducts];
+      this.state.draftSelectedScores = [...this.state.selectedScores];
+      this.state.draftSelectedCategories = [...this.state.selectedCategories];
+      this.state.draftSelectedRisks = [...this.state.selectedRisks];
+      this.state.draftSelectedPeriod = this.state.selectedPeriod;
+      this.state.draftStartDate = this.state.startDate;
+      this.state.draftEndDate = this.state.endDate;
     });
 
     onPatched(() => {
@@ -249,31 +300,30 @@ export class OwlLowPerformersDashboard extends Component {
 
   // filter controls
   toggleDropdown(k) { this.state[k] = !this.state[k]; }
-  toggleFilter(listName, value) {
-    const list = this.state[listName];
-    const i = list.indexOf(value); if (i === -1) list.push(value); else list.splice(i, 1);
-    this.state.page = 1; this._fetchData();
+  toggleFilter(listName, value, isDraft = true) {
+    const key = isDraft ? `draft${listName[0].toUpperCase()}${listName.slice(1)}` : listName;
+    if (!Array.isArray(this.state[key])) this.state[key] = [];  // guard
+    const list = this.state[key];
+    const i = list.indexOf(value);
+    if (i === -1) list.push(value); else list.splice(i, 1);
+    this.state.page = 1;
   }
   changePeriod(p) {
-    this.state.selectedPeriod = p;
+    this.state.draftSelectedPeriod = p;
     this.state.showPeriod = false;
     this.state.page = 1;
-    // NEW: clear manual dates; fetch will repopulate with the server’s df/dt_
-    this.state.startDate = '';
-    this.state.endDate = '';
-    this._fetchData();
+    this.state.draftStartDate = '';
+    this.state.draftEndDate = '';
   }
   onStartDateChange(ev) {
-    this.state.startDate = ev.target.value;
-    this.state.selectedPeriod = 'Custom Range';   // NEW
+    this.state.draftStartDate = ev.target.value;
+    this.state.draftSelectedPeriod = 'Custom Range';
     this.state.page = 1;
-    if (this.state.startDate && this.state.endDate) this._fetchData();
   }
   onEndDateChange(ev) {
-    this.state.endDate = ev.target.value;
-    this.state.selectedPeriod = 'Custom Range';   // NEW
+    this.state.draftEndDate = ev.target.value;
+    this.state.draftSelectedPeriod = 'Custom Range';
     this.state.page = 1;
-    if (this.state.startDate && this.state.endDate) this._fetchData();
   }
   onSearchChange(ev) { this.state.search = ev.target.value || ''; this.state.page = 1; }
 

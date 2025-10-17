@@ -18,12 +18,12 @@
           <div class="dropdown" t-att-class="{'show': state.showProducts}">
             <button class="btn btn-primary dropdown-toggle" t-on-click="() => toggleDropdown('showProducts')">
               Anda Product
-              <t t-if="state.selectedProducts.length">(<t t-esc="state.selectedProducts.length"/>)</t>
+              <t t-if="state.draftSelectedProducts.length">(<t t-esc="state.draftSelectedProducts.length"/>)</t>
             </button>
             <div class="dropdown-menu" t-att-class="{'show': state.showProducts}" style="max-height:200px;overflow:auto">
               <t t-foreach="state.productTypes" t-as="pt" t-key="pt.id">
                 <button class="dropdown-item"
-                        t-att-class="{'active': state.selectedProducts.includes(pt.id)}"
+                        t-att-class="{'active': state.draftSelectedProducts.includes(pt.id)}"
                         t-on-click="() => toggleFilter('selectedProducts', pt.id)">
                   <t t-esc="pt.name"/>
                 </button>
@@ -35,7 +35,7 @@
           <div class="dropdown" t-att-class="{'show': state.showScores}">
             <button class="btn btn-primary dropdown-toggle" t-on-click="() => toggleDropdown('showScores')">
               Driver Quality
-              <t t-if="state.selectedScores.length">(<t t-esc="state.selectedScores.length"/>)</t>
+              <t t-if="state.draftSelectedScores.length">(<t t-esc="state.draftSelectedScores.length"/>)</t>
             </button>
             <div class="dropdown-menu" t-att-class="{'show': state.showScores}">
               <t t-foreach="[
@@ -44,7 +44,7 @@
                   {key:'High Performer',label:'High Performer'}
                 ]" t-as="sc" t-key="sc.key">
                 <button class="dropdown-item"
-                        t-att-class="{'active': state.selectedScores.includes(sc.key)}"
+                        t-att-class="{'active': state.draftSelectedScores.includes(sc.key)}"
                         t-on-click="() => toggleFilter('selectedScores', sc.key)">
                   <t t-esc="sc.label"/>
                 </button>
@@ -56,12 +56,12 @@
           <div class="dropdown" t-att-class="{'show': state.showCategories}">
             <button class="btn btn-primary dropdown-toggle" t-on-click="() => toggleDropdown('showCategories')">
               Driver Category
-              <t t-if="state.selectedCategories.length">(<t t-esc="state.selectedCategories.length"/>)</t>
+              <t t-if="state.draftSelectedCategories.length">(<t t-esc="state.draftSelectedCategories.length"/>)</t>
             </button>
             <div class="dropdown-menu" t-att-class="{'show': state.showCategories}" style="max-height:220px;overflow:auto">
               <t t-foreach="state.categories" t-as="ct" t-key="ct">
                 <button class="dropdown-item"
-                        t-att-class="{'active': state.selectedCategories.includes(ct)}"
+                        t-att-class="{'active': state.draftSelectedCategories.includes(ct)}"
                         t-on-click="() => toggleFilter('selectedCategories', ct)">
                   <t t-esc="ct"/>
                 </button>
@@ -73,12 +73,12 @@
           <div class="dropdown" t-att-class="{'show': state.showRisks}">
             <button class="btn btn-primary dropdown-toggle" t-on-click="() => toggleDropdown('showRisks')">
               Risk
-              <t t-if="state.selectedRisks.length">(<t t-esc="state.selectedRisks.length"/>)</t>
+              <t t-if="state.draftSelectedRisks.length">(<t t-esc="state.draftSelectedRisks.length"/>)</t>
             </button>
             <div class="dropdown-menu" t-att-class="{'show': state.showRisks}">
               <t t-foreach="state.risks" t-as="rk" t-key="rk.key">
                 <button class="dropdown-item"
-                        t-att-class="{'active': state.selectedRisks.includes(rk.key)}"
+                        t-att-class="{'active': state.draftSelectedRisks.includes(rk.key)}"
                         t-on-click="() => toggleFilter('selectedRisks', rk.key)">
                   <t t-esc="rk.label"/>
                 </button>
@@ -90,12 +90,12 @@
             <div class="dropdown" t-att-class="{'show': state.showIssues}">
             <button class="btn btn-primary dropdown-toggle" t-on-click="() => toggleDropdown('showIssues')">
                 Issues Reported
-                <t t-if="state.selectedIssues.length">(<t t-esc="state.selectedIssues.length"/>)</t>
+                <t t-if="state.draftSelectedIssues.length">(<t t-esc="state.draftSelectedIssues.length"/>)</t>
             </button>
             <div class="dropdown-menu" t-att-class="{'show': state.showIssues}">
                 <t t-foreach="[{key:'Yes',label:'Yes'},{key:'No',label:'No'}]" t-as="opt" t-key="opt.key">
                 <button class="dropdown-item"
-                        t-att-class="{'active': state.selectedIssues.includes(opt.key)}"
+                        t-att-class="{'active': state.draftSelectedIssues.includes(opt.key)}"
                         t-on-click="() => toggleFilter('selectedIssues', opt.key)">
                     <t t-esc="opt.label"/>
                 </button>
@@ -111,7 +111,7 @@
             <div class="dropdown-menu" t-att-class="{'show': state.showPeriod}">
               <t t-foreach="state.timePeriods" t-as="p" t-key="p">
                 <button class="dropdown-item"
-                        t-att-class="{'active': state.selectedPeriod === p}"
+                        t-att-class="{'active': state.draftSelectedPeriod === p}"
                         t-on-click="() => changePeriod(p)">
                   <t t-esc="p"/>
                 </button>
@@ -122,13 +122,20 @@
           <!-- Manual dates -->
           <div class="d-flex align-items-center gap-2 ms-auto">
             <input type="date" class="form-control" style="min-width: 180px"
-                  t-att-value="state.startDate"
+                  t-att-value="state.draftStartDate"
                   t-on-change="onStartDateChange"/>
             <span>to</span>
             <input type="date" class="form-control" style="min-width: 180px"
-                  t-att-value="state.endDate"
+                  t-att-value="state.draftEndDate"
                   t-on-change="onEndDateChange"/>
           </div>
+
+          <!-- Apply Filters -->
+          <button class="btn btn-primary"
+                  t-att-disabled="!isDirty()"
+                  t-on-click="applyFilters">
+            Apply Filters
+          </button>
         </div>
 
         <!-- SEARCH -->
