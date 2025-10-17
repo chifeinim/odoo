@@ -49,6 +49,42 @@ export class OwlPerformanceDashboard extends Component {
     return '';
   }
 
+  _isSameArray(a, b) {
+    if (a === b) return true;
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    const A = [...a].sort(); const B = [...b].sort();
+    return A.every((v, i) => String(v) === String(B[i]));
+  }
+  isDirty() {
+    return !(
+      this._isSameArray(this.state.draftSelectedProducts, this.state.selectedProducts) &&
+      this._isSameArray(this.state.draftSelectedScores, this.state.selectedScores) &&
+      this._isSameArray(this.state.draftSelectedCategories, this.state.selectedCategories) &&
+      this.state.draftSelectedPeriod === this.state.selectedPeriod &&
+      this.state.draftStartDate === this.state.startDate &&
+      this.state.draftEndDate === this.state.endDate
+    );
+  }
+  applyFilters = async () => {
+    // copy drafts → applied, then fetch once
+    this.state.selectedProducts = [...this.state.draftSelectedProducts];
+    this.state.selectedScores = [...this.state.draftSelectedScores];
+    this.state.selectedCategories = [...this.state.draftSelectedCategories];
+    this.state.selectedPeriod = this.state.draftSelectedPeriod;
+    this.state.startDate = this.state.draftStartDate;
+    this.state.endDate = this.state.draftEndDate;
+    this.state.page = 1;
+    await this._fetchData();
+    // backend returns resp.range; keep drafts aligned with what actually applied
+    this.state.draftSelectedProducts = [...this.state.selectedProducts];
+    this.state.draftSelectedScores = [...this.state.selectedScores];
+    this.state.draftSelectedCategories = [...this.state.selectedCategories];
+    this.state.draftSelectedPeriod = this.state.selectedPeriod;
+    this.state.draftStartDate = this.state.startDate;
+    this.state.draftEndDate = this.state.endDate;
+  };
+
   // robust comparator that handles numbers, strings, booleans, and ISO-ish dates
   _compareByKey(a, b, key) {
     const ax = a?.[key];
@@ -202,6 +238,12 @@ export class OwlPerformanceDashboard extends Component {
       timePeriods: ['Last Week','Last Month','Last 3 Months'],
       selectedProducts: [], selectedScores: [], selectedCategories: [], selectedPeriod: 'Last Week',
       startDate: '', endDate: '',
+      draftSelectedProducts: [],
+      draftSelectedScores: [],
+      draftSelectedCategories: [],
+      draftSelectedPeriod: 'Last Week',
+      draftStartDate: '',
+      draftEndDate: '',
       showProducts: false, showScores: false, showCategories: false, showPeriod: false,
       showCharts: false, search: '', sortKey: 'name', sortDir: 'asc',
       pageSize: 100, page: 1,
@@ -234,6 +276,12 @@ export class OwlPerformanceDashboard extends Component {
       this.state.productTypes = product_types;
       this.state.categories   = categories;
       await this._fetchData();
+      this.state.draftSelectedProducts = [...this.state.selectedProducts];
+      this.state.draftSelectedScores = [...this.state.selectedScores];
+      this.state.draftSelectedCategories = [...this.state.selectedCategories];
+      this.state.draftSelectedPeriod = this.state.selectedPeriod;
+      this.state.draftStartDate = this.state.startDate;
+      this.state.draftEndDate = this.state.endDate;
     });
 
     // whenever the DOM updates, if we're in chart mode, draw the charts
@@ -392,35 +440,31 @@ export class OwlPerformanceDashboard extends Component {
     }
   }
 
-  toggleFilter(listName, value) {
-    const list = this.state[listName];
+  toggleFilter(listName, value, isDraft = true) {
+    const key = isDraft ? `draft${listName[0].toUpperCase()}${listName.slice(1)}` : listName;
+    if (!Array.isArray(this.state[key])) this.state[key] = [];   // <-- guard
+    const list = this.state[key];
     const idx = list.indexOf(value);
     if (idx === -1) list.push(value);
     else            list.splice(idx, 1);
     this.state.page = 1;
-    this._fetchData();
   }
   changePeriod(p) {
-    this.state.selectedPeriod = p;
-    this.state.showPeriod    = false;
+    this.state.draftSelectedPeriod = p;
+    this.state.showPeriod = false;
     this.state.page = 1;
-    this.state.startDate = '';
-    this.state.endDate = '';
-    this._fetchData();
   }
   toggleDropdown(f) { this.state[f] = !this.state[f]; }
   toggleView()      { this.state.showCharts = !this.state.showCharts; }
   onStartDateChange(ev) {
-    this.state.startDate = ev.target.value;
-    this.state.selectedPeriod = 'Custom Range';
+    this.state.draftStartDate = ev.target.value;
+    this.state.draftSelectedPeriod = 'Custom Range';
     this.state.page = 1;
-    if (this.state.startDate && this.state.endDate) this._fetchData();
   }
   onEndDateChange(ev) {
-    this.state.endDate = ev.target.value;
-    this.state.selectedPeriod = 'Custom Range';
+    this.state.draftEndDate = ev.target.value;
+    this.state.draftSelectedPeriod = 'Custom Range';
     this.state.page = 1;
-    if (this.state.startDate && this.state.endDate) this._fetchData();
   }
   onSearchChange(ev) {
     this.state.search = ev.target.value || '';
