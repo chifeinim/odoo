@@ -312,11 +312,9 @@ export class OwlPerformanceDashboard extends Component {
       const row   = thead && thead.querySelector('tr');
       if (!thead || !row) return;
 
-      // measure current column widths (exact pixels)
       const ths = Array.from(row.children);
       const widths = ths.map(th => Math.ceil(th.getBoundingClientRect().width));
 
-      // rebuild host
       host.innerHTML = '';
       const track = document.createElement('div');
       track.className = 'fp-sticky-track';
@@ -327,41 +325,27 @@ export class OwlPerformanceDashboard extends Component {
 
       ths.forEach((th, i) => {
         const cth = document.createElement('th');
+
+        // --- CLEAN LABEL: remove any arrow/span from source <th>
+        const tmp = th.cloneNode(true);
+        tmp.querySelectorAll('span').forEach(s => s.remove()); // removes ▲/▼ span
+        const label = tmp.textContent.replace(/[▲▼]/g, '').trim();
+
         const w = widths[i] || 80;
+        cth.textContent = label;
+        cth.title = label;
         cth.style.width = `${w}px`;
         cth.style.minWidth = `${w}px`;
         cth.style.maxWidth = `${w}px`;
 
-        // label
-        const label = th.textContent.trim();
-        cth.appendChild(document.createTextNode(label));
+        // pass sort key through to the clone (from your data-sort-key)
+        cth.dataset.sortKey = th.dataset.sortKey || '';
 
-        // sort key from original header
-        const key = th.getAttribute('data-sort-key');
-        if (key) {
-          cth.classList.add('fp-sortable');
+        // click-to-sort
+        if (cth.dataset.sortKey) {
           cth.style.cursor = 'pointer';
-
-          // show current sort arrow
-          if (this.state.sortKey === key) {
-            const arrow = document.createElement('span');
-            arrow.className = 'ms-1';
-            arrow.textContent = this.state.sortDir === 'asc' ? '▲' : '▼';
-            cth.appendChild(arrow);
-          }
-
-          // click + keyboard activate sorting
-          const activate = (ev) => {
-            if (ev.type === 'click' || (ev.type === 'keydown' && (ev.key === 'Enter' || ev.key === ' '))) {
-              ev.preventDefault();
-              this.setSort(key);  // triggers Owl patch → clone rebuilds with new arrow
-            }
-          };
-          cth.tabIndex = 0;
-          cth.addEventListener('click', activate);
-          cth.addEventListener('keydown', activate);
+          cth.addEventListener('click', () => this.setSort(cth.dataset.sortKey));
         }
-
         cloneRow.appendChild(cth);
       });
 
@@ -370,26 +354,35 @@ export class OwlPerformanceDashboard extends Component {
       track.appendChild(cloneTable);
       host.appendChild(track);
 
-      // host matches current visible width of wrapper
       host.style.width = `${Math.ceil(wrap.getBoundingClientRect().width)}px`;
 
-      // sync horizontal scroll
-      const syncX = () => {
-        track.style.transform = `translateX(${- (wrap.scrollLeft || 0)}px)`;
-      };
-      syncX();
-      this._syncStickyHeaderX = syncX;
-
-      // show clone only when the real header has scrolled above the sticky line
+      const syncX = () => { track.style.transform = `translateX(${- (wrap.scrollLeft || 0)}px)`; };
       const syncVisibility = () => {
-        const headBox = thead.getBoundingClientRect();
-        const hostBox = host.getBoundingClientRect();
-        // show clone once the real header has scrolled past the sticky line
-        const beyondTop = headBox.bottom <= hostBox.top + 1;
-        host.classList.toggle('fp-hidden', !beyondTop);
+        host.classList.toggle('fp-hidden', !(thead.getBoundingClientRect().top < host.getBoundingClientRect().top));
       };
-      syncVisibility();
+      syncX(); syncVisibility();
+      this._syncStickyHeaderX = syncX;
       this._syncStickyHeaderVisibility = syncVisibility;
+
+      // ensure only one arrow is shown
+      this._updateCloneSortIndicators();
+    };
+
+    this._updateCloneSortIndicators = () => {
+      const host = this.stickyHostRef.el;
+      if (!host) return;
+      host.querySelectorAll('th').forEach(cth => {
+        // remove any previous arrow we added
+        cth.querySelector('.fp-arrow')?.remove();
+
+        const key = cth.dataset.sortKey;
+        if (key && key === this.state.sortKey) {
+          const arrow = document.createElement('span');
+          arrow.className = 'fp-arrow ms-1';
+          arrow.textContent = this.state.sortDir === 'asc' ? '▲' : '▼';
+          cth.appendChild(arrow);
+        }
+      });
     };
 
     // === NEW: measure & set CSS variables for sticky offsets ===
@@ -468,7 +461,8 @@ export class OwlPerformanceDashboard extends Component {
     onPatched(() => {
       this._recomputeStickyHeights && this._recomputeStickyHeights();
       this._buildStickyHeader && this._buildStickyHeader();
-      this._attachStickyListeners();             // <— NEW
+      this._attachStickyListeners();
+      this._updateCloneSortIndicators && this._updateCloneSortIndicators();
       if (this.state.showCharts && !this.state.loading) {
         this._renderDistributionCharts();
         this._renderCharts();
