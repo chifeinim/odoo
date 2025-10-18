@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 const { Component, hooks } = owl;
-const { onMounted, onPatched, useState, useRef } = hooks;
+const { onMounted, onPatched, onWillUnmount, useState, useRef } = hooks;
 import { registry } from '@web/core/registry';
 
 export class OwlPerformanceDashboard extends Component {
@@ -13,15 +13,57 @@ export class OwlPerformanceDashboard extends Component {
       maximumFractionDigits: digits,
     }).format(n);
   }
-  digits(s) {
-    return (s || '').replace(/\D/g, '');
-  }
+  digits(s) { return (s || '').replace(/\D/g, ''); }
 
   periodButtonLabel() {
     const p = this.state.draftSelectedPeriod || '';
     if (!p) return 'Date';
     if (p === 'Custom Range') return 'Custom Range';
-    return p; // 'Last Week', 'Last Month', etc.
+    return p;
+  }
+
+  // Closest vertical scroll container; falls back to window
+  _getScrollContainer(el) {
+    const bad = /(auto|scroll)/;
+    let n = el;
+    while (n && n !== document.body && n !== document.documentElement) {
+      const cs = getComputedStyle(n);
+      const hasY = bad.test(cs.overflowY) || bad.test(cs.overflow);
+      if (hasY && n.scrollHeight > n.clientHeight) return n;
+      n = n.parentElement;
+    }
+    return window;
+  }
+
+  // Attach (or reattach) scroll listeners to current containers
+  _attachStickyListeners() {
+    const host = this.stickyHostRef?.el || this.el;
+    const wrap = this.tableWrapRef?.el;
+
+    // pick the correct vertical scroller each time
+    const scroller = this._getScrollContainer(host);
+
+    // detach old
+    if (this._scrollTarget && this._onRootScroll) {
+      this._scrollTarget.removeEventListener('scroll', this._onRootScroll);
+    }
+    if (this._wrapTarget && this._onWrapScroll) {
+      this._wrapTarget.removeEventListener('scroll', this._onWrapScroll);
+    }
+
+    // bind new
+    this._onRootScroll = () => this._syncStickyHeaderVisibility && this._syncStickyHeaderVisibility();
+    this._onWrapScroll = () => this._syncStickyHeaderX && this._syncStickyHeaderX();
+
+    this._scrollTarget = scroller;
+    this._wrapTarget   = wrap;
+
+    scroller.addEventListener('scroll', this._onRootScroll, { passive: true });
+    if (wrap) wrap.addEventListener('scroll', this._onWrapScroll, { passive: true });
+
+    // run once now
+    this._syncStickyHeaderVisibility && this._syncStickyHeaderVisibility();
+    this._syncStickyHeaderX && this._syncStickyHeaderX();
   }
 
   qualityClass(score) {
@@ -32,27 +74,16 @@ export class OwlPerformanceDashboard extends Component {
     return '';
   }
   setSort(key) {
-    if (this.state.sortKey === key) {
-      this.state.sortDir = this.state.sortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-      this.state.sortKey = key;
-      this.state.sortDir = 'asc';
-    }
+    if (this.state.sortKey === key) this.state.sortDir = this.state.sortDir === 'asc' ? 'desc' : 'asc';
+    else { this.state.sortKey = key; this.state.sortDir = 'asc'; }
     this.state.page = 1;
   }
   qualityBgStyle(score) {
     const s = (score || '').toString().trim().toLowerCase();
-    // Prefer Bootstrap 5 “subtle” background tokens if present, with hex fallbacks
-    const common = 'color:#000; font-weight:600;'; // keep text black & bold
-    if (s === 'low performer') {
-      return `${common} background-color: var(--bs-danger-bg-subtle, #f8d7da);`;
-    }
-    if (s === 'average performer') {
-      return `${common} background-color: var(--bs-warning-bg-subtle, #fff3cd);`;
-    }
-    if (s === 'high performer') {
-      return `${common} background-color: var(--bs-success-bg-subtle, #d4edda);`;
-    }
+    const common = 'color:#000; font-weight:600;';
+    if (s === 'low performer') return `${common} background-color: var(--bs-danger-bg-subtle, #f8d7da);`;
+    if (s === 'average performer') return `${common} background-color: var(--bs-warning-bg-subtle, #fff3cd);`;
+    if (s === 'high performer') return `${common} background-color: var(--bs-success-bg-subtle, #d4edda);`;
     return '';
   }
 
@@ -74,25 +105,29 @@ export class OwlPerformanceDashboard extends Component {
     );
   }
   applyFilters = async () => {
-   this.state.selectedProducts   = [...this.state.draftSelectedProducts];
-   this.state.selectedScores     = [...this.state.draftSelectedScores];
-   this.state.selectedCategories = [...this.state.draftSelectedCategories];
-   this.state.selectedPeriod     = this.state.draftSelectedPeriod;
-   if (this.state.draftSelectedPeriod === 'Custom Range') {
-     this.state.startDate = this.state.draftStartDate;
-     this.state.endDate   = this.state.draftEndDate;
-   } else {
-     this.state.startDate = '';
-     this.state.endDate   = '';
-   }
+    this.state.selectedProducts   = [...this.state.draftSelectedProducts];
+    this.state.selectedScores     = [...this.state.draftSelectedScores];
+    this.state.selectedCategories = [...this.state.draftSelectedCategories];
+    this.state.selectedPeriod     = this.state.draftSelectedPeriod;
+    if (this.state.draftSelectedPeriod === 'Custom Range') {
+      this.state.startDate = this.state.draftStartDate;
+      this.state.endDate   = this.state.draftEndDate;
+    } else {
+      this.state.startDate = '';
+      this.state.endDate   = '';
+    }
     await this._fetchData();
-    // backend returns resp.range; keep drafts aligned with what actually applied
     this.state.draftSelectedProducts = [...this.state.selectedProducts];
     this.state.draftSelectedScores = [...this.state.selectedScores];
     this.state.draftSelectedCategories = [...this.state.selectedCategories];
     this.state.draftSelectedPeriod = this.state.selectedPeriod;
     this.state.draftStartDate = this.state.startDate;
     this.state.draftEndDate = this.state.endDate;
+    this._recomputeStickyHeights && this._recomputeStickyHeights();
+    this._buildStickyHeader && this._buildStickyHeader();
+    this._attachStickyListeners();
+
+    setTimeout(() => this._buildStickyHeader && this._buildStickyHeader(), 0);
   };
 
   // robust comparator that handles numbers, strings, booleans, and ISO-ish dates
@@ -258,6 +293,90 @@ export class OwlPerformanceDashboard extends Component {
       showCharts: false, search: '', sortKey: 'name', sortDir: 'asc',
       pageSize: 100, page: 1,
     });
+
+    // === NEW: sticky layer refs ===
+    this.filtersBarRef = useRef('filtersBar');
+    this.searchBarRef  = useRef('searchBar');
+    this.tableWrapRef   = useRef('tableWrap');
+    this.tableRef       = useRef('driversTable');
+    this.stickyHostRef  = useRef('stickyHeader');
+
+    // === helper to (re)build the clone ===
+    this._buildStickyHeader = () => {
+      const table = this.tableRef.el;
+      const wrap  = this.tableWrapRef.el;
+      const host  = this.stickyHostRef.el;
+      if (!table || !wrap || !host) return;
+
+      const thead = table.querySelector('thead');
+      const row   = thead && thead.querySelector('tr');
+      if (!thead || !row) return;
+
+      // measure current column widths (exact pixels)
+      const ths = Array.from(row.children);
+      const widths = ths.map(th => Math.ceil(th.getBoundingClientRect().width));
+
+      // rebuild host
+      host.innerHTML = '';
+      const track = document.createElement('div');
+      track.className = 'fp-sticky-track';
+
+      const cloneTable = document.createElement('table');
+      const cloneHead  = document.createElement('thead');
+      const cloneRow   = document.createElement('tr');
+
+      ths.forEach((th, i) => {
+        const cth = document.createElement('th');
+        const w = widths[i] || 80;
+        // copy the visible text (keeps things simple)
+        cth.textContent = th.textContent.trim();
+        cth.style.width = `${w}px`;
+        cth.style.minWidth = `${w}px`;
+        cth.style.maxWidth = `${w}px`;
+        cth.title = cth.textContent;
+        cloneRow.appendChild(cth);
+      });
+
+      cloneHead.appendChild(cloneRow);
+      cloneTable.appendChild(cloneHead);
+      track.appendChild(cloneTable);
+      host.appendChild(track);
+
+      // host matches current visible width of wrapper
+      host.style.width = `${Math.ceil(wrap.getBoundingClientRect().width)}px`;
+
+      // sync horizontal scroll
+      const syncX = () => {
+        track.style.transform = `translateX(${- (wrap.scrollLeft || 0)}px)`;
+      };
+      syncX();
+      this._syncStickyHeaderX = syncX;
+
+      // show clone only when the real header has scrolled above the sticky line
+      const syncVisibility = () => {
+        const headBox = thead.getBoundingClientRect();
+        const hostBox = host.getBoundingClientRect();
+        // show clone once the real header has scrolled past the sticky line
+        const beyondTop = headBox.bottom <= hostBox.top + 1;
+        host.classList.toggle('fp-hidden', !beyondTop);
+      };
+      syncVisibility();
+      this._syncStickyHeaderVisibility = syncVisibility;
+    };
+
+    // === NEW: measure & set CSS variables for sticky offsets ===
+    const recomputeStickyHeights = () => {
+      const f = this.filtersBarRef.el;
+      const s = this.searchBarRef.el;
+      const fh = f ? f.getBoundingClientRect().height : 0;
+      const sh = s ? s.getBoundingClientRect().height : 0;
+      if (this.el) {
+        this.el.style.setProperty('--sticky-filters-h', `${Math.ceil(fh)}px`);
+        this.el.style.setProperty('--sticky-search-h',  `${Math.ceil(sh)}px`);
+      }
+    };
+    this._recomputeStickyHeights = recomputeStickyHeights;
+
     this.chartActive = useRef('chartActive');
     this.chartTrips  = useRef('chartTrips');
     this.chartSupply = useRef('chartSupply');
@@ -276,30 +395,67 @@ export class OwlPerformanceDashboard extends Component {
     this.chartProduct  = useRef('chartProduct');
     this.chartCategory = useRef('chartCategory');
     this.chartCancelledByDriver = useRef('chartCancelledByDriver');
-    
-    this._charts     = {};
+
+    this._charts = {};
 
     onMounted(async () => {
-      const { product_types, categories } = await this.env.services.rpc(
-        '/fleet_partner_performance/filters', {}
-      );
+      recomputeStickyHeights();
+      this._onResize = () => recomputeStickyHeights();
+      window.addEventListener('resize', this._onResize, { passive: true });
+
+      const { product_types, categories } = await this.env.services.rpc('/fleet_partner_performance/filters', {});
       this.state.productTypes = product_types;
       this.state.categories   = categories;
+
       await this._fetchData();
-      this.state.draftSelectedProducts = [...this.state.selectedProducts];
-      this.state.draftSelectedScores = [...this.state.selectedScores];
+      this.state.draftSelectedProducts   = [...this.state.selectedProducts];
+      this.state.draftSelectedScores     = [...this.state.selectedScores];
       this.state.draftSelectedCategories = [...this.state.selectedCategories];
-      this.state.draftSelectedPeriod = this.state.selectedPeriod;
-      this.state.draftStartDate = this.state.startDate;
-      this.state.draftEndDate = this.state.endDate;
+      this.state.draftSelectedPeriod     = this.state.selectedPeriod;
+      this.state.draftStartDate          = this.state.startDate;
+      this.state.draftEndDate            = this.state.endDate;
+
+      recomputeStickyHeights();
+
+      // build once DOM is painted
+      this._buildStickyHeader && this._buildStickyHeader();
+
+      // listeners (IMPORTANT: scroll on the ROOT, not window)
+      const root = this.el;                       // .o_fleet_dashboard (your scroller)
+      const wrap = this.tableWrapRef.el;          // .table-responsive (x-scroll)
+
+      this._onRootScroll = () => this._syncStickyHeaderVisibility && this._syncStickyHeaderVisibility();
+      this._onWrapScroll = () => this._syncStickyHeaderX && this._syncStickyHeaderX();
+      this._onResize2    = () => {
+        this._recomputeStickyHeights && this._recomputeStickyHeights();
+        this._buildStickyHeader && this._buildStickyHeader();
+        this._attachStickyListeners();
+      };
+
+      if (root) root.addEventListener('scroll', this._onRootScroll, { passive: true });
+      if (wrap) wrap.addEventListener('scroll', this._onWrapScroll, { passive: true });
+      window.addEventListener('resize', this._onResize2, { passive: true });
     });
 
-    // whenever the DOM updates, if we're in chart mode, draw the charts
     onPatched(() => {
+      this._recomputeStickyHeights && this._recomputeStickyHeights();
+      this._buildStickyHeader && this._buildStickyHeader();
+      this._attachStickyListeners();             // <— NEW
       if (this.state.showCharts && !this.state.loading) {
         this._renderDistributionCharts();
         this._renderCharts();
       }
+    });
+
+    onWillUnmount(() => {
+      if (this._scrollTarget && this._onRootScroll) {
+        this._scrollTarget.removeEventListener('scroll', this._onRootScroll);
+      }
+      if (this._wrapTarget && this._onWrapScroll) {
+        this._wrapTarget.removeEventListener('scroll', this._onWrapScroll);
+      }
+      window.removeEventListener('resize', this._onResize);
+      window.removeEventListener('resize', this._onResize2);
     });
   }
 
@@ -313,9 +469,7 @@ export class OwlPerformanceDashboard extends Component {
       start_date: this.state.startDate || undefined,
       end_date:   this.state.endDate   || undefined,
     };
-    const resp = await this.env.services.rpc(
-      '/fleet_partner_performance/data', params
-    );
+    const resp = await this.env.services.rpc('/fleet_partner_performance/data', params);
     this.state.metrics       = resp.metrics;
     this.state.series        = resp.series;
     this.state.data          = resp.data;
@@ -325,8 +479,7 @@ export class OwlPerformanceDashboard extends Component {
       this.state.startDate = resp.range.start || '';
       this.state.endDate   = resp.range.end   || '';
     }
-    this.state.loading       = false;
-    // onPatched() will run next and draw charts if needed
+    this.state.loading = false;
   }
 
   _renderDistributionCharts() {
@@ -452,7 +605,7 @@ export class OwlPerformanceDashboard extends Component {
 
   toggleFilter(listName, value, isDraft = true) {
     const key = isDraft ? `draft${listName[0].toUpperCase()}${listName.slice(1)}` : listName;
-    if (!Array.isArray(this.state[key])) this.state[key] = [];   // <-- guard
+    if (!Array.isArray(this.state[key])) this.state[key] = [];
     const list = this.state[key];
     const idx = list.indexOf(value);
     if (idx === -1) list.push(value);
@@ -466,8 +619,17 @@ export class OwlPerformanceDashboard extends Component {
     this.state.draftStartDate = '';
     this.state.draftEndDate   = '';
   }
-  toggleDropdown(f) { this.state[f] = !this.state[f]; }
-  toggleView()      { this.state.showCharts = !this.state.showCharts; }
+
+  // === UPDATED: recompute heights after dropdown opens/closes ===
+  toggleDropdown(f) {
+    this.state[f] = !this.state[f];
+    setTimeout(() => {
+      this._recomputeStickyHeights && this._recomputeStickyHeights();
+      this._syncStickyHeaderVisibility && this._syncStickyHeaderVisibility();
+    }, 0);
+  }
+
+  toggleView() { this.state.showCharts = !this.state.showCharts; }
   onStartDateChange(ev) {
     this.state.draftStartDate = ev.target.value;
     this.state.draftSelectedPeriod = 'Custom Range';
@@ -486,4 +648,4 @@ export class OwlPerformanceDashboard extends Component {
 
 OwlPerformanceDashboard.template = 'owl.OwlPerformanceDashboard';
 registry.category('actions')
-        .add('owl.performance_dashboard', OwlPerformanceDashboard);
+  .add('owl.performance_dashboard', OwlPerformanceDashboard);
