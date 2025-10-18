@@ -328,12 +328,40 @@ export class OwlPerformanceDashboard extends Component {
       ths.forEach((th, i) => {
         const cth = document.createElement('th');
         const w = widths[i] || 80;
-        // copy the visible text (keeps things simple)
-        cth.textContent = th.textContent.trim();
         cth.style.width = `${w}px`;
         cth.style.minWidth = `${w}px`;
         cth.style.maxWidth = `${w}px`;
-        cth.title = cth.textContent;
+
+        // label
+        const label = th.textContent.trim();
+        cth.appendChild(document.createTextNode(label));
+
+        // sort key from original header
+        const key = th.getAttribute('data-sort-key');
+        if (key) {
+          cth.classList.add('fp-sortable');
+          cth.style.cursor = 'pointer';
+
+          // show current sort arrow
+          if (this.state.sortKey === key) {
+            const arrow = document.createElement('span');
+            arrow.className = 'ms-1';
+            arrow.textContent = this.state.sortDir === 'asc' ? '▲' : '▼';
+            cth.appendChild(arrow);
+          }
+
+          // click + keyboard activate sorting
+          const activate = (ev) => {
+            if (ev.type === 'click' || (ev.type === 'keydown' && (ev.key === 'Enter' || ev.key === ' '))) {
+              ev.preventDefault();
+              this.setSort(key);  // triggers Owl patch → clone rebuilds with new arrow
+            }
+          };
+          cth.tabIndex = 0;
+          cth.addEventListener('click', activate);
+          cth.addEventListener('keydown', activate);
+        }
+
         cloneRow.appendChild(cth);
       });
 
