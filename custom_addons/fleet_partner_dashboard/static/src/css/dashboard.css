@@ -1,12 +1,9 @@
-/* ==========================================================================
-   Fleet Partner Dashboards — Sticky UI (filters/search/table header)
-   Place in: fleet_partner_dashboard/static/src/css/dashboard.css
-   ========================================================================== */
-
 /* JS writes these based on live heights of the filter/search bars */
 .o_fleet_dashboard {
   --sticky-filters-h: 0px;
   --sticky-search-h:  0px;
+  position: relative; /* make sure we have a stacking context root */
+  z-index: 0;
 }
 
 /* --------------------------------------------------------------------------
@@ -15,10 +12,19 @@
 .sticky-filters {
   position: sticky !important;
   top: 0 !important;
-  z-index: 910 !important; /* above search & table header, below Odoo topbar */
+
+  /* high, but still below Odoo's global topbar (which is usually ~1100+) */
+  z-index: 20 !important;
+
   background: var(--bs-light, #f8f9fa) !important;
   backdrop-filter: blur(2px);
   box-shadow: 0 1px 0 rgba(0,0,0,0.08);
+}
+
+/* Make sure dropdown menus that open from this bar float ABOVE everything */
+.o_fleet_dashboard .dropdown-menu {
+  position: absolute; /* bootstrap default, keep it */
+  z-index: 21 !important; /* 1 higher than sticky-filters */
 }
 
 /* --------------------------------------------------------------------------
@@ -27,33 +33,47 @@
 .sticky-search {
   position: sticky !important;
   top: var(--sticky-filters-h) !important;
-  z-index: 905 !important;
+  z-index: 19 !important; /* just under filters */
+
   background: var(--bs-body-bg, #fff) !important;
   padding-top: .25rem;
   padding-bottom: .25rem;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06);
 }
 
 /* --------------------------------------------------------------------------
-   LAYER 3: Table header — make TH cells sticky (not THEAD)
+   LAYER 3: Cloned table header bar
    -------------------------------------------------------------------------- */
-/* Disable native sticky on <th> to avoid double headers */
-.sticky-thead { position: static !important; }
-.sticky-thead th { position: static !important; }
 
-/* Sticky header clone bar */
+/* Disable native sticky on the real thead so it scrolls away normally */
+.sticky-thead,
+.lp-sticky-thead {
+  position: static !important;
+}
+.sticky-thead th,
+.lp-sticky-thead th {
+  position: static !important;
+}
+
+/* Sticky header clone host */
 .fp-sticky-header {
   position: sticky;
   top: calc(var(--sticky-filters-h) + var(--sticky-search-h));
-  z-index: 900;                /* above rows, below filters/search */
+
+  /* under filters + search, but above table rows */
+  z-index: 18 !important;
+
   background: var(--bs-light, #f8f9fa);
   border-bottom: 1px solid rgba(0,0,0,.08);
-  overflow: hidden;             /* we'll translate inner content */
+  overflow: hidden; /* we translate inner track for horizontal scroll sync */
 }
 
-/* Inner strip that we translate horizontally */
-.fp-sticky-header .fp-sticky-track { will-change: transform; }
+/* Inner strip that moves horizontally with the table scroll */
+.fp-sticky-header .fp-sticky-track {
+  will-change: transform;
+}
 
-/* Match table look */
+/* Make clone table look like the real one */
 .fp-sticky-header table {
   table-layout: fixed;
   width: 100%;
@@ -67,46 +87,30 @@
   white-space: nowrap;
   border: 0;
   box-shadow: 0 2px 0 rgba(0,0,0,0.06);
+  font-weight: 500;
 }
 
-/* Hide clone unless the real thead has scrolled past */
-.fp-sticky-header.fp-hidden { display: none; }
+/* hide clone until the real header has scrolled past */
+.fp-sticky-header.fp-hidden {
+  display: none;
+}
 
 /* --------------------------------------------------------------------------
-   Scroll-container fixes (these were blocking stickiness)
+   Scroll-container fixes
    -------------------------------------------------------------------------- */
 
-/* Let horizontal scroll exist, but DO NOT create a vertical scroll here */
+/* allow horizontal scroll but don't trap vertical sticky behavior */
 .o_fleet_dashboard .table-responsive {
   overflow-x: auto !important;
   overflow-y: visible !important;
 }
 
-/* Odoo sometimes sets this to overflow-y:hidden; relax it so sticky works */
+/* Odoo sometimes sets overflow-y:hidden in the action manager */
 .o_action_manager {
   overflow-y: visible !important;
 }
 
-/* If your dashboard wrapper had inline overflow/height, prefer to remove it
-   in the XML. If you must keep it, ensure it doesn't block stickies: */
-/* 
-.o_fleet_dashboard {
-  height: auto !important;
-  max-height: none !important;
-  overflow-y: visible !important;
-}
-*/
-
-/* ensure native sticky can pin under Odoo’s chrome */
-.o_action_manager { overflow-y: visible !important; }
-
-/* table wrapper: only horizontal scroll here */
-.o_fleet_dashboard .table-responsive {
-  overflow-x: auto !important;
-  overflow-y: visible !important;
-}
-
-/* this avoids a long-standing sticky+collapse quirk */
+/* table layout nits */
 .o_fleet_dashboard table.table {
   border-collapse: separate !important;
   border-spacing: 0;
