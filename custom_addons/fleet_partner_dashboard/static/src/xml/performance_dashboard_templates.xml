@@ -566,93 +566,131 @@
           </div>
         </t>
 
+        <!-- STICKY CLONE HOST -->
         <div t-ref="stickyHeader" class="fp-sticky-header fp-hidden"></div>
+
         <!-- TABLE -->
         <div class="table-responsive" t-ref="tableWrap">
           <table class="table table-striped table-hover mb-0" t-ref="driversTable">
             <thead class="table-light sticky-thead">
               <tr>
-                <th data-sort-key="name"           style="cursor:pointer" t-on-click="() => setSort('name')">
+                <th data-sort-key="name" style="cursor:pointer" t-on-click="() => setSort('name')">
                   Driver
-                  <t t-if="state.sortKey === 'name'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'name'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
-                <th data-sort-key="quality_score"  style="cursor:pointer" t-on-click="() => setSort('quality_score')">
+                <th data-sort-key="quality_score" style="cursor:pointer" t-on-click="() => setSort('quality_score')">
                   Quality Score
-                  <t t-if="state.sortKey === 'quality_score'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'quality_score'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
-                <th data-sort-key="phone"          style="cursor:pointer" t-on-click="() => setSort('phone')">
+                <th data-sort-key="phone" style="cursor:pointer" t-on-click="() => setSort('phone')">
                   Phone
-                  <t t-if="state.sortKey === 'phone'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'phone'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
-                <th data-sort-key="hire_date"      style="cursor:pointer" t-on-click="() => setSort('hire_date')">
+                <th data-sort-key="hire_date" style="cursor:pointer" t-on-click="() => setSort('hire_date')">
                   Hire Date
-                  <t t-if="state.sortKey === 'hire_date'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'hire_date'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
-                <th data-sort-key="product_type"   style="cursor:pointer" t-on-click="() => setSort('product_type')">
+                <th data-sort-key="product_type" style="cursor:pointer" t-on-click="() => setSort('product_type')">
                   Product
-                  <t t-if="state.sortKey === 'product_type'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'product_type'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
-                <th data-sort-key="type"           style="cursor:pointer" t-on-click="() => setSort('type')">
+                <th data-sort-key="type" style="cursor:pointer" t-on-click="() => setSort('type')">
                   Category
-                  <t t-if="state.sortKey === 'type'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'type'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
-                <th data-sort-key="cash"           style="cursor:pointer" t-on-click="() => setSort('cash')">
+                <th data-sort-key="cash" style="cursor:pointer" t-on-click="() => setSort('cash')">
                   GMV (Kz)
-                  <t t-if="state.sortKey === 'cash'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'cash'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
-                <th data-sort-key="trips"          style="cursor:pointer" t-on-click="() => setSort('trips')">
+                <th data-sort-key="trips" style="cursor:pointer" t-on-click="() => setSort('trips')">
                   Trips
-                  <t t-if="state.sortKey === 'trips'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'trips'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
-                <th data-sort-key="hours"          style="cursor:pointer" t-on-click="() => setSort('hours')">
+                <th data-sort-key="hours" style="cursor:pointer" t-on-click="() => setSort('hours')">
                   Supply Hours
-                  <t t-if="state.sortKey === 'hours'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'hours'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
                 <th data-sort-key="trips_per_hour" style="cursor:pointer" t-on-click="() => setSort('trips_per_hour')">
                   Trips/Hour
-                  <t t-if="state.sortKey === 'trips_per_hour'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'trips_per_hour'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
                 <th data-sort-key="money_per_hour" style="cursor:pointer" t-on-click="() => setSort('money_per_hour')">
                   Money/Hour
-                  <t t-if="state.sortKey === 'money_per_hour'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'money_per_hour'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
                 <th data-sort-key="acceptance_rate" style="cursor:pointer" t-on-click="() => setSort('acceptance_rate')">
                   Acceptance Rate
-                  <t t-if="state.sortKey === 'acceptance_rate'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'acceptance_rate'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
                 <th data-sort-key="cancelled_by_driver" style="cursor:pointer" t-on-click="() => setSort('cancelled_by_driver')">
                   Cancelled by Driver
-                  <t t-if="state.sortKey === 'cancelled_by_driver'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'cancelled_by_driver'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
                 <th data-sort-key="completed_to_request" style="cursor:pointer" t-on-click="() => setSort('completed_to_request')">
                   Completed to Request
-                  <t t-if="state.sortKey === 'completed_to_request'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'completed_to_request'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
 
                 <th data-sort-key="completion_rate" style="cursor:pointer" t-on-click="() => setSort('completion_rate')">
                   Completion Rate
-                  <t t-if="state.sortKey === 'completion_rate'"><span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/></t>
+                  <t t-if="state.sortKey === 'completion_rate'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
                 </th>
               </tr>
             </thead>
             <tbody>
               <t t-foreach="pagedDrivers()" t-as="d" t-key="d.id">
                 <tr>
-                  <td><t t-esc="d.name"/></td>
-                  <td t-att-style="qualityBgStyle(d.quality_score)"><t t-esc="d.quality_score"/></td>
+                  <td>
+                    <a href="#" t-on-click="() => openDriver(d)">
+                      <t t-esc="d.name"/>
+                    </a>
+                  </td>
+                  <td t-att-style="qualityBgStyle(d.quality_score)">
+                    <t t-esc="d.quality_score"/>
+                  </td>
                   <td><t t-esc="d.phone"/></td>
                   <td><t t-esc="d.hire_date"/></td>
                   <td><t t-esc="d.product_type"/></td>
@@ -662,18 +700,10 @@
                   <td><t t-esc="formatNumber(d.hours, 0)"/>h</td>
                   <td><t t-esc="formatNumber(d.trips_per_hour, 0)"/></td>
                   <td><t t-esc="formatNumber(d.money_per_hour, 0)"/></td>
-                  <!--
-                  <td><t t-esc="formatNumber(d.utilisation, 1)"/>%</td>
-                  <td><t t-esc="formatNumber(d.efficiency, 1)"/>%</td>
-                  -->
                   <td><t t-esc="formatNumber(d.acceptance_rate, 1)"/>%</td>
                   <td><t t-esc="formatNumber(d.cancelled_by_driver, 1)"/>%</td>
                   <td><t t-esc="formatNumber(d.completed_to_request, 1)"/>%</td>
                   <td><t t-esc="formatNumber(d.completion_rate, 1)"/>%</td>
-                  <!--
-                  <td><t t-esc="formatNumber(d.service_fee, 0)"/></td>
-                  <td><t t-esc="formatNumber(d.partner_fee, 0)"/></td>
-                  -->
                 </tr>
               </t>
             </tbody>
@@ -691,7 +721,6 @@
             </small>
           </div>
           <div class="btn-group">
-            <!-- First/Prev use outline so the active page stands out -->
             <button class="btn btn-outline-primary"
                     t-att-disabled="state.page === 1"
                     t-on-click="() => goToPage(1)">« First</button>
@@ -700,13 +729,11 @@
                     t-att-disabled="state.page === 1"
                     t-on-click="prevPage">‹ Prev</button>
 
-            <!-- Numbered page buttons -->
             <t t-foreach="pageWindow()" t-as="pg" t-key="pg">
               <t t-if="pg === '…'">
                 <button class="btn btn-outline-primary" disabled="disabled">…</button>
               </t>
               <t t-elif="state.page === pg">
-                <!-- ACTIVE page: solid blue, disabled, aria-current -->
                 <button class="btn btn-primary active"
                         disabled="disabled"
                         aria-current="page">
@@ -714,7 +741,6 @@
                 </button>
               </t>
               <t t-else="">
-                <!-- Other pages: outline blue -->
                 <button class="btn btn-outline-primary"
                         t-on-click="() => goToPage(pg)"
                         t-att-aria-label="'Go to page ' + pg">
@@ -723,7 +749,6 @@
               </t>
             </t>
 
-            <!-- Next/Last use outline too -->
             <button class="btn btn-outline-primary"
                     t-att-disabled="state.page >= pageCount()"
                     t-on-click="nextPage">Next ›</button>
@@ -733,6 +758,194 @@
                     t-on-click="() => goToPage(pageCount())">Last »</button>
           </div>
         </div>
+
+        <!-- MODAL (Driver Details) -->
+        <t t-if="state.showModal">
+          <div class="modal d-block"
+               tabindex="-1"
+               t-ref="perf_modal"
+               style="background:rgba(0,0,0,0.4)">
+            <div class="modal-dialog modal-xl" style="max-width: 80vw;">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h5 class="modal-title">Driver Details</h5>
+                </div>
+
+                <div class="modal-body">
+                  <div class="row">
+                    <!-- LEFT: identity (no Risk line here) -->
+                    <div class="col-md-3">
+                      <div><strong>Name:</strong> <t t-esc="state.modalDriver.name"/></div>
+                      <div><strong>Phone:</strong> <t t-esc="state.modalDriver.phone"/></div>
+                      <div><strong>Product:</strong> <t t-esc="state.modalDriver.product_type"/></div>
+                      <div><strong>Hire Date:</strong> <t t-esc="state.modalDriver.hire_date"/></div>
+                      <div><strong>Driver Quality:</strong> <t t-esc="state.modalDriver.quality_score"/></div>
+                    </div>
+
+                    <!-- RIGHT SIDE: cards or charts -->
+                    <div class="col-md-9">
+                      <div class="d-flex justify-content-end mb-2">
+                        <button class="btn btn-primary"
+                                t-on-click="toggleModalView">
+                          <t t-esc="state.modalShowCharts ? 'Show Cards' : 'Show Charts'"/>
+                        </button>
+                      </div>
+
+                      <t t-if="!state.modalShowCharts">
+                        <!-- KPI cards for this driver -->
+                        <div class="row g-3">
+                          <div class="col-md-4">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Gross Revenue</h6>
+                                <h3>
+                                  <t t-esc="formatNumber(state.modalDriver.cards?.cash || 0, 0)"/>
+                                </h3>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="col-md-4">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Trips</h6>
+                                <h3>
+                                  <t t-esc="formatNumber(state.modalDriver.cards?.trips || 0)"/>
+                                </h3>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="col-md-4">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Hours Online</h6>
+                                <h3>
+                                  <t t-esc="formatNumber(state.modalDriver.cards?.hours || 0, 0)"/>
+                                </h3>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="col-md-4">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Acceptance %</h6>
+                                <h3>
+                                  <t t-esc="formatNumber(state.modalDriver.cards?.acceptance_rate || 0, 1)"/>%
+                                </h3>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="col-md-4">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Completion %</h6>
+                                <h3>
+                                  <t t-esc="formatNumber(state.modalDriver.cards?.completion_rate || 0, 1)"/>%
+                                </h3>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </t>
+                      <t t-else="">
+                        <!-- driver trend charts -->
+                        <div class="row g-3">
+                          <div class="col-md-6">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Gross Revenue</h6>
+                                <canvas id="lp_chart_cash" height="160"></canvas>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="col-md-6">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Trips</h6>
+                                <canvas id="lp_chart_trips" height="160"></canvas>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="col-md-6">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Hours Online</h6>
+                                <canvas id="lp_chart_hours" height="160"></canvas>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="col-md-6">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Acceptance Rate %</h6>
+                                <canvas id="lp_chart_acc" height="160"></canvas>
+                              </div>
+                            </div>
+                          </div>
+                          <div class="col-md-6">
+                            <div class="card">
+                              <div class="card-body">
+                                <h6>Completion Rate %</h6>
+                                <canvas id="lp_chart_comp" height="160"></canvas>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </t>
+                    </div>
+                  </div>
+
+                  <!-- Issues list -->
+                  <div class="mt-4">
+                    <h6>Issues</h6>
+                    <div class="table-responsive">
+                      <table class="table table-sm">
+                        <thead>
+                          <tr>
+                            <th>Category</th>
+                            <th>Date Reported</th>
+                            <th>Date Resolved</th>
+                            <th>Reporter Note</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <t t-if="!state.modalDriver.issues || !state.modalDriver.issues.length">
+                            <tr>
+                              <td colspan="4"><em>No issues in this window.</em></td>
+                            </tr>
+                          </t>
+                          <t t-else="">
+                            <t t-foreach="state.modalDriver.issues"
+                               t-as="it"
+                               t-key="it.date_reported + it.category_path">
+                              <tr style="vertical-align: top;">
+                                <td style="white-space: nowrap;">
+                                  <t t-esc="it.category_path"/>
+                                </td>
+                                <td style="white-space: nowrap;">
+                                  <t t-esc="it.date_reported"/>
+                                </td>
+                                <td style="white-space: nowrap;">
+                                  <t t-esc="it.date_resolved or ''"/>
+                                </td>
+                                <td style="white-space: pre-wrap;">
+                                  <t t-esc="it.note"/>
+                                </td>
+                              </tr>
+                            </t>
+                          </t>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="modal-footer">
+                  <button class="btn btn-secondary" t-on-click="closeModal">Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </t>
       </t>
     </div>
   </t>
