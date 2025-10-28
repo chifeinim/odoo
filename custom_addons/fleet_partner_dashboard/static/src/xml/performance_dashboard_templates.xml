@@ -137,9 +137,10 @@
                  t-on-input="onSearchChange"/>
         </div>
 
-        <!-- KPI CARDS: always 3 per row -->
+        <!-- KPI CARDS -->
         <t t-if="!state.showCharts">
-          <!-- first row: Active, Trips, Supply -->
+
+          <!-- Row 1: Active Drivers / Total Trips / Supply Hours -->
           <div class="row mb-4">
             <!-- Active Drivers -->
             <div class="col-md-4 mb-3">
@@ -166,6 +167,7 @@
                 </div>
               </div>
             </div>
+
             <!-- Total Trips -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
@@ -191,6 +193,7 @@
                 </div>
               </div>
             </div>
+
             <!-- Supply Hours -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
@@ -218,8 +221,9 @@
             </div>
           </div>
 
-          <!-- second row: Gross Revenue, Revenue/Hour, Trips/Hour -->
+          <!-- Row 2: Gross Revenue / Revenue / Hour / Trips / Hour -->
           <div class="row mb-4">
+            <!-- Gross Revenue -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
@@ -244,7 +248,8 @@
                 </div>
               </div>
             </div>
-            <!-- Avg Money per Hour card -->
+
+            <!-- Revenue / Hour -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
@@ -265,7 +270,8 @@
                 </div>
               </div>
             </div>
-            <!-- Avg Trips/hr -->
+
+            <!-- Trips / Hour -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
@@ -288,8 +294,9 @@
             </div>
           </div>
 
-          <!-- third row: SH / Active Driver, Acceptance Rate, Cancelled by Driver -->
+          <!-- Row 3: SH per Active Driver / Trips per Active Driver / Acceptance Rate -->
           <div class="row mb-4">
+            <!-- SH per Active Driver -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
                 <div class="card-body">
@@ -310,6 +317,29 @@
                 </div>
               </div>
             </div>
+
+            <!-- Trips per Active Driver -->
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Trips per Active Driver</h5>
+                  <h2><t t-esc="formatNumber(state.metrics.tripsPerActiveDriver, 2)"/></h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevTripsPerActiveDriver"/>
+                    <t t-set="curr"  t-value="state.metrics.tripsPerActiveDriver"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                    </t>
+                    &#160;from last period
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <!-- Acceptance Rate -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
@@ -331,6 +361,10 @@
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- Row 4: Cancelled by Driver / Cancelled by Customer / Cancelled due to Network -->
+          <div class="row mb-4">
             <!-- Cancelled by Driver % -->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
@@ -352,9 +386,53 @@
                 </div>
               </div>
             </div>
+
+            <!-- Cancelled by Customer % -->
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Cancelled by Customer</h5>
+                  <h2><t t-esc="formatNumber(state.metrics.cancelledByCustomerPct, 1)"/>%</h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevCancelledByCustomerPct"/>
+                    <t t-set="curr"  t-value="state.metrics.cancelledByCustomerPct"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-danger">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-success">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                    </t>
+                    &#160;from last period
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cancelled due to Network % -->
+            <div class="col-md-4 mb-3">
+              <div class="card text-center h-100">
+                <div class="card-body">
+                  <h5 class="card-title">Cancelled due to Network</h5>
+                  <h2><t t-esc="formatNumber(state.metrics.cancelledDueToNetworkPct, 1)"/>%</h2>
+                  <p class="card-text">
+                    <t t-set="prev"  t-value="state.metrics.prevCancelledDueToNetworkPct"/>
+                    <t t-set="curr"  t-value="state.metrics.cancelledDueToNetworkPct"/>
+                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
+                    <t t-if="delta >= 0">
+                      <span class="text-danger">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
+                    </t>
+                    <t t-else="">
+                      <span class="text-success">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
+                    </t>
+                    &#160;from last period
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- fourth row: Completed %, Completion %, Cancelled by Customer % -->
+          <!-- Row 5: Completed to Request / Completion Rate / Service Fee -->
           <div class="row mb-4">
             <!-- Completed to Request % -->
             <div class="col-md-4 mb-3">
@@ -377,6 +455,7 @@
                 </div>
               </div>
             </div>
+
             <!-- Completion Rate %-->
             <div class="col-md-4 mb-3">
               <div class="card text-center h-100">
@@ -394,74 +473,6 @@
                       <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
                     </t>
                     from last period
-                  </p>
-                </div>
-              </div>
-            </div>
-            <!-- NEW: Cancelled by Customer % -->
-            <div class="col-md-4 mb-3">
-              <div class="card text-center h-100">
-                <div class="card-body">
-                  <h5 class="card-title">Cancelled by Customer</h5>
-                  <h2><t t-esc="formatNumber(state.metrics.cancelledByCustomerPct, 1)"/>%</h2>
-                  <p class="card-text">
-                    <t t-set="prev"  t-value="state.metrics.prevCancelledByCustomerPct"/>
-                    <t t-set="curr"  t-value="state.metrics.cancelledByCustomerPct"/>
-                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
-                    <t t-if="delta >= 0">
-                      <span class="text-danger">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
-                    </t>
-                    <t t-else="">
-                      <span class="text-success">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
-                    </t>
-                    &#160;from last period
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- fifth row: Cancelled due to Network %, Trips / Active Driver, Service Fee -->
-          <div class="row mb-4">
-            <!-- NEW: Cancelled due to Network % -->
-            <div class="col-md-4 mb-3">
-              <div class="card text-center h-100">
-                <div class="card-body">
-                  <h5 class="card-title">Cancelled due to Network</h5>
-                  <h2><t t-esc="formatNumber(state.metrics.cancelledDueToNetworkPct, 1)"/>%</h2>
-                  <p class="card-text">
-                    <t t-set="prev"  t-value="state.metrics.prevCancelledDueToNetworkPct"/>
-                    <t t-set="curr"  t-value="state.metrics.cancelledDueToNetworkPct"/>
-                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
-                    <t t-if="delta >= 0">
-                      <span class="text-danger">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
-                    </t>
-                    <t t-else="">
-                      <span class="text-success">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
-                    </t>
-                    &#160;from last period
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <!-- NEW: Trips per Active Driver -->
-            <div class="col-md-4 mb-3">
-              <div class="card text-center h-100">
-                <div class="card-body">
-                  <h5 class="card-title">Trips per Active Driver</h5>
-                  <h2><t t-esc="formatNumber(state.metrics.tripsPerActiveDriver, 2)"/></h2>
-                  <p class="card-text">
-                    <t t-set="prev"  t-value="state.metrics.prevTripsPerActiveDriver"/>
-                    <t t-set="curr"  t-value="state.metrics.tripsPerActiveDriver"/>
-                    <t t-set="delta" t-value="prev ? ((curr - prev)/prev*100) : 0"/>
-                    <t t-if="delta >= 0">
-                      <span class="text-success">&#9650; <t t-esc="delta.toFixed(1)"/>%</span>
-                    </t>
-                    <t t-else="">
-                      <span class="text-danger">&#9660; <t t-esc="Math.abs(delta).toFixed(1)"/>%</span>
-                    </t>
-                    &#160;from last period
                   </p>
                 </div>
               </div>
@@ -494,7 +505,7 @@
             </div>
           </div>
 
-          <!-- sixth row: Partner Fee -->
+          <!-- Row 6: Partner Fee -->
           <div class="row mb-4">
             <!-- Partner Fee -->
             <div class="col-md-4 mb-3">
@@ -522,11 +533,14 @@
               </div>
             </div>
           </div>
+
         </t>
 
         <!-- LINE CHARTS -->
         <t t-if="state.showCharts">
           <div class="row g-1 mb-1">
+
+            <!-- Row 1 -->
             <div class="col-md-4">
               <canvas t-ref="chartActive" style="height:200px"></canvas>
             </div>
@@ -536,6 +550,8 @@
             <div class="col-md-4">
               <canvas t-ref="chartSupply" style="height:200px"></canvas>
             </div>
+
+            <!-- Row 2 -->
             <div class="col-md-4">
               <canvas t-ref="chartCash" style="height:200px"></canvas>
             </div>
@@ -545,28 +561,21 @@
             <div class="col-md-4">
               <canvas t-ref="chartTripsPerHour" style="height:200px"></canvas>
             </div>
+
+            <!-- Row 3 -->
             <div class="col-md-4">
               <canvas t-ref="chartAvgSupply" style="height:200px"></canvas>
             </div>
-            <!--
             <div class="col-md-4">
-              <canvas t-ref="chartUtilisation" style="height:200px"></canvas>
+              <canvas t-ref="chartTripsPerActiveDriver" style="height:200px"></canvas>
             </div>
-            <div class="col-md-4">
-              <canvas t-ref="chartEfficiency" style="height:200px"></canvas>
-            </div>
-            -->
             <div class="col-md-4">
               <canvas t-ref="chartAcceptance" style="height:200px"></canvas>
             </div>
+
+            <!-- Row 4 -->
             <div class="col-md-4">
               <canvas t-ref="chartCancelledByDriver" style="height:200px"></canvas>
-            </div>
-            <div class="col-md-4">
-              <canvas t-ref="chartCompletedToRequest" style="height:200px"></canvas>
-            </div>
-            <div class="col-md-4">
-              <canvas t-ref="chartCompletionRate" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartCancelledByCustomer" style="height:200px"></canvas>
@@ -574,15 +583,24 @@
             <div class="col-md-4">
               <canvas t-ref="chartCancelledDueToNetwork" style="height:200px"></canvas>
             </div>
+
+            <!-- Row 5 -->
             <div class="col-md-4">
-              <canvas t-ref="chartTripsPerActiveDriver" style="height:200px"></canvas>
+              <canvas t-ref="chartCompletedToRequest" style="height:200px"></canvas>
+            </div>
+            <div class="col-md-4">
+              <canvas t-ref="chartCompletionRate" style="height:200px"></canvas>
             </div>
             <div class="col-md-4">
               <canvas t-ref="chartServiceFee" style="height:200px"></canvas>
             </div>
+
+            <!-- Row 6 -->
             <div class="col-md-4">
               <canvas t-ref="chartPartnerFee" style="height:200px"></canvas>
             </div>
+
+            <!-- Distribution pies (kept after the KPI-style charts) -->
             <div class="col-md-4">
               <canvas t-ref="chartQuality" style="height:200px"></canvas>
             </div>
@@ -592,8 +610,19 @@
             <div class="col-md-4">
               <canvas t-ref="chartCategory" style="height:200px"></canvas>
             </div>
+
+            <!-- Optional historic utilisation / efficiency: keeping commented -->
+            <!--
+            <div class="col-md-4">
+              <canvas t-ref="chartUtilisation" style="height:200px"></canvas>
+            </div>
+            <div class="col-md-4">
+              <canvas t-ref="chartEfficiency" style="height:200px"></canvas>
+            </div>
+            -->
           </div>
         </t>
+
 
         <!-- STICKY CLONE HOST -->
         <div t-ref="stickyHeader" class="fp-sticky-header fp-hidden"></div>
