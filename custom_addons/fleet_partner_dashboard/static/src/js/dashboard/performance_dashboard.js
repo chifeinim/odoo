@@ -492,7 +492,9 @@ export class OwlPerformanceDashboard extends Component {
       'active','trips','supply','cash','moneyPerHour','tripsPerHour',
       'avgSupplyHoursPerDriver','utilisation','efficiency',
       'acceptanceRate','completedToRequest','completionRate',
-      'serviceFee','partnerFee','cancelledByDriverPct'
+      'serviceFee','partnerFee','cancelledByDriverPct',
+      // NEW:
+      'cancelledByCustomerPct','cancelledDueToNetworkPct','tripsPerActiveDriver'
     ].forEach(k => {
       if (this._charts[k]) {
         this._charts[k].destroy();
@@ -514,7 +516,14 @@ export class OwlPerformanceDashboard extends Component {
       ['acceptanceRate', ctx(this.chartAcceptance), 'Acceptance Rate %', this.state.series.acceptanceRate],
       ['completedToRequest', ctx(this.chartCompletedToRequest), 'Completed to Request %', this.state.series.completedToRequest],
       ['completionRate', ctx(this.chartCompletionRate), 'Completion Rate %', this.state.series.completionRate],
+
       ['cancelledByDriverPct', ctx(this.chartCancelledByDriver), 'Cancelled by Driver %', this.state.series.cancelledByDriverPct],
+
+      // NEW charts
+      ['cancelledByCustomerPct', ctx(this.chartCancelledByCustomer), 'Cancelled by Customer %', this.state.series.cancelledByCustomerPct],
+      ['cancelledDueToNetworkPct', ctx(this.chartCancelledDueToNetwork), 'Cancelled due to Network %', this.state.series.cancelledDueToNetworkPct],
+      ['tripsPerActiveDriver', ctx(this.chartTripsPerActiveDriver), 'Trips per Active Driver', this.state.series.tripsPerActiveDriver],
+
       ['serviceFee', ctx(this.chartServiceFee), 'Service Fee', this.state.series.serviceFee],
       ['partnerFee', ctx(this.chartPartnerFee), 'Partner Fee', this.state.series.partnerFee],
     ];
@@ -581,12 +590,25 @@ export class OwlPerformanceDashboard extends Component {
       loading: true,
       metrics: {},
       series: {
-        activeDrivers: [], trips: [], supplyHours: [],
-        cashEarned: [], moneyPerHour: [], tripsPerHour: [],
-        avgSupplyHoursPerDriver: [], utilisation: [], efficiency: [],
-        acceptanceRate: [], completedToRequest: [], completionRate: [],
-        serviceFee: [], partnerFee: [],
+        activeDrivers: [],
+        trips: [],
+        supplyHours: [],
+        cashEarned: [],
+        moneyPerHour: [],
+        tripsPerHour: [],
+        avgSupplyHoursPerDriver: [],
+        utilisation: [],
+        efficiency: [],
+        acceptanceRate: [],
+        completedToRequest: [],
+        completionRate: [],
+        serviceFee: [],
+        partnerFee: [],
         cancelledByDriverPct: [],
+        // NEW:
+        cancelledByCustomerPct: [],
+        cancelledDueToNetworkPct: [],
+        tripsPerActiveDriver: [],
       },
       allDrivers: 0,
       distributions: { product: [], quality: [], category: [] },
@@ -625,7 +647,7 @@ export class OwlPerformanceDashboard extends Component {
       pageSize: 100,
       page: 1,
 
-      // modal state (NEW)
+      // modal state
       showModal: false,
       modalDriver: null,
       modalShowCharts: false,
@@ -749,6 +771,7 @@ export class OwlPerformanceDashboard extends Component {
     this.chartCash   = useRef('chartCash');
     this.chartMoneyPerHour = useRef('chartMoneyPerHour');
     this.chartTripsPerHour = useRef('chartTripsPerHour');
+    this.chartTripsPerActiveDriver = useRef('chartTripsPerActiveDriver');
     this.chartAvgSupply = useRef('chartAvgSupply');
     this.chartUtilisation = useRef('chartUtilisation');
     this.chartEfficiency = useRef('chartEfficiency');
@@ -761,6 +784,8 @@ export class OwlPerformanceDashboard extends Component {
     this.chartProduct  = useRef('chartProduct');
     this.chartCategory = useRef('chartCategory');
     this.chartCancelledByDriver = useRef('chartCancelledByDriver');
+    this.chartCancelledByCustomer = useRef('chartCancelledByCustomer');
+    this.chartCancelledDueToNetwork = useRef('chartCancelledDueToNetwork');
 
     this._charts = {};
 

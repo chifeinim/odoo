@@ -283,13 +283,11 @@ class FleetDashboardController(http.Controller):
                 return {"rows": [], "count": 0}
 
         # Pull a single combined set of driver-day rows covering prev+current
-        # Decide the fetch window we send to metrics-db
         if want_all_time:
             fetch_from = "2000-01-01"                       # safely early
             fetch_to   = today.strftime("%Y-%m-%d")         # today
         else:
-            # Use the combined prev+current window you already computed
-            fetch_from = big_df.strftime('%Y-%m-%d') # type: ignore
+            fetch_from = big_df.strftime('%Y-%m-%d')        # type: ignore
             fetch_to   = big_dt.strftime('%Y-%m-%d')
 
         day_resp = _get(
@@ -301,7 +299,7 @@ class FleetDashboardController(http.Controller):
             }
         )
         day_rows = day_resp.get('rows', [])
-        
+
         if want_all_time:
             if day_rows:
                 all_days = []
@@ -388,7 +386,7 @@ class FleetDashboardController(http.Controller):
             'weak':    {'strong': 'Average Performer', 'average': 'Low Performer',     'weak': 'Low Performer'},
         }
 
-        # Build DQS map keyed by Odoo driver id, using Yango id to look up OTRS
+        # Build DQS map keyed by Odoo driver id
         dqs_map = {}
         prod_counts = defaultdict(int)
         qual_counts = defaultdict(int)
@@ -420,15 +418,30 @@ class FleetDashboardController(http.Controller):
         filtered_yids = { (d.yango_driver_id or '').strip(): d.id for d in filtered_drivers if d.yango_driver_id }
 
         # --- E) Aggregate metrics from driver_day rows ---
-        # Accumulators (current & previous windows)
-        cur = {'orders': 0, 'completes': 0, 'cash': 0.0, 'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0, 'sup_secs': 0.0, 'driver_cancels': 0}
-        prv = {'orders': 0, 'completes': 0, 'cash': 0.0, 'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0, 'sup_secs': 0.0, 'driver_cancels': 0}
+        # Accumulators (current & previous windows); now also track customer + network cancels
+        cur = {
+            'orders': 0, 'completes': 0, 'cash': 0.0,
+            'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0,
+            'sup_secs': 0.0, 'driver_cancels': 0,
+            'cust_cancels': 0, 'net_cancels': 0,
+        }
+        prv = {
+            'orders': 0, 'completes': 0, 'cash': 0.0,
+            'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0,
+            'sup_secs': 0.0, 'driver_cancels': 0,
+            'cust_cancels': 0, 'net_cancels': 0,
+        }
         cur_active_set, prv_active_set = set(), set()
 
-        # Per-driver current window for table
-        drv_cur = defaultdict(lambda: {'orders': 0, 'completes': 0, 'cash': 0.0, 'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0, 'sup_secs': 0.0, 'driver_cancels': 0})
+        # Per-driver current window for table (we do NOT surface new metrics per driver)
+        drv_cur = defaultdict(lambda: {
+            'orders': 0, 'completes': 0, 'cash': 0.0,
+            'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0,
+            'sup_secs': 0.0, 'driver_cancels': 0,
+        })
 
         # Series accumulators by bucket label (current window only)
+        # We'll also track cust_cancels and net_cancels per bucket.
         series_acc = {
             'orders': defaultdict(int),
             'completes': defaultdict(int),
@@ -438,6 +451,8 @@ class FleetDashboardController(http.Controller):
             'accepts': defaultdict(int),
             'sup_secs': defaultdict(float),
             'driver_cancels': defaultdict(int),
+            'cust_cancels': defaultdict(int),
+            'net_cancels': defaultdict(int),
             'active_sets': defaultdict(set),
         }
 
@@ -453,81 +468,90 @@ class FleetDashboardController(http.Controller):
             if not odoo_id:
                 continue
 
-            orders_total      = int(r.get('orders_total') or 0)
-            completes         = int(r.get('orders_completed') or 0)
-            cash_sum          = float(r.get('cash_sum') or 0.0)
-            accepts           = int(r.get('accepts') or 0)
-            util_secs         = float(r.get('interval_seconds') or 0.0)
-            eff_secs          = float(r.get('transport_seconds') or 0.0)
-            sup_secs          = float(r.get('supply_seconds') or 0.0)
-            driver_cancels = int(r.get('driver_cancellations') or 0)
+            orders_total        = int(r.get('orders_total') or 0)
+            completes           = int(r.get('orders_completed') or 0)
+            cash_sum            = float(r.get('cash_sum') or 0.0)
+            accepts             = int(r.get('accepts') or 0)
+            util_secs           = float(r.get('interval_seconds') or 0.0)
+            eff_secs            = float(r.get('transport_seconds') or 0.0)
+            sup_secs            = float(r.get('supply_seconds') or 0.0)
+            driver_cancels      = int(r.get('driver_cancellations') or 0)
+            customer_cancels    = int(r.get('customer_cancellations') or 0)
+            network_cancels     = int(r.get('network_cancellations') or 0)
 
             in_prev = (prev_df and prev_dt and prev_df <= day <= prev_dt)
-            in_cur  = (df and dt_ and df <= day <= dt_)
+            in_cur  = (df and dt_   and df    <= day <= dt_)
 
             if in_prev:
-                prv['orders']     += orders_total
-                prv['completes']  += completes
-                prv['cash']       += cash_sum
-                prv['util_secs']  += util_secs
-                prv['eff_secs']   += eff_secs
-                prv['accepts']    += accepts
-                prv['sup_secs']   += sup_secs
+                prv['orders']    += orders_total
+                prv['completes'] += completes
+                prv['cash']      += cash_sum
+                prv['util_secs'] += util_secs
+                prv['eff_secs']  += eff_secs
+                prv['accepts']   += accepts
+                prv['sup_secs']  += sup_secs
                 prv['driver_cancels'] += driver_cancels
+                prv['cust_cancels']   += customer_cancels
+                prv['net_cancels']    += network_cancels
                 if completes > 0:
                     prv_active_set.add(odoo_id)
 
             if in_cur:
-                cur['orders']     += orders_total
-                cur['completes']  += completes
-                cur['cash']       += cash_sum
-                cur['util_secs']  += util_secs
-                cur['eff_secs']   += eff_secs
-                cur['accepts']    += accepts
-                cur['sup_secs']   += sup_secs
+                cur['orders']    += orders_total
+                cur['completes'] += completes
+                cur['cash']      += cash_sum
+                cur['util_secs'] += util_secs
+                cur['eff_secs']  += eff_secs
+                cur['accepts']   += accepts
+                cur['sup_secs']  += sup_secs
                 cur['driver_cancels'] += driver_cancels
+                cur['cust_cancels']   += customer_cancels
+                cur['net_cancels']    += network_cancels
                 if completes > 0:
                     cur_active_set.add(odoo_id)
 
                 # per-driver (current)
                 x = drv_cur[odoo_id]
-                x['orders']     += orders_total
-                x['completes']  += completes
-                x['cash']       += cash_sum
-                x['util_secs']  += util_secs
-                x['eff_secs']   += eff_secs
-                x['accepts']    += accepts
-                x['sup_secs']   += sup_secs
+                x['orders']         += orders_total
+                x['completes']      += completes
+                x['cash']           += cash_sum
+                x['util_secs']      += util_secs
+                x['eff_secs']       += eff_secs
+                x['accepts']        += accepts
+                x['sup_secs']       += sup_secs
                 x['driver_cancels'] += driver_cancels
 
-                # series by bucket
+                # series by bucket (current window only)
                 bk = _bucket_key(day)
                 if bk:
-                    series_acc['orders'][bk]     += orders_total
-                    series_acc['completes'][bk]  += completes
-                    series_acc['cash'][bk]       += cash_sum
-                    series_acc['util_secs'][bk]  += util_secs
-                    series_acc['eff_secs'][bk]   += eff_secs
-                    series_acc['accepts'][bk]    += accepts
-                    series_acc['sup_secs'][bk]   += sup_secs
-                    series_acc['driver_cancels'][bk] += driver_cancels
+                    series_acc['orders'][bk]          += orders_total
+                    series_acc['completes'][bk]       += completes
+                    series_acc['cash'][bk]            += cash_sum
+                    series_acc['util_secs'][bk]       += util_secs
+                    series_acc['eff_secs'][bk]        += eff_secs
+                    series_acc['accepts'][bk]         += accepts
+                    series_acc['sup_secs'][bk]        += sup_secs
+                    series_acc['driver_cancels'][bk]  += driver_cancels
+                    series_acc['cust_cancels'][bk]    += customer_cancels
+                    series_acc['net_cancels'][bk]     += network_cancels
                     if completes > 0:
                         series_acc['active_sets'][bk].add(odoo_id)
 
-        # --- F) Derived metrics (same names as before) ---
+        # --- F) Derived metrics ---
         def _safe_div(a, b): 
             return (a / b) if b else 0.0
 
         active_current   = len(cur_active_set)
         active_previous  = len(prv_active_set)
+
         trip_current     = cur['completes']
         trip_previous    = prv['completes']
+
         supply_current   = cur['sup_secs'] / 3600.0
         supply_previous  = prv['sup_secs'] / 3600.0
+
         cash_current     = cur['cash']
         cash_previous    = prv['cash']
-        driver_cancellations_current  = cur['driver_cancels']
-        driver_cancellations_previous = prv['driver_cancels']
 
         util_pct_current = _safe_div(cur['util_secs']/3600.0, max(supply_current, 1e-12)) * 100.0 if supply_current else 0.0
         util_pct_prev    = _safe_div(prv['util_secs']/3600.0, max(supply_previous, 1e-12)) * 100.0 if supply_previous else 0.0
@@ -541,11 +565,21 @@ class FleetDashboardController(http.Controller):
         completed_to_request_current  = _safe_div(trip_current * 100.0, max(cur['orders'], 1e-12))
         completed_to_request_previous = _safe_div(trip_previous * 100.0, max(prv['orders'], 1e-12))
         
-        completion_rate_current  = _safe_div(trip_current * 100.0, max(cur['accepts'], 1e-12))
-        completion_rate_previous = _safe_div(trip_previous * 100.0, max(prv['accepts'], 1e-12))
+        completion_rate_current  = _safe_div(trip_current * 100.0, max(cur['accepts'], 1e-12)) if cur['accepts'] else 0.0
+        completion_rate_previous = _safe_div(trip_previous * 100.0, max(prv['accepts'], 1e-12)) if prv['accepts'] else 0.0
         
         cancelled_by_driver_pct_current  = _safe_div(cur['driver_cancels'] * 100.0, max(cur['accepts'], 1e-12)) if cur['accepts'] else 0.0
         cancelled_by_driver_pct_previous = _safe_div(prv['driver_cancels'] * 100.0, max(prv['accepts'], 1e-12)) if prv['accepts'] else 0.0
+
+        # NEW aggregates
+        cancelled_by_customer_pct_current  = _safe_div(cur['cust_cancels'] * 100.0, max(cur['accepts'], 1e-12)) if cur['accepts'] else 0.0
+        cancelled_by_customer_pct_previous = _safe_div(prv['cust_cancels'] * 100.0, max(prv['accepts'], 1e-12)) if prv['accepts'] else 0.0
+
+        cancelled_due_to_network_pct_current  = _safe_div(cur['net_cancels'] * 100.0, max(cur['orders'], 1e-12)) if cur['orders'] else 0.0
+        cancelled_due_to_network_pct_previous = _safe_div(prv['net_cancels'] * 100.0, max(prv['orders'], 1e-12)) if prv['orders'] else 0.0
+
+        trips_per_active_driver_current  = _safe_div(trip_current, max(active_current, 1e-12)) if active_current else 0.0
+        trips_per_active_driver_previous = _safe_div(trip_previous, max(active_previous, 1e-12)) if active_previous else 0.0
 
         avg_supply        = _safe_div(supply_current, active_current) if active_current else 0.0
         avg_supply_prev   = _safe_div(supply_previous, active_previous) if active_previous else 0.0
@@ -568,24 +602,41 @@ class FleetDashboardController(http.Controller):
             'prevSupplyHours':   supply_previous,
             'cashEarned':        cash_current,
             'prevCashEarned':    cash_previous,
+
             'moneyPerHour':      _safe_div(cash_current, max(supply_current, 1e-12)) if supply_current else 0.0,
             'prevMoneyPerHour':  _safe_div(cash_previous, max(supply_previous, 1e-12)) if supply_previous else 0.0,
+
             'tripsPerHour':      _safe_div(trip_current, max(supply_current, 1e-12)) if supply_current else 0.0,
             'prevTripsPerHour':  _safe_div(trip_previous, max(supply_previous, 1e-12)) if supply_previous else 0.0,
+
             'avgSupplyHoursPerDriver':     avg_supply,
             'prevAvgSupplyHoursPerDriver': avg_supply_prev,
+
             'avgUtilisation':     util_pct_current,
             'prevAvgUtilisation': util_pct_prev,
             'avgEfficiency':      eff_pct_current,
             'prevAvgEfficiency':  eff_pct_prev,
+
             'acceptanceRate':      accept_rate_current,
             'prevAcceptanceRate':  accept_rate_previous,
+
             'completedToRequest':  completed_to_request_current,
             'prevCompletedToRequest': completed_to_request_previous,
+
             'completionRate':       completion_rate_current,
             'prevCompletionRate':   completion_rate_previous,
+
             'cancelledByDriverPct':     cancelled_by_driver_pct_current,
             'prevCancelledByDriverPct': cancelled_by_driver_pct_previous,
+
+            # NEW card metrics:
+            'cancelledByCustomerPct':        cancelled_by_customer_pct_current,
+            'prevCancelledByCustomerPct':    cancelled_by_customer_pct_previous,
+            'cancelledDueToNetworkPct':      cancelled_due_to_network_pct_current,
+            'prevCancelledDueToNetworkPct':  cancelled_due_to_network_pct_previous,
+            'tripsPerActiveDriver':          trips_per_active_driver_current,
+            'prevTripsPerActiveDriver':      trips_per_active_driver_previous,
+
             'serviceFee': cash_current * 0.1,
             'prevServiceFee': cash_previous * 0.1,
             'partnerFee': cash_current * 0.03,
@@ -600,15 +651,23 @@ class FleetDashboardController(http.Controller):
         series_driverCancels, series_cancelledByDriver = [], []
         series_serviceFee, series_partnerFee = [], []
 
+        # NEW series arrays:
+        series_cancelledByCustomer = []
+        series_cancelledDueToNetwork = []
+        series_tripsPerActiveDriver = []
+
         for lbl in bucket_labels:
-            trips     = series_acc['completes'].get(lbl, 0)
-            orders    = series_acc['orders'].get(lbl, 0)
-            cash_sum  = series_acc['cash'].get(lbl, 0.0)
-            sup_hours = series_acc['sup_secs'].get(lbl, 0.0) / 3600.0
-            util_h    = series_acc['util_secs'].get(lbl, 0.0) / 3600.0
-            eff_h     = series_acc['eff_secs'].get(lbl, 0.0) / 3600.0
-            accepts   = series_acc['accepts'].get(lbl, 0)
-            active    = len(series_acc['active_sets'].get(lbl, set()))
+            trips        = series_acc['completes'].get(lbl, 0)
+            orders       = series_acc['orders'].get(lbl, 0)
+            cash_sum     = series_acc['cash'].get(lbl, 0.0)
+            sup_hours    = series_acc['sup_secs'].get(lbl, 0.0) / 3600.0
+            util_h       = series_acc['util_secs'].get(lbl, 0.0) / 3600.0
+            eff_h        = series_acc['eff_secs'].get(lbl, 0.0) / 3600.0
+            accepts      = series_acc['accepts'].get(lbl, 0)
+            active       = len(series_acc['active_sets'].get(lbl, set()))
+            drv_canc     = series_acc['driver_cancels'].get(lbl, 0)
+            cust_canc    = series_acc['cust_cancels'].get(lbl, 0)
+            net_canc     = series_acc['net_cancels'].get(lbl, 0)
 
             series_active.append({'period': lbl, 'value': active})
             series_trips.append({'period': lbl, 'value': trips})
@@ -629,17 +688,28 @@ class FleetDashboardController(http.Controller):
             eff_pct  = _safe_div(eff_h,  max(sup_hours, 1e-12)) * 100.0 if sup_hours else 0.0
             series_utilisation.append({'period': lbl, 'value': util_pct})
             series_efficiency.append({'period': lbl, 'value': eff_pct})
+
             acc_pct = _safe_div(accepts * 100.0, max(orders, 1e-12)) if orders else 0.0
             c2r_pct = _safe_div(trips   * 100.0, max(orders, 1e-12)) if orders else 0.0
-            cmp_r_pct = _safe_div(trips   * 100.0, max(accepts, 1e-12)) if accepts else 0.0
+            cmp_r_pct = _safe_div(trips * 100.0, max(accepts, 1e-12)) if accepts else 0.0
+
             series_acceptance.append({'period': lbl, 'value': acc_pct})
             series_completed.append({'period': lbl, 'value': c2r_pct})
             series_completion.append({'period': lbl, 'value': cmp_r_pct})
-            const_driver_cancels = series_acc['driver_cancels'].get(lbl, 0)
-            series_driverCancels.append({'period': lbl, 'value': const_driver_cancels})
 
-            const_cancelled_by_driver_pct = _safe_div(const_driver_cancels * 100.0, max(accepts, 1e-12)) if accepts else 0.0
-            series_cancelledByDriver.append({'period': lbl, 'value': const_cancelled_by_driver_pct})
+            series_driverCancels.append({'period': lbl, 'value': drv_canc})
+            cancelled_by_driver_pct_lbl = _safe_div(drv_canc * 100.0, max(accepts, 1e-12)) if accepts else 0.0
+            series_cancelledByDriver.append({'period': lbl, 'value': cancelled_by_driver_pct_lbl})
+
+            # NEW per-bucket derived series:
+            cancelled_by_customer_pct_lbl = _safe_div(cust_canc * 100.0, max(accepts, 1e-12)) if accepts else 0.0
+            series_cancelledByCustomer.append({'period': lbl, 'value': cancelled_by_customer_pct_lbl})
+
+            cancelled_due_to_network_pct_lbl = _safe_div(net_canc * 100.0, max(orders, 1e-12)) if orders else 0.0
+            series_cancelledDueToNetwork.append({'period': lbl, 'value': cancelled_due_to_network_pct_lbl})
+
+            trips_per_active_driver_lbl = _safe_div(trips, max(active, 1e-12)) if active else 0.0
+            series_tripsPerActiveDriver.append({'period': lbl, 'value': trips_per_active_driver_lbl})
 
         series = {
             'activeDrivers': series_active,
@@ -658,13 +728,21 @@ class FleetDashboardController(http.Controller):
             'partnerFee':    series_partnerFee,
             'driverCancellations':   series_driverCancels,
             'cancelledByDriverPct':  series_cancelledByDriver,
+
+            # NEW time series for charts:
+            'cancelledByCustomerPct':    series_cancelledByCustomer,
+            'cancelledDueToNetworkPct':  series_cancelledDueToNetwork,
+            'tripsPerActiveDriver':      series_tripsPerActiveDriver,
         }
 
         # --- H) Per-driver detail table (from aggregates; current window only) ---
         data = {}
         for drv in filtered_drivers:
-            s = drv_cur.get(drv.id, {'orders': 0, 'completes': 0, 'cash': 0.0,
-                                    'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0, 'sup_secs': 0.0, 'driver_cancels': 0, })
+            s = drv_cur.get(drv.id, {
+                'orders': 0, 'completes': 0, 'cash': 0.0,
+                'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0,
+                'sup_secs': 0.0, 'driver_cancels': 0,
+            })
             hours = s['sup_secs'] / 3600.0
             trips = s['completes']
             orders = s['orders']
