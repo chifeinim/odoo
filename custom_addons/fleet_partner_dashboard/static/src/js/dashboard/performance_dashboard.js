@@ -447,84 +447,148 @@ export class OwlPerformanceDashboard extends Component {
   }
 
   _renderCharts() {
-    const cfg = (label, data) => ({
-      type: 'line',
-      data: {
-        labels: data.map(pt => pt.period),
-        datasets: [{ label, data: data.map(pt => pt.value), fill: false }],
-      },
-      options: {
-        scales: {
-          x: {
-            display: true,
-            grid: { display: false, drawBorder: false },
-            ticks: {
-              autoSkip: true,
-              maxTicksLimit: 8,
-              callback: function (value) {
-                const raw = this.getLabelForValue ? this.getLabelForValue(value) : value;
-                const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
-                if (!m) return raw;
-                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                return `${m[3]}-${months[+m[2]-1]}`;
+    // build a Chart.js config for one metric series
+    // `seriesData` is [{ period: '2025-10-01', value: 123 }, ...]
+    const cfg = (label, seriesData) => {
+      const vals = Array.isArray(seriesData)
+        ? seriesData.map(pt => (typeof pt.value === 'number' ? pt.value : 0))
+        : [];
+
+      // compute min/max from the data
+      let minVal = null;
+      let maxVal = null;
+      for (const v of vals) {
+        if (minVal === null || v < minVal) minVal = v;
+        if (maxVal === null || v > maxVal) maxVal = v;
+      }
+
+      // sane fallbacks if we have no data
+      if (minVal === null) minVal = 0;
+      if (maxVal === null) maxVal = 0;
+
+      const span = maxVal - minVal;
+      const mid  = (maxVal + minVal) / 2;
+
+      let suggestedMin, suggestedMax;
+      if (span === 0) {
+        // flat series (e.g. all zeros or all same %) -> give ±10% band
+        const pad = (Math.abs(maxVal) || 1) * 0.1;
+        suggestedMin = maxVal - pad;
+        suggestedMax = maxVal + pad;
+      } else {
+        // double the original range, centered around the midpoint
+        // original range = span
+        // doubled range = 2 * span
+        // so half-range for each side = span
+        suggestedMin = mid - span;
+        suggestedMax = mid + span;
+      }
+
+      const labelsRaw = Array.isArray(seriesData)
+        ? seriesData.map(pt => pt.period)
+        : [];
+      const values    = vals;
+
+      return {
+        type: 'line',
+        data: {
+          labels: labelsRaw,
+          datasets: [{
+            label,
+            data: values,
+            fill: false,
+          }],
+        },
+        options: {
+          scales: {
+            x: {
+              display: true,
+              grid: { display: false, drawBorder: false },
+              ticks: {
+                autoSkip: true,
+                maxTicksLimit: 8,
+                callback: function (value) {
+                  // format YYYY-MM-DD -> "DD-Mon"
+                  const raw = this.getLabelForValue
+                    ? this.getLabelForValue(value)
+                    : value;
+                  const m = String(raw).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                  if (!m) return raw;
+                  const months = [
+                    'Jan','Feb','Mar','Apr','May','Jun',
+                    'Jul','Aug','Sep','Oct','Nov','Dec'
+                  ];
+                  return `${m[3]}-${months[+m[2]-1]}`;
+                },
               },
             },
+            y: {
+              display: true,
+              grid: { display: false, drawBorder: true },
+              ticks: {
+                autoSkip: true,
+                maxTicksLimit: 6,
+              },
+              // here's the new "double the range around the midpoint"
+              suggestedMin,
+              suggestedMax,
+            },
           },
-          y: {
-            display: true,
-            grid: { display: false, drawBorder: true },
-            ticks: { autoSkip: true, maxTicksLimit: 6 },
+          plugins: {
+            title:  { display: true, text: label },
+            legend: { display: false },
           },
+          elements: {
+            point: { radius: 2, hitRadius: 8 },
+          },
+          maintainAspectRatio: false,
         },
-        plugins: {
-          title: { display: true, text: label },
-          legend: { display: false },
-        },
-        elements: { point: { radius: 2, hitRadius: 8 } },
-        maintainAspectRatio: false,
-      },
-    });
+      };
+    };
 
     const ctx = (ref) => (ref && ref.el) ? ref.el.getContext('2d') : null;
 
-    // Destroy any existing high-level charts (NOT the modal charts)
+    // destroy existing dashboard-level charts only
     [
       'active','trips','supply','cash','moneyPerHour','tripsPerHour',
-      'avgSupplyHoursPerDriver','utilisation','efficiency',
-      'acceptanceRate','completedToRequest','completionRate',
-      'serviceFee','partnerFee','cancelledByDriverPct',
-      // NEW:
-      'cancelledByCustomerPct','cancelledDueToNetworkPct','tripsPerActiveDriver'
+      'avgSupplyHoursPerDriver','tripsPerActiveDriver','acceptanceRate',
+      'cancelledByDriverPct','cancelledByCustomerPct','cancelledDueToNetworkPct',
+      'completedToRequest','completionRate','serviceFee','partnerFee'
     ].forEach(k => {
       if (this._charts[k]) {
-        this._charts[k].destroy();
+        try { this._charts[k].destroy(); } catch(e) {}
         delete this._charts[k];
       }
     });
 
-    // Create charts only when the canvas exists
+    // same chart list/order you have now in the template
     const charts = [
+      // row 1
       ['active', ctx(this.chartActive), 'Active Drivers', this.state.series.activeDrivers],
       ['trips', ctx(this.chartTrips), 'Total Trips', this.state.series.trips],
       ['supply', ctx(this.chartSupply), 'Supply Hours', this.state.series.supplyHours],
+
+      // row 2
       ['cash', ctx(this.chartCash), 'Gross Revenue', this.state.series.cashEarned],
       ['moneyPerHour', ctx(this.chartMoneyPerHour), 'Revenue / Hour', this.state.series.moneyPerHour],
       ['tripsPerHour', ctx(this.chartTripsPerHour), 'Trips / Hour', this.state.series.tripsPerHour],
+
+      // row 3
       ['avgSupplyHoursPerDriver', ctx(this.chartAvgSupply), 'SH per Active Driver', this.state.series.avgSupplyHoursPerDriver],
-      ['utilisation', ctx(this.chartUtilisation), 'Utilisation %', this.state.series.utilisation],
-      ['efficiency', ctx(this.chartEfficiency), 'Efficiency %', this.state.series.efficiency],
+      ['tripsPerActiveDriver', ctx(this.chartTripsPerActiveDriver), 'Trips per Active Driver', this.state.series.tripsPerActiveDriver],
       ['acceptanceRate', ctx(this.chartAcceptance), 'Acceptance Rate %', this.state.series.acceptanceRate],
-      ['completedToRequest', ctx(this.chartCompletedToRequest), 'Completed to Request %', this.state.series.completedToRequest],
-      ['completionRate', ctx(this.chartCompletionRate), 'Completion Rate %', this.state.series.completionRate],
 
+      // row 4
       ['cancelledByDriverPct', ctx(this.chartCancelledByDriver), 'Cancelled by Driver %', this.state.series.cancelledByDriverPct],
-
-      // NEW charts
       ['cancelledByCustomerPct', ctx(this.chartCancelledByCustomer), 'Cancelled by Customer %', this.state.series.cancelledByCustomerPct],
       ['cancelledDueToNetworkPct', ctx(this.chartCancelledDueToNetwork), 'Cancelled due to Network %', this.state.series.cancelledDueToNetworkPct],
-      ['tripsPerActiveDriver', ctx(this.chartTripsPerActiveDriver), 'Trips per Active Driver', this.state.series.tripsPerActiveDriver],
 
+      // row 5
+      ['completedToRequest', ctx(this.chartCompletedToRequest), 'Completed to Request %', this.state.series.completedToRequest],
+      ['completionRate', ctx(this.chartCompletionRate), 'Completion Rate %', this.state.series.completionRate],
       ['serviceFee', ctx(this.chartServiceFee), 'Service Fee', this.state.series.serviceFee],
+
+      // row 6
       ['partnerFee', ctx(this.chartPartnerFee), 'Partner Fee', this.state.series.partnerFee],
     ];
 
