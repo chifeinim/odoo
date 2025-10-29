@@ -447,50 +447,55 @@ export class OwlPerformanceDashboard extends Component {
   }
 
   _renderCharts() {
-    // helper to pull a dashboard metric
+    // convenience reader for card metrics
     const m = (key) => {
       const v = this.state.metrics?.[key];
       return (typeof v === 'number' && !Number.isNaN(v)) ? v : 0;
     };
 
-    // helper to compute number of days in the current window (inclusive)
-    // we'll default to 1 if parsing fails so we don't divide by 0
-    const daysInWindow = (() => {
-      const s = this.state.startDate;
-      const e = this.state.endDate;
-      if (!s || !e) return 1;
-      const sd = new Date(s + 'T00:00:00Z');
-      const ed = new Date(e + 'T00:00:00Z');
-      if (isNaN(sd.getTime()) || isNaN(ed.getTime())) return 1;
-      const diffMs = ed.getTime() - sd.getTime();
-      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
-      return diffDays > 0 ? diffDays : 1;
-    })();
-
-    // "sum" helper: take scorecard total and turn it into avg-per-day
-    const dailyAvg = (totalVal) => {
+    // avg line for "sum-ish" charts:
+    // take total from scorecard, divide by number of buckets in the series
+    const bucketAvg = (totalVal, seriesData) => {
       if (typeof totalVal !== 'number' || Number.isNaN(totalVal)) return null;
-      const d = daysInWindow || 1;
-      return totalVal / d;
+      if (!Array.isArray(seriesData) || !seriesData.length) return null;
+      return totalVal / seriesData.length;
     };
 
-    // config builder
-    // label: string
-    // seriesData: [{ period, value }, ...]
-    // avgVal: number | null   -> dashed line + included in y scaling if not null
+    // avg line for "snapshot per bucket" / "per active driver" style charts:
+    // just mean of the plotted values
+    const meanOfSeries = (seriesData) => {
+      if (!Array.isArray(seriesData) || !seriesData.length) return null;
+      let sum = 0;
+      let n = 0;
+      for (const pt of seriesData) {
+        const v = typeof pt.value === 'number' ? pt.value : 0;
+        sum += v;
+        n += 1;
+      }
+      if (!n) return null;
+      return sum / n;
+    };
+
+    // chart config builder
     const cfg = (label, seriesData, avgVal) => {
-      const vals = Array.isArray(seriesData)
+      const labelsRaw = Array.isArray(seriesData)
+        ? seriesData.map(pt => pt.period)
+        : [];
+
+      const mainValues = Array.isArray(seriesData)
         ? seriesData.map(pt => (typeof pt.value === 'number' ? pt.value : 0))
         : [];
 
+      // build a combined list of values to size the Y axis
+      const valsForAxis = [...mainValues];
       if (avgVal !== null && avgVal !== undefined && !Number.isNaN(avgVal)) {
-          vals.push(avgVal);
+        valsForAxis.push(avgVal);
       }
 
-      // figure out min/max of data (+ avgVal if provided)
+      // compute doubled-span y range
       let minVal = null;
       let maxVal = null;
-      for (const v of vals) {
+      for (const v of valsForAxis) {
         if (minVal === null || v < minVal) minVal = v;
         if (maxVal === null || v > maxVal) maxVal = v;
       }
@@ -506,19 +511,12 @@ export class OwlPerformanceDashboard extends Component {
         suggestedMin = maxVal - pad;
         suggestedMax = maxVal + pad;
       } else {
-        // double the observed range, centered
+        // double the span around mid
         suggestedMin = mid - span;
         suggestedMax = mid + span;
       }
 
-      const labelsRaw = Array.isArray(seriesData)
-        ? seriesData.map(pt => pt.period)
-        : [];
-
-      const mainValues = Array.isArray(seriesData)
-        ? seriesData.map(pt => (typeof pt.value === 'number' ? pt.value : 0))
-        : [];
-
+      // datasets: main line plus optional avg line
       const datasets = [
         {
           label,
@@ -531,7 +529,6 @@ export class OwlPerformanceDashboard extends Component {
         },
       ];
 
-      // optional dashed reference line
       if (avgVal !== null && avgVal !== undefined && !Number.isNaN(avgVal)) {
         const avgArray = labelsRaw.map(() => avgVal);
         datasets.push({
@@ -561,7 +558,7 @@ export class OwlPerformanceDashboard extends Component {
                 autoSkip: true,
                 maxTicksLimit: 8,
                 callback: function (value) {
-                  // format YYYY-MM-DD -> "DD-Mon"
+                  // turn YYYY-MM-DD into "DD-Mon"
                   const raw = this.getLabelForValue
                     ? this.getLabelForValue(value)
                     : value;
@@ -604,7 +601,7 @@ export class OwlPerformanceDashboard extends Component {
 
     const ctx = (ref) => (ref && ref.el) ? ref.el.getContext('2d') : null;
 
-    // clean up non-modal charts from previous render
+    // tear down old dashboard charts (modal charts have different keys)
     [
       'active','trips','supply','cash','moneyPerHour','tripsPerHour',
       'avgSupplyHoursPerDriver','tripsPerActiveDriver','acceptanceRate',
@@ -617,32 +614,29 @@ export class OwlPerformanceDashboard extends Component {
       }
     });
 
-    // build the dashboard charts in the same visual order as before:
-    // row1, row2, row3, row4, row5, row6
-
+    // build chart list in the same order you’re rendering canvases in the template
     const charts = [
       // row 1: Active Drivers, Total Trips, Supply Hours
-      // Active Drivers -> KEEP avg line null (funky per-day logic)
       [
         'active',
         ctx(this.chartActive),
         'Active Drivers',
         this.state.series.activeDrivers,
-        null // explicitly keep null
+        meanOfSeries(this.state.series.activeDrivers) // NEW: mean of buckets
       ],
       [
         'trips',
         ctx(this.chartTrips),
         'Total Trips',
         this.state.series.trips,
-        dailyAvg(m('tripCount')) // scorecard trips / days
+        bucketAvg(m('tripCount'), this.state.series.trips) // total trips ÷ buckets
       ],
       [
         'supply',
         ctx(this.chartSupply),
         'Supply Hours',
         this.state.series.supplyHours,
-        dailyAvg(m('supplyHours')) // scorecard supply hours / days
+        bucketAvg(m('supplyHours'), this.state.series.supplyHours) // total hours ÷ buckets
       ],
 
       // row 2: Gross Revenue, Revenue / Hour, Trips / Hour
@@ -651,50 +645,47 @@ export class OwlPerformanceDashboard extends Component {
         ctx(this.chartCash),
         'Gross Revenue',
         this.state.series.cashEarned,
-        dailyAvg(m('cashEarned')) // scorecard cash / days
+        bucketAvg(m('cashEarned'), this.state.series.cashEarned) // total Kz ÷ buckets
       ],
       [
         'moneyPerHour',
         ctx(this.chartMoneyPerHour),
         'Revenue / Hour',
         this.state.series.moneyPerHour,
-        m('moneyPerHour') // keep straight avg from scorecard
+        m('moneyPerHour') // directly the scorecard avg
       ],
       [
         'tripsPerHour',
         ctx(this.chartTripsPerHour),
         'Trips / Hour',
         this.state.series.tripsPerHour,
-        m('tripsPerHour') // keep straight avg from scorecard
+        m('tripsPerHour') // directly the scorecard avg
       ],
 
       // row 3: SH per Active Driver, Trips per Active Driver, Acceptance Rate
-      // SH per Active Driver -> remove avg line (sum-ish over bucket)
       [
         'avgSupplyHoursPerDriver',
         ctx(this.chartAvgSupply),
         'SH per Active Driver',
         this.state.series.avgSupplyHoursPerDriver,
-        null // no reference line
+        meanOfSeries(this.state.series.avgSupplyHoursPerDriver) // NEW: mean of buckets
       ],
-      // Trips per Active Driver -> remove avg line (sum-ish over bucket)
       [
         'tripsPerActiveDriver',
         ctx(this.chartTripsPerActiveDriver),
         'Trips per Active Driver',
         this.state.series.tripsPerActiveDriver,
-        null // no reference line
+        meanOfSeries(this.state.series.tripsPerActiveDriver) // NEW: mean of buckets
       ],
-      // Acceptance Rate -> keep direct %
       [
         'acceptanceRate',
         ctx(this.chartAcceptance),
         'Acceptance Rate %',
         this.state.series.acceptanceRate,
-        m('acceptanceRate')
+        m('acceptanceRate') // % from scorecard
       ],
 
-      // row 4: Driver Cancel %, Cust Cancel %, Network Cancel %
+      // row 4: Cancelled by Driver, by Customer, due to Network
       [
         'cancelledByDriverPct',
         ctx(this.chartCancelledByDriver),
@@ -737,7 +728,7 @@ export class OwlPerformanceDashboard extends Component {
         ctx(this.chartServiceFee),
         'Service Fee',
         this.state.series.serviceFee,
-        dailyAvg(m('serviceFee')) // service fee total / days
+        bucketAvg(m('serviceFee'), this.state.series.serviceFee) // total fee ÷ buckets
       ],
 
       // row 6: Partner Fee
@@ -746,16 +737,16 @@ export class OwlPerformanceDashboard extends Component {
         ctx(this.chartPartnerFee),
         'Partner Fee',
         this.state.series.partnerFee,
-        dailyAvg(m('partnerFee')) // partner fee total / days
+        bucketAvg(m('partnerFee'), this.state.series.partnerFee) // total fee ÷ buckets
       ],
     ];
 
+    // render all charts
     for (const [key, context, label, data, avgVal] of charts) {
       if (!context) continue;
       this._charts[key] = new Chart(context, cfg(label, data, avgVal));
     }
   }
-
 
   // filter dropdowns for dashboard
   toggleFilter(listName, value, isDraft = true) {
