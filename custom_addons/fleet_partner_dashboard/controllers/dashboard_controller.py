@@ -437,7 +437,7 @@ class FleetDashboardController(http.Controller):
         drv_cur = defaultdict(lambda: {
             'orders': 0, 'completes': 0, 'cash': 0.0,
             'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0,
-            'sup_secs': 0.0, 'driver_cancels': 0,
+            'sup_secs': 0.0, 'driver_cancels': 0, 'mileage_meters': 0.0,
         })
 
         # Series accumulators by bucket label (current window only)
@@ -478,6 +478,7 @@ class FleetDashboardController(http.Controller):
             driver_cancels      = int(r.get('driver_cancellations') or 0)
             customer_cancels    = int(r.get('customer_cancellations') or 0)
             network_cancels     = int(r.get('network_cancellations') or 0)
+            mileage_meters      = float(r.get('mileage_meters') or 0.0)
 
             in_prev = (prev_df and prev_dt and prev_df <= day <= prev_dt)
             in_cur  = (df and dt_   and df    <= day <= dt_)
@@ -520,6 +521,7 @@ class FleetDashboardController(http.Controller):
                 x['accepts']        += accepts
                 x['sup_secs']       += sup_secs
                 x['driver_cancels'] += driver_cancels
+                x['mileage_meters'] += mileage_meters
 
                 # series by bucket (current window only)
                 bk = _bucket_key(day)
@@ -741,13 +743,14 @@ class FleetDashboardController(http.Controller):
             s = drv_cur.get(drv.id, {
                 'orders': 0, 'completes': 0, 'cash': 0.0,
                 'util_secs': 0.0, 'eff_secs': 0.0, 'accepts': 0,
-                'sup_secs': 0.0, 'driver_cancels': 0,
+                'sup_secs': 0.0, 'driver_cancels': 0, 'mileage_meters': 0.0,
             })
             hours = s['sup_secs'] / 3600.0
             trips = s['completes']
             orders = s['orders']
             cash   = s['cash']
             driver_cancels = s['driver_cancels']
+            mileage_km = (s.get('mileage_meters', 0.0) or 0.0) / 1000.0
 
             accept_rate = _safe_div(s['accepts'] * 100.0, max(orders, 1e-12)) if orders else 0.0
             efficiency  = _safe_div((s['eff_secs']/3600.0) * 100.0, max(hours, 1e-12)) if hours else 0.0
@@ -766,6 +769,7 @@ class FleetDashboardController(http.Controller):
                 'cash':           cash,
                 'trips':          trips,
                 'hours':          hours,
+                'mileage_km':     mileage_km,
                 'acceptance_rate': accept_rate,
                 'trips_per_hour': _safe_div(trips, max(hours, 1e-12)) if hours else 0.0,
                 'money_per_hour': _safe_div(cash,  max(hours, 1e-12)) if hours else 0.0,

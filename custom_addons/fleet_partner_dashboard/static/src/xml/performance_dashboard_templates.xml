@@ -113,11 +113,11 @@
                     t-on-change="onEndDateChange"/>
             </div>
 
-            <!-- Apply Filters -->
+            <!-- Enter Filters-->
             <button class="btn btn-primary"
                     t-att-disabled="!isDirty()"
                     t-on-click="applyFilters">
-              Apply Filters
+              Enter Filters
             </button>
 
             <!-- Toggle Cards/Charts -->
@@ -695,6 +695,13 @@
                   </t>
                 </th>
 
+                <th data-sort-key="mileage_km" style="cursor:pointer" t-on-click="() => setSort('mileage_km')">
+                  Mileage
+                  <t t-if="state.sortKey === 'mileage_km'">
+                    <span class="ms-1" t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
+                  </t>
+                </th>
+
                 <th data-sort-key="trips_per_hour" style="cursor:pointer" t-on-click="() => setSort('trips_per_hour')">
                   Trips/Hour
                   <t t-if="state.sortKey === 'trips_per_hour'">
@@ -756,6 +763,7 @@
                   <td><t t-esc="formatNumber(d.cash, 0)"/></td>
                   <td><t t-esc="formatNumber(d.trips, 0)"/></td>
                   <td><t t-esc="formatNumber(d.hours, 0)"/>h</td>
+                  <td><t t-esc="formatNumber(d.mileage_km, 0)"/>km</td>
                   <td><t t-esc="formatNumber(d.trips_per_hour, 0)"/></td>
                   <td><t t-esc="formatNumber(d.money_per_hour, 0)"/></td>
                   <td><t t-esc="formatNumber(d.acceptance_rate, 1)"/>%</td>
