@@ -115,3 +115,54 @@
   border-collapse: separate !important;
   border-spacing: 0;
 }
+
+/* ===== Modal overlay ==================================================== */
+.lp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 4000;            /* above in-app sticky headers */
+}
+
+/* Lock page behind */
+body.lp-modal-open { overflow: hidden !important; }
+
+/* Make only the modal body scroll. Prevent large fixed elements from scrolling. */
+.lp-modal-overlay .modal { 
+  pointer-events: auto;           /* accept input */
+  overflow: hidden;               /* prevent the overall modal from scrolling */
+}
+.lp-modal-overlay .modal-dialog {
+  margin: 5vh auto;               /* vertical breathing room */
+}
+.lp-modal-overlay .modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;               /* constrain total height */
+  background-color: #fff;         /* opaque for stable painting */
+}
+
+/* The only scroller is here */
+.lp-modal-overlay .modal-body {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  contain: paint;                 /* isolate paint to the scroller */
+  will-change: scroll-position;   /* hint without promoting big layers */
+  background-color: #fff;         /* no transparent gaps (prevents flashes) */
+}
+
+/* Clean, compact cards – no extra white */
+.lp-modal-overlay .card,
+.lp-modal-overlay .card .card-body {
+  background-color: #fff;
+}
+.lp-modal-overlay .card { margin: 0; }
+.lp-modal-overlay .card .card-body { padding: 0.75rem; }
+
+/* Canvases get a solid backdrop to avoid any see-through during repaints */
+.lp-modal-overlay canvas { background-color: #fff; }
+
+/* While the modal is open, ensure our cloned sticky header never paints on top */
+body.lp-modal-open .fp-sticky-header {
+  display: none !important;    /* simplest + most robust */
+}

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
   <t t-name="owl.OwlLowPerformersDashboard" owl="1">
+
     <div class="o_fleet_dashboard"
          style="height: calc(100vh - 70px); overflow-y: auto; padding: 1rem;">
       <t t-if="state.loading">
@@ -366,10 +367,9 @@
 
         <!-- MODAL (driver detail) -->
         <t t-if="state.showModal">
-          <div class="modal d-block"
-               tabindex="-1"
-               t-ref="lp_modal"
-               style="background:rgba(0,0,0,0.4)">
+            <div class="modal d-block lp-modal-overlay"
+                  tabindex="-1"
+                  t-ref="lp_modal">
             <div class="modal-dialog modal-xl" style="max-width: 80vw;">
               <div class="modal-content">
 
@@ -385,7 +385,7 @@
                       <div><strong>Phone:</strong> <t t-esc="state.modalDriver.phone"/></div>
                       <div><strong>Product:</strong> <t t-esc="state.modalDriver.product_type"/></div>
                       <div><strong>Hire Date:</strong> <t t-esc="state.modalDriver.hire_date"/></div>
-                      <div><strong>Risk:</strong> <t t-esc="state.modalDriver.risk"/></div>
+                      <div><strong>Priority:</strong> <t t-esc="state.modalDriver.risk"/></div>
                       <div><strong>Driver Quality:</strong> <t t-esc="state.modalDriver.quality_score"/></div>
                     </div>
 

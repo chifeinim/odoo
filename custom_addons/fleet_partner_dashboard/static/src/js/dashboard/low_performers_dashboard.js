@@ -104,6 +104,19 @@ export class OwlLowPerformersDashboard extends Component {
     this._syncStickyHeaderX && this._syncStickyHeaderX();
   }
 
+  _detachStickyListeners() {
+    if (this._scrollTarget && this._onRootScroll) {
+      this._scrollTarget.removeEventListener('scroll', this._onRootScroll);
+      this._scrollTarget = null;
+      this._onRootScroll = null;
+    }
+    if (this._wrapTarget && this._onWrapScroll) {
+      this._wrapTarget.removeEventListener('scroll', this._onWrapScroll);
+      this._wrapTarget = null;
+      this._onWrapScroll = null;
+    }
+  }
+
   // ===== sorting / paging logic (same as you had) =========================
   _compareByKey(a, b, key) {
     const ax = a?.[key], bx = b?.[key];
@@ -331,6 +344,8 @@ export class OwlLowPerformersDashboard extends Component {
   constructor(...args) {
     super(...args);
     this._charts = {};
+    this._modalPlaceholder = null;
+    this._modalPortaled = false;
   }
 
   renderBarChart(canvas, series, title) {
@@ -494,13 +509,36 @@ export class OwlLowPerformersDashboard extends Component {
 
       // modal charts (if user is looking at charts tab)
       if (this.state.showModal && this.state.showCharts && this.state.modalDriver?.series) {
+        const host = (this.modalRef && this.modalRef.el) || document;
         const s = this.state.modalDriver.series;
-        this.renderBarChart(this.el.querySelector('#lp_chart_cash'),   s.cashEarned,      'Gross Revenue');
-        this.renderBarChart(this.el.querySelector('#lp_chart_trips'),  s.trips,           'Trips');
-        this.renderBarChart(this.el.querySelector('#lp_chart_hours'),  s.supplyHours,     'Hours Online');
-        this.renderBarChart(this.el.querySelector('#lp_chart_acc'),    s.acceptanceRate,  'Acceptance Rate %');
-        this.renderBarChart(this.el.querySelector('#lp_chart_comp'),   s.completionRate,  'Completion Rate %');
+        this.renderBarChart(host.querySelector('#lp_chart_cash'),   s.cashEarned,      'Gross Revenue');
+        this.renderBarChart(host.querySelector('#lp_chart_trips'),  s.trips,           'Trips');
+        this.renderBarChart(host.querySelector('#lp_chart_hours'),  s.supplyHours,     'Hours Online');
+        this.renderBarChart(host.querySelector('#lp_chart_acc'),    s.acceptanceRate,  'Acceptance Rate %');
+        this.renderBarChart(host.querySelector('#lp_chart_comp'),   s.completionRate,  'Completion Rate %');
       }
+
+      // Manual portal: if modal is open and not yet portaled, move it to <body>
+      if (this.state.showModal && this.modalRef?.el && !this._modalPortaled) {
+        const el = this.modalRef.el;
+        if (!this._modalPlaceholder) {
+          this._modalPlaceholder = document.createComment('lp-modal-anchor');
+          el.parentNode && el.parentNode.insertBefore(this._modalPlaceholder, el);
+        }
+        document.body.appendChild(el);
+        this._modalPortaled = true;
+        try { document.body.classList.add('lp-modal-open'); } catch(e) {}
+      }
+      // If modal is closed but still portaled, restore it
+      if (!this.state.showModal && this._modalPortaled && this._modalPlaceholder) {
+        const el = this.modalRef?.el;
+        if (el && this._modalPlaceholder.parentNode) {
+          this._modalPlaceholder.parentNode.insertBefore(el, this._modalPlaceholder);
+        }
+        this._modalPortaled = false;
+        try { document.body.classList.remove('lp-modal-open'); } catch(e) {}
+      }
+
     });
 
     onWillUnmount(() => {
@@ -517,6 +555,13 @@ export class OwlLowPerformersDashboard extends Component {
       }
       // destroy charts
       Object.values(this._charts).forEach(ch => { try { ch.destroy(); } catch(e){} });
+
+      // Restore modal to original place if still portaled (safety)
+      if (this._modalPortaled && this.modalRef?.el && this._modalPlaceholder?.parentNode) {
+        this._modalPlaceholder.parentNode.insertBefore(this.modalRef.el, this._modalPlaceholder);
+        this._modalPortaled = false;
+      }
+      try { document.body.classList.remove('lp-modal-open'); } catch(e) {}
     });
   }
 
@@ -635,14 +680,16 @@ export class OwlLowPerformersDashboard extends Component {
     this.state.showModal   = true;
     this.state.showCharts  = false;
 
+    // Stop sticky header machinery while modal is open
+    this._detachStickyListeners();
+    try { document.body.classList.add('lp-modal-open'); } catch(e) {}
+
     const meta  = this.state.meta || {};
     const start = meta.table_from;
     const end   = meta.table_to;
 
     const res = await this.env.services.rpc('/fleet_low_performers/driver_detail', {
-      driver_id: d.id,
-      start_date: start,
-      end_date: end,
+      driver_id: d.id, start_date: start, end_date: end,
     });
     this.state.modalDriver.cards  = res.cards  || null;
     this.state.modalDriver.series = res.series || null;
@@ -652,17 +699,62 @@ export class OwlLowPerformersDashboard extends Component {
   closeModal() {
     this.state.showModal = false;
     this.state.modalDriver = null;
+
+    // Re-enable sticky header machinery
+    try { document.body.classList.remove('lp-modal-open'); } catch(e) {}
+    this._attachStickyListeners();   // rebuild after the modal goes away
+    // one extra rebuild on next tick for good measure
+    setTimeout(() => {
+      this._buildStickyHeader && this._buildStickyHeader();
+    }, 0);
+  }
+
+  _drawChartsOnce() {
+    const host = this.modalRef?.el;
+    const s = this.state.modalDriver?.series;
+    if (!host || !s) return;
+
+    const sel = (id) => host.querySelector(id);
+    const ensureFreshCanvas = (canvas) => {
+      if (!canvas) return null;
+      try {
+        // hard reset: resets internal state + clears previous drawing buffer
+        canvas.width = canvas.clientWidth || canvas.width || 600;
+        canvas.height = canvas.clientHeight || 160;
+        // also nuke any lingering chart for this canvas id
+        const id = canvas.id;
+        if (id && this._charts && this._charts[id]) {
+          try { this._charts[id].destroy(); } catch(e) {}
+          delete this._charts[id];
+        }
+      } catch(e) {}
+      return canvas;
+    };
+
+    this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_cash')),   s.cashEarned,      'Gross Revenue');
+    this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_trips')),  s.trips,           'Trips');
+    this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_hours')),  s.supplyHours,     'Hours Online');
+    this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_acc')),    s.acceptanceRate,  'Acceptance Rate %');
+    this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_comp')),   s.completionRate,  'Completion Rate %');
   }
 
   toggleModalView() {
     this.state.showCharts = !this.state.showCharts;
+
+    // Leaving Charts → destroy all instances
     if (!this.state.showCharts) {
-      // kill any live Chart.js instances
-      Object.values(this._charts).forEach(ch => {
-        try { ch.destroy(); } catch(e){}
-      });
+      Object.values(this._charts || {}).forEach(ch => { try { ch.destroy(); } catch(e) {} });
       this._charts = {};
+      return;
     }
+
+    // Entering Charts → wait for DOM/layout to settle, then draw
+    // 1st rAF: DOM applied; 2nd rAF: layout finalized; then render
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this._drawChartsOnce();
+      });
+    });
   }
 }
 
