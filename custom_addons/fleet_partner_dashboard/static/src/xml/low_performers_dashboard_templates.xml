@@ -89,11 +89,11 @@
             </div>
           </div>
 
-          <!-- Risk -->
+          <!-- Priority -->
           <div class="dropdown" t-att-class="{'show': state.showRisks}">
             <button class="btn btn-primary dropdown-toggle"
                     t-on-click="() => toggleDropdown('showRisks')">
-              Risk
+              Priority
               <t t-if="state.draftSelectedRisks.length">
                 (<t t-esc="state.draftSelectedRisks.length"/>)
               </t>
@@ -169,7 +169,7 @@
           <button class="btn btn-primary"
                   t-att-disabled="!isDirty()"
                   t-on-click="applyFilters">
-            Apply Filters
+            Enter Filters
           </button>
         </div>
 
@@ -213,7 +213,7 @@
                 <th data-sort-key="risk"
                     style="cursor:pointer"
                     t-on-click="() => setSort('risk')">
-                  Risk
+                  Priority
                   <t t-if="state.sortKey === 'risk'">
                     <span class="ms-1"
                           t-esc="state.sortDir === 'asc' ? '▲' : '▼'"/>
@@ -284,14 +284,16 @@
                   </td>
                   <td><t t-esc="d.phone"/></td>
 
-                  <!-- RISK cell highlighting -->
+                  <!-- PRIORITY cell highlighting (1=dark red, 2=red, 3=orange) -->
                   <td
-                    t-att-class="(d.risk === 'High' ? 'bg-danger text-dark fw-bold' : (d.risk === 'Medium' ? 'bg-warning text-dark fw-bold' : ''))"
-                    t-att-style="d.risk === 'High'
-                                  ? 'background-color:#f8d7da !important;'
-                                  : (d.risk === 'Medium'
-                                      ? 'background-color:#fff3cd !important;'
-                                      : '')">
+                    t-att-class="(d.risk === 1 || d.risk === 2 || d.risk === 3) ? 'text-white fw-bold' : ''"
+                    t-att-style="d.risk === 1
+                                  ? 'background-color:#8B0000 !important;'     /* dark red */
+                                  : (d.risk === 2
+                                      ? 'background-color:#dc3545 !important;' /* red */
+                                      : (d.risk === 3
+                                          ? 'background-color:#fd7e14 !important;' /* orange */
+                                          : ''))">
                     <t t-esc="d.risk"/>
                   </td>
 

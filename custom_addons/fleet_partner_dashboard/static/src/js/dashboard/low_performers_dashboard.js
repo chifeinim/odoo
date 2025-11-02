@@ -392,14 +392,18 @@ export class OwlLowPerformersDashboard extends Component {
       data: {},
       productTypes: [],
       categories: [],
-      risks: [{ key: 'High', label: 'High' }, { key: 'Medium', label: 'Medium' }],
+      risks: [
+        { key: 1, label: '1' },
+        { key: 2, label: '2' },
+        { key: 3, label: '3' },
+      ],
       timePeriods: ['This Week','Last Week','Last Month','Last 3 Months'],
 
       // filters
       selectedProducts: [],
       selectedScores: [],
       selectedCategories: [],
-      selectedRisks: ['High','Medium'],
+      selectedRisks: [1, 2, 3],
       selectedIssues: [],
       selectedPeriod: 'Last Week',
       startDate: '', endDate: '',
@@ -407,16 +411,17 @@ export class OwlLowPerformersDashboard extends Component {
       draftSelectedScores: [],
       draftSelectedCategories: [],
       draftSelectedIssues: [],
-      draftSelectedRisks: ['High','Medium'],
+      draftSelectedRisks: [1, 2, 3],
       draftSelectedPeriod: 'Last Week',
       draftStartDate: '',
       draftEndDate: '',
 
       // UI
       infoText:
-        'Shows drivers flagged as Medium/High risk based on the last 7 days (ending yesterday), averaging over 6 days.\n' +
-        'High risk: avg daily hours ≤ 2 OR avg daily trips ≤ 2.\n' +
-        'Medium risk: 2 < avg daily hours < 5 OR 2 < avg daily trips < 5.',
+        'Priority is computed from the PRIOR WEEK (Mon-Sun), accounting for a 6-day workweek.\n' +
+        '1: avg trips/day ≤ 1 OR avg hours/day ≤ 1.\n' +
+        '2: avg trips/day ≤ 2 OR avg hours/day ≤ 2.\n' +
+        '3: 2 < avg trips/day < 5 OR 2 < avg hours/day < 5.',
       showProducts: false, showScores: false, showCategories: false,
       showRisks: false, showIssues: false, showPeriod: false,
 
@@ -443,7 +448,7 @@ export class OwlLowPerformersDashboard extends Component {
         await this.env.services.rpc('/fleet_low_performers/filters', {});
       this.state.productTypes = product_types;
       this.state.categories   = categories;
-      this.state.risks        = risks || this.state.risks;
+      this.state.risks        = risks || this.state.risks; // expects numeric keys (1/2/3)
       this.state.timePeriods  = time_periods || this.state.timePeriods;
 
       // default: include most categories except archive/new/churn/other

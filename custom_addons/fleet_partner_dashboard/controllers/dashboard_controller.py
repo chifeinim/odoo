@@ -804,8 +804,12 @@ class FleetDashboardController(http.Controller):
 
         Driver = request.env['x_fleet_driver'].sudo()
         categories = [k for k, _ in Driver._fields['type'].selection]  # same as perf dash
-        # risk filter options
-        risks = [{'key': 'High', 'label': 'High'}, {'key': 'Medium', 'label': 'Medium'}]
+        # priority filter options
+        risks = [
+            {'key': 1, 'label': '1'},
+            {'key': 2, 'label': '2'},
+            {'key': 3, 'label': '3'},
+        ]
         periods = ['This Week', 'Last Week', 'Last Month', 'Last 3 Months']
 
         return {
@@ -824,12 +828,11 @@ class FleetDashboardController(http.Controller):
         """
         Build the Low Performers table dataset.
 
-        - Risk is computed from the last 7 days (ending yesterday) using:
-            High    if avg daily hours <= 2 OR avg daily trips <= 2
-            Medium  if (2 < avg daily hours < 5) OR (2 < avg daily trips < 5)
-        (High takes precedence if one metric <= 2.)
-        - Table metrics (trips, hours, cash, rates, issues_flag) are computed
-        for the user-selected date window below.
+        PRIORITY (formerly "risk") is computed from the **prior full week** (Mon-Sun),
+        not the last-7-days, with the following buckets (P1 takes precedence):
+          • 1: avg trips/day ≤ 1  OR avg hours/day ≤ 1
+          • 2: avg trips/day ≤ 2  OR avg hours/day ≤ 2
+          • 3: 2 < avg trips/day < 5  OR 2 < avg hours/day < 5
         """
         today = date.today()
 
@@ -892,8 +895,8 @@ class FleetDashboardController(http.Controller):
 
         # --- C) Pull driver-day rows for:
         #       (1) the table window df..dt_
-        #       (2) the risk window (last 7 days ending yesterday)
-        risk_df, risk_dt = _last_7_days_excl_today(today)
+        #       (2) the PRIORITY window = prior full Monday–Sunday week
+        risk_df, risk_dt = _last_week_range(today)
 
         def _pull_day_rows(_from: date, _to: date):
             resp = _get('/metrics/driver-day', {
@@ -957,25 +960,31 @@ class FleetDashboardController(http.Controller):
         table_by_drv = _by_odoo_id(table_rows)
         risk_by_drv  = _by_odoo_id(risk_rows)
 
-        # --- F) Compute risk from last 7 days ---
-        def _risk_for(rows7: list) -> Optional[str]:
-            trips     = sum(int(r.get('orders_completed') or 0) for r in rows7)
-            sup_secs  = sum(float(r.get('supply_seconds') or 0.0) for r in rows7)
-            # divide by 6 instead of 7, since drivers are only expected to work 6 days a week
-            avg_trips = trips / 6.0
-            avg_hours = (sup_secs / 3600.0) / 6.0
+        # --- F) Compute PRIORITY from prior Mon–Sun week (averaged over 6 days) ---
+        def _priority_for(rows_week: list) -> Optional[int]:
+            trips    = sum(int(r.get('orders_completed') or 0) for r in rows_week)
+            sup_secs = sum(float(r.get('supply_seconds') or 0.0) for r in rows_week)
+            days = 6.0  # average per calendar day in that week
+            avg_trips = trips / days
+            avg_hours = (sup_secs / 3600.0) / days
+
+            # Priority 1 first (most severe)
+            if avg_hours <= 1.0 or avg_trips <= 1.0:
+                return 1
+            # Priority 2 (rename of previous High)
             if avg_hours <= 2.0 or avg_trips <= 2.0:
-                return 'High'
+                return 2
+            # Priority 3 (rename of previous Medium)
             if (2.0 < avg_hours < 5.0) or (2.0 < avg_trips < 5.0):
-                return 'Medium'
+                return 3
             return None
 
-        # --- G) Build table data for selected window, filtered to High/Medium ---
+        # --- G) Build table data for selected window, filtered to P1/P2/P3 ---
         Issue = request.env['x_fleet_issue'].sudo()
         data = {}
         for drv in all_drivers:
-            rid = _risk_for(risk_by_drv.get(drv.id, []))
-            if rid not in ('High', 'Medium'):
+            rid = _priority_for(risk_by_drv.get(drv.id, []))
+            if rid not in (1, 2, 3):
                 continue
             if risks and rid not in risks:
                 continue
@@ -1012,7 +1021,7 @@ class FleetDashboardController(http.Controller):
                 'id': drv.id,
                 'name': drv.name,
                 'phone': drv.phone or '',
-                'risk': rid,
+                'risk': rid,  # numeric 1/2/3
                 'trips': completes,
                 'hours': hours,
                 'cash': cash_sum,
