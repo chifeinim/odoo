@@ -1103,17 +1103,19 @@ class FleetDashboardController(http.Controller):
             return {'cards': {}, 'series': {}, 'issues': []}
 
         # --- C) Pull rows for the metrics window (8 weeks) ----------------------
-        day_resp = _get('/metrics/driver-day', {
+        # Use pre-aggregated weekly metrics from the new endpoint
+        week_resp = _get('/metrics/driver-week', {
             'from_date': metrics_df.strftime('%Y-%m-%d'),
             'to_date':   metrics_dt.strftime('%Y-%m-%d'),
             'tenant':    TENANT_CODE,
-            'driver_id': yid,    # if signer supports it
+            # (endpoint doesn’t need priority here; we’re viewing one driver)
+            # 'priority': '1,2,3',
         })
-        rows = [r for r in day_resp.get('rows', []) if (r.get('driver_id') or '').strip() == yid]
+        rows = [r for r in week_resp.get('rows', [])
+                if (r.get('driver_id') or '').strip() == yid]
 
-        # --- D) Bucketing: weekly buckets (Mon–Sun) across exactly 8 weeks -----
-        def _bucketize_8_weeks(mon0: date, sunN: date):
-            # mon0 is a Monday, sunN is a Sunday; produce 8 week buckets Mon..Sun
+        # --- D) Bucketing: exactly 8 Mon–Sun weeks (labels = Monday ISO) -------
+        def _bucketize_8_weeks(mon0: date):
             buckets = []
             cur = mon0
             for _ in range(8):
@@ -1122,108 +1124,75 @@ class FleetDashboardController(http.Controller):
                 cur += timedelta(days=7)
             return buckets
 
-        buckets = _bucketize_8_weeks(metrics_df, metrics_dt)
+        buckets = _bucketize_8_weeks(metrics_df)
         labels  = [lbl for _, _, lbl, _ in buckets]
 
-        def _bucket_label(d: date):
-            for b0, b1, lbl, _ in buckets:
-                if b0 <= d <= b1:
-                    return lbl
-            return None
-
-        # --- E) Aggregate per bucket (include driver cancellations) -------------
-        from collections import defaultdict
-        acc = {
-            'orders': defaultdict(int),
-            'completes': defaultdict(int),
-            'cash': defaultdict(float),
-            'accepts': defaultdict(int),
-            'sup_secs': defaultdict(float),
-            'util_secs': defaultdict(float),
-            'eff_secs': defaultdict(float),
-            'driver_cancels': defaultdict(int),
-        }
-        totals = {'orders':0,'completes':0,'cash':0.0,'accepts':0,'sup_secs':0.0,'util_secs':0.0,'eff_secs':0.0,'driver_cancels':0}
-
+        # Map week_monday -> row (there should be at most one per driver/week)
+        by_week = {}
         for r in rows:
+            w = r.get('week_monday')
             try:
-                d = datetime.strptime(r.get('day'), '%Y-%m-%d').date()
+                wdt = datetime.strptime(w, '%Y-%m-%d').date()
             except Exception:
                 continue
-            lbl = _bucket_label(d)
-            if not lbl:
-                continue
+            by_week[wdt.strftime('%Y-%m-%d')] = r
 
-            orders_total     = int(r.get('orders_total') or 0)
-            completes        = int(r.get('orders_completed') or 0)
-            cash_sum         = float(r.get('cash_sum') or 0.0)
-            accepts          = int(r.get('accepts') or 0)
-            sup_secs         = float(r.get('supply_seconds') or 0.0)
-            util_secs        = float(r.get('interval_seconds') or 0.0)
-            eff_secs         = float(r.get('transport_seconds') or 0.0)
-            driver_cancels   = int(r.get('driver_cancellations') or 0)
-
-            acc['orders'][lbl]    += orders_total
-            acc['completes'][lbl] += completes
-            acc['cash'][lbl]      += cash_sum
-            acc['accepts'][lbl]   += accepts
-            acc['sup_secs'][lbl]  += sup_secs
-            acc['util_secs'][lbl] += util_secs
-            acc['eff_secs'][lbl]  += eff_secs
-            acc['driver_cancels'][lbl] += driver_cancels
-
-            totals['orders']    += orders_total
-            totals['completes'] += completes
-            totals['cash']      += cash_sum
-            totals['accepts']   += accepts
-            totals['sup_secs']  += sup_secs
-            totals['util_secs'] += util_secs
-            totals['eff_secs']  += eff_secs
-            totals['driver_cancels'] += driver_cancels
-
-        def _safe_div(a, b): 
+        def _safe_div(a, b):
             return (a / b) if b else 0.0
 
-        # --- F) Build series for charts (weekly) --------------------------------
+        # --- E) Build series for charts (weekly, using server-calculated fields) -
         series = {
-            'trips':        [{'period': L, 'value': acc['completes'].get(L, 0)} for L in labels],
-            'supplyHours':  [{'period': L, 'value': acc['sup_secs'].get(L, 0.0)/3600.0} for L in labels],
-            'cashEarned':   [{'period': L, 'value': acc['cash'].get(L, 0.0)} for L in labels],
-            'acceptanceRate': [
-                {'period': L, 'value': _safe_div(acc['accepts'].get(L,0)*100.0, max(acc['orders'].get(L,0), 1e-12))}
-                for L in labels
-            ],
-            'completionRate': [
-                {'period': L, 'value': _safe_div(acc['completes'].get(L,0)*100.0, max(acc['accepts'].get(L,0), 1e-12))}
-                for L in labels
-            ],
-            # already added earlier in your build:
-            'tripsPerHour': [
-                {
-                    'period': L,
-                    'value': _safe_div(acc['completes'].get(L, 0), max(acc['sup_secs'].get(L, 0.0)/3600.0, 1e-12))
-                } for L in labels
-            ],
-            'cancelledByDriverPct': [
-                {
-                    'period': L,
-                    'value': _safe_div(acc['driver_cancels'].get(L, 0) * 100.0, max(acc['accepts'].get(L, 0), 1e-12))
-                } for L in labels
-            ],
+            'trips': [],
+            'supplyHours': [],
+            'cashEarned': [],
+            'acceptanceRate': [],
+            'completionRate': [],
+            'tripsPerHour': [],
+            'cancelledByDriverPct': [],
         }
 
-        # --- G) Cards = totals over the 8-week window ---------------------------
+        for L in labels:
+            r = by_week.get(L, {})
+            trips      = int(r.get('orders_completed') or 0)
+            sup_hours  = (float(r.get('supply_seconds') or 0.0)) / 3600.0
+            cash_sum   = float(r.get('cash_sum') or 0.0)
+            acc_pct    = float(r.get('acceptance_rate_pct') or 0.0)
+            cmp_pct    = float(r.get('completion_rate_pct') or 0.0)
+            trph       = float(r.get('trips_per_hour') or (_safe_div(trips, sup_hours) if sup_hours else 0.0))
+            cbd_pct    = float(r.get('cancelled_by_driver_pct') or 0.0)
+
+            series['trips'].append({'period': L, 'value': trips})
+            series['supplyHours'].append({'period': L, 'value': sup_hours})
+            series['cashEarned'].append({'period': L, 'value': cash_sum})
+            series['acceptanceRate'].append({'period': L, 'value': acc_pct})
+            series['completionRate'].append({'period': L, 'value': cmp_pct})
+            series['tripsPerHour'].append({'period': L, 'value': trph})
+            series['cancelledByDriverPct'].append({'period': L, 'value': cbd_pct})
+
+        # --- F) Cards = totals over the 8-week window ---------------------------
+        totals = {
+            'orders':    sum(int(r.get('orders_total') or 0) for r in rows),
+            'completes': sum(int(r.get('orders_completed') or 0) for r in rows),
+            'cash':      sum(float(r.get('cash_sum') or 0.0) for r in rows),
+            'accepts':   sum(int(r.get('accepts') or 0) for r in rows),
+            'sup_secs':  sum(float(r.get('supply_seconds') or 0.0) for r in rows),
+        }
         hours = totals['sup_secs'] / 3600.0
+
         cards = {
             'cash': totals['cash'],
             'trips': totals['completes'],
             'hours': hours,
+            # recompute from totals to keep weighting correct across weeks
             'acceptance_rate': _safe_div(totals['accepts'] * 100.0, max(totals['orders'], 1e-12)) if totals['orders'] else 0.0,
             'completion_rate': _safe_div(totals['completes'] * 100.0, max(totals['accepts'], 1e-12)) if totals['accepts'] else 0.0,
-
-            # previously added:
-            'trips_per_hour': _safe_div(totals['completes'], max(hours, 1e-12)) if hours else 0.0,
-            'cancelled_by_driver': _safe_div(totals.get('driver_cancels', 0) * 100.0, max(totals['accepts'], 1e-12)) if totals['accepts'] else 0.0,
+            'trips_per_hour':  _safe_div(totals['completes'], max(hours, 1e-12)) if hours else 0.0,
+            # weekly endpoint already gives cancelled_by_driver_pct per week; for the card, we do totals-based %
+            'cancelled_by_driver': _safe_div(
+                # sum driver cancels across weeks / sum accepts
+                sum(int(r.get('driver_cancellations') or 0) for r in rows) * 100.0,
+                max(totals['accepts'], 1e-12)
+            ) if totals['accepts'] else 0.0,
         }
 
         # --- H) Issues list uses the table's current window (unchanged) ---------
