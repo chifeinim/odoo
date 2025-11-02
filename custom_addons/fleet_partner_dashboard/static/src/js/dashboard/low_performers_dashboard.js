@@ -516,6 +516,8 @@ export class OwlLowPerformersDashboard extends Component {
         this.renderBarChart(host.querySelector('#lp_chart_hours'),  s.supplyHours,     'Hours Online');
         this.renderBarChart(host.querySelector('#lp_chart_acc'),    s.acceptanceRate,  'Acceptance Rate %');
         this.renderBarChart(host.querySelector('#lp_chart_comp'),   s.completionRate,  'Completion Rate %');
+        this.renderBarChart(this.el.querySelector('#lp_chart_trph'), s.tripsPerHour, 'Trips per Hour');
+        this.renderBarChart(this.el.querySelector('#lp_chart_cbd'),  s.cancelledByDriverPct, 'Cancelled by Driver %');
       }
 
       // Manual portal: if modal is open and not yet portaled, move it to <body>
@@ -736,6 +738,8 @@ export class OwlLowPerformersDashboard extends Component {
     this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_hours')),  s.supplyHours,     'Hours Online');
     this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_acc')),    s.acceptanceRate,  'Acceptance Rate %');
     this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_comp')),   s.completionRate,  'Completion Rate %');
+    this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_trph')), s.tripsPerHour, 'Trips per Hour');
+    this.renderBarChart(ensureFreshCanvas(sel('#lp_chart_cbd')),  s.cancelledByDriverPct, 'Cancelled by Driver %');
   }
 
   toggleModalView() {

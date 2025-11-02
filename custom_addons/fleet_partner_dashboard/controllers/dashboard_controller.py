@@ -1144,6 +1144,7 @@ class FleetDashboardController(http.Controller):
             'sup_secs': defaultdict(float),
             'util_secs': defaultdict(float),
             'eff_secs': defaultdict(float),
+            'driver_cancels': defaultdict(int),
         }
 
         def _bucket_label(d):
@@ -1170,6 +1171,7 @@ class FleetDashboardController(http.Controller):
             sup_secs     = float(r.get('supply_seconds') or 0.0)
             util_secs    = float(r.get('interval_seconds') or 0.0)
             eff_secs     = float(r.get('transport_seconds') or 0.0)
+            driver_cancels = int(r.get('driver_cancellations') or 0)
 
             acc['orders'][lbl]    += orders_total
             acc['completes'][lbl] += completes
@@ -1178,6 +1180,7 @@ class FleetDashboardController(http.Controller):
             acc['sup_secs'][lbl]  += sup_secs
             acc['util_secs'][lbl] += util_secs
             acc['eff_secs'][lbl]  += eff_secs
+            acc['driver_cancels'][lbl] += driver_cancels
 
             totals['orders']    += orders_total
             totals['completes'] += completes
@@ -1186,6 +1189,7 @@ class FleetDashboardController(http.Controller):
             totals['sup_secs']  += sup_secs
             totals['util_secs'] += util_secs
             totals['eff_secs']  += eff_secs
+            totals['driver_cancels'] = totals.get('driver_cancels', 0) + driver_cancels
 
         # Build series (values already bucketed)
         series = {
@@ -1200,6 +1204,21 @@ class FleetDashboardController(http.Controller):
                 {'period': L, 'value': _safe_div(acc['completes'].get(L,0)*100.0, max(acc['accepts'].get(L,0), 1e-12))}
                 for L in labels
             ],
+            'tripsPerHour': [
+                {
+                    'period': L,
+                    'value': (lambda trips, hrs: _safe_div(trips, max(hrs, 1e-12)))(
+                        acc['completes'].get(L, 0),
+                        acc['sup_secs'].get(L, 0.0)/3600.0
+                    )
+                } for L in labels
+            ],
+            'cancelledByDriverPct': [
+                {
+                    'period': L,
+                    'value': _safe_div(acc['driver_cancels'].get(L, 0) * 100.0, max(acc['accepts'].get(L, 0), 1e-12))
+                } for L in labels
+            ],
         }
 
         # Totals for the cards
@@ -1210,6 +1229,8 @@ class FleetDashboardController(http.Controller):
             'hours': hours,
             'acceptance_rate': _safe_div(totals['accepts'] * 100.0, max(totals['orders'], 1e-12)) if totals['orders'] else 0.0,
             'completion_rate': _safe_div(totals['completes'] * 100.0, max(totals['accepts'], 1e-12)) if totals['accepts'] else 0.0,
+            'trips_per_hour': _safe_div(totals['completes'], max(hours, 1e-12)) if hours else 0.0,
+            'cancelled_by_driver': _safe_div(totals.get('driver_cancels', 0) * 100.0, max(totals['accepts'], 1e-12)) if totals['accepts'] else 0.0,
         }
 
         # Issues — same pattern as dashboard_data()
