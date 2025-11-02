@@ -373,8 +373,17 @@
             <div class="modal-dialog modal-xl" style="max-width: 80vw;">
               <div class="modal-content">
 
-                <div class="modal-header">
-                  <h5 class="modal-title">Driver Details</h5>
+                <div class="modal-header flex-column align-items-start">
+                  <h5 class="modal-title mb-1">Driver Details</h5>
+                  <div class="small text-muted">
+                    <t t-if="state.modalDriver.metrics_range">
+                      Metrics window:
+                      <t t-esc="formatDateYMDToDMY(state.modalDriver.metrics_range.start)"/>
+                      -
+                      <t t-esc="formatDateYMDToDMY(state.modalDriver.metrics_range.end)"/>
+                      (Mon-Sun, last 8 weeks)
+                    </t>
+                  </div>
                 </div>
 
                 <div class="modal-body">

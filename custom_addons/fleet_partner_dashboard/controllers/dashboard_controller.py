@@ -1049,15 +1049,24 @@ class FleetDashboardController(http.Controller):
     @http.route('/fleet_low_performers/driver_detail', type='json', auth='user')
     def low_perf_driver_detail(self, driver_id: int, start_date: str, end_date: str):
         """
-        Return per-driver aggregates for the selected date window, bucketed series
-        using the same bucketing rule as performance dashboard, and the driver's issues
-        (newest first) with "Main, Sub, Sub Sub" text.
+        Cards + charts: previous 8 full Mon–Sun weeks (ending last Sunday)
+        Issues table:   stays aligned to the table range passed in (start_date/end_date)
         """
         today = date.today()
-        df = datetime.strptime(start_date, '%Y-%m-%d').date()
-        dt_ = datetime.strptime(end_date,   '%Y-%m-%d').date()
-        # Avoid partial today from metrics-db
-        dt_ = min(dt_, today - timedelta(days=1))
+
+        # --- A) Issues window uses the incoming filter (as before) -------------
+        issues_df = datetime.strptime(start_date, '%Y-%m-%d').date()
+        issues_dt = datetime.strptime(end_date,   '%Y-%m-%d').date()
+        # Avoid partial today from metrics-db when used for issues search end-of-day
+        issues_dt = min(issues_dt, today - timedelta(days=1))
+
+        # --- B) Metrics window = previous 8 full Mon–Sun weeks ------------------
+        # Find last Sunday (relative to "today"), then its Monday; then go back 7 more weeks
+        # weekday(): Mon=0 ... Sun=6
+        last_sunday  = today - timedelta(days=(today.weekday() + 1))  # last Sunday
+        last_monday  = last_sunday - timedelta(days=6)
+        metrics_df   = last_monday - timedelta(days=7 * 7)  # start of the oldest week in the 8-week span
+        metrics_dt   = last_sunday                          # end of the newest week (last Sunday)
 
         icp = request.env['ir.config_parameter'].sudo()
         SIGNER_URL     = (icp.get_param('media_signer.base_url') or os.environ.get('SIGNER_URL', '')).rstrip('/')
@@ -1091,51 +1100,39 @@ class FleetDashboardController(http.Controller):
         drv = Driver.browse(int(driver_id))
         yid = (drv.yango_driver_id or '').strip()
         if not drv or not yid:
-            return {'data': {}, 'series': {}, 'issues': []}
+            return {'cards': {}, 'series': {}, 'issues': []}
 
-        # Pull rows for just this driver
+        # --- C) Pull rows for the metrics window (8 weeks) ----------------------
         day_resp = _get('/metrics/driver-day', {
-            'from_date': df.strftime('%Y-%m-%d'),
-            'to_date':   dt_.strftime('%Y-%m-%d'),
+            'from_date': metrics_df.strftime('%Y-%m-%d'),
+            'to_date':   metrics_dt.strftime('%Y-%m-%d'),
             'tenant':    TENANT_CODE,
-            'driver_id': yid,    # if signer supports filtering by driver_id; if not, we’ll filter after
+            'driver_id': yid,    # if signer supports it
         })
-        rows = day_resp.get('rows', [])
-        # Filter to this yid if API ignores driver_id
-        rows = [r for r in rows if (r.get('driver_id') or '').strip() == yid]
+        rows = [r for r in day_resp.get('rows', []) if (r.get('driver_id') or '').strip() == yid]
 
-        # Bucketing rule exactly like performance dashboard
-        def _bucketize_span(df_, dt__):
-            span = (dt__ - df_).days + 1
+        # --- D) Bucketing: weekly buckets (Mon–Sun) across exactly 8 weeks -----
+        def _bucketize_8_weeks(mon0: date, sunN: date):
+            # mon0 is a Monday, sunN is a Sunday; produce 8 week buckets Mon..Sun
             buckets = []
-            if span <= 30:
-                cur = df_
-                while cur <= dt__:
-                    buckets.append((cur, cur, cur.strftime('%Y-%m-%d'), 'day'))
-                    cur += timedelta(days=1)
-            elif span < 90:
-                start = df_ - timedelta(days=df_.weekday())
-                cur = start
-                while cur <= dt__:
-                    nxt = cur + timedelta(days=6)
-                    buckets.append((cur, min(nxt, dt__), cur.strftime('%Y-%m-%d'), 'week'))
-                    cur += timedelta(days=7)
-            else:
-                y0, m0 = df_.year, df_.month
-                y1, m1 = dt__.year, dt__.month
-                start_month = y0 * 12 + (m0 - 1)
-                end_month   = y1 * 12 + (m1 - 1)
-                for ym in range(start_month, end_month + 1):
-                    y, mo = divmod(ym, 12); mo += 1
-                    start_day = date(y, mo, 1)
-                    last_day  = date(y, mo, calendar.monthrange(y, mo)[1])
-                    buckets.append((start_day, min(last_day, dt__), start_day.strftime('%Y-%m'), 'month'))
+            cur = mon0
+            for _ in range(8):
+                end = cur + timedelta(days=6)
+                buckets.append((cur, end, cur.strftime('%Y-%m-%d'), 'week'))
+                cur += timedelta(days=7)
             return buckets
 
-        buckets = _bucketize_span(df, dt_)
-        labels = [lbl for _, _, lbl, _ in buckets]
+        buckets = _bucketize_8_weeks(metrics_df, metrics_dt)
+        labels  = [lbl for _, _, lbl, _ in buckets]
 
-        # Prepare series accumulators
+        def _bucket_label(d: date):
+            for b0, b1, lbl, _ in buckets:
+                if b0 <= d <= b1:
+                    return lbl
+            return None
+
+        # --- E) Aggregate per bucket (include driver cancellations) -------------
+        from collections import defaultdict
         acc = {
             'orders': defaultdict(int),
             'completes': defaultdict(int),
@@ -1146,15 +1143,8 @@ class FleetDashboardController(http.Controller):
             'eff_secs': defaultdict(float),
             'driver_cancels': defaultdict(int),
         }
+        totals = {'orders':0,'completes':0,'cash':0.0,'accepts':0,'sup_secs':0.0,'util_secs':0.0,'eff_secs':0.0,'driver_cancels':0}
 
-        def _bucket_label(d):
-            for b0, b1, lbl, _ in buckets:
-                if b0 <= d <= b1:
-                    return lbl
-            return None
-
-        # Aggregate per bucket
-        totals = {'orders':0,'completes':0,'cash':0.0,'accepts':0,'sup_secs':0.0,'util_secs':0.0,'eff_secs':0.0}
         for r in rows:
             try:
                 d = datetime.strptime(r.get('day'), '%Y-%m-%d').date()
@@ -1164,14 +1154,14 @@ class FleetDashboardController(http.Controller):
             if not lbl:
                 continue
 
-            orders_total = int(r.get('orders_total') or 0)
-            completes    = int(r.get('orders_completed') or 0)
-            cash_sum     = float(r.get('cash_sum') or 0.0)
-            accepts      = int(r.get('accepts') or 0)
-            sup_secs     = float(r.get('supply_seconds') or 0.0)
-            util_secs    = float(r.get('interval_seconds') or 0.0)
-            eff_secs     = float(r.get('transport_seconds') or 0.0)
-            driver_cancels = int(r.get('driver_cancellations') or 0)
+            orders_total     = int(r.get('orders_total') or 0)
+            completes        = int(r.get('orders_completed') or 0)
+            cash_sum         = float(r.get('cash_sum') or 0.0)
+            accepts          = int(r.get('accepts') or 0)
+            sup_secs         = float(r.get('supply_seconds') or 0.0)
+            util_secs        = float(r.get('interval_seconds') or 0.0)
+            eff_secs         = float(r.get('transport_seconds') or 0.0)
+            driver_cancels   = int(r.get('driver_cancellations') or 0)
 
             acc['orders'][lbl]    += orders_total
             acc['completes'][lbl] += completes
@@ -1189,9 +1179,12 @@ class FleetDashboardController(http.Controller):
             totals['sup_secs']  += sup_secs
             totals['util_secs'] += util_secs
             totals['eff_secs']  += eff_secs
-            totals['driver_cancels'] = totals.get('driver_cancels', 0) + driver_cancels
+            totals['driver_cancels'] += driver_cancels
 
-        # Build series (values already bucketed)
+        def _safe_div(a, b): 
+            return (a / b) if b else 0.0
+
+        # --- F) Build series for charts (weekly) --------------------------------
         series = {
             'trips':        [{'period': L, 'value': acc['completes'].get(L, 0)} for L in labels],
             'supplyHours':  [{'period': L, 'value': acc['sup_secs'].get(L, 0.0)/3600.0} for L in labels],
@@ -1204,13 +1197,11 @@ class FleetDashboardController(http.Controller):
                 {'period': L, 'value': _safe_div(acc['completes'].get(L,0)*100.0, max(acc['accepts'].get(L,0), 1e-12))}
                 for L in labels
             ],
+            # already added earlier in your build:
             'tripsPerHour': [
                 {
                     'period': L,
-                    'value': (lambda trips, hrs: _safe_div(trips, max(hrs, 1e-12)))(
-                        acc['completes'].get(L, 0),
-                        acc['sup_secs'].get(L, 0.0)/3600.0
-                    )
+                    'value': _safe_div(acc['completes'].get(L, 0), max(acc['sup_secs'].get(L, 0.0)/3600.0, 1e-12))
                 } for L in labels
             ],
             'cancelledByDriverPct': [
@@ -1221,7 +1212,7 @@ class FleetDashboardController(http.Controller):
             ],
         }
 
-        # Totals for the cards
+        # --- G) Cards = totals over the 8-week window ---------------------------
         hours = totals['sup_secs'] / 3600.0
         cards = {
             'cash': totals['cash'],
@@ -1229,16 +1220,18 @@ class FleetDashboardController(http.Controller):
             'hours': hours,
             'acceptance_rate': _safe_div(totals['accepts'] * 100.0, max(totals['orders'], 1e-12)) if totals['orders'] else 0.0,
             'completion_rate': _safe_div(totals['completes'] * 100.0, max(totals['accepts'], 1e-12)) if totals['accepts'] else 0.0,
+
+            # previously added:
             'trips_per_hour': _safe_div(totals['completes'], max(hours, 1e-12)) if hours else 0.0,
             'cancelled_by_driver': _safe_div(totals.get('driver_cancels', 0) * 100.0, max(totals['accepts'], 1e-12)) if totals['accepts'] else 0.0,
         }
 
-        # Issues — same pattern as dashboard_data()
+        # --- H) Issues list uses the table's current window (unchanged) ---------
         Issue = request.env['x_fleet_issue'].sudo()
         issues = Issue.search([
             ('driver_id', '=', drv.id),
-            ('date_reported', '>=', datetime.combine(df, datetime.min.time())),
-            ('date_reported', '<=', datetime.combine(dt_, datetime.max.time())),
+            ('date_reported', '>=', datetime.combine(issues_df, datetime.min.time())),
+            ('date_reported', '<=', datetime.combine(issues_dt, datetime.max.time())),
         ], order='date_reported desc, id desc')
 
         def _cat_path(i):
@@ -1252,4 +1245,12 @@ class FleetDashboardController(http.Controller):
             'note':          (i.note or '').strip(),
         } for i in issues]
 
-        return {'cards': cards, 'series': series, 'issues': issue_rows}
+        return {
+            'cards': cards, 
+            'series': series, 
+            'issues': issue_rows,
+            'metrics_range': {
+                'start': metrics_df.strftime('%Y-%m-%d'),
+                'end':   metrics_dt.strftime('%Y-%m-%d'),
+            },
+        }

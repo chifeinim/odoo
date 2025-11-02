@@ -696,6 +696,7 @@ export class OwlLowPerformersDashboard extends Component {
     this.state.modalDriver.cards  = res.cards  || null;
     this.state.modalDriver.series = res.series || null;
     this.state.modalDriver.issues = res.issues || [];
+    this.state.modalDriver.metrics_range  = res.metrics_range || null;
   }
 
   closeModal() {
