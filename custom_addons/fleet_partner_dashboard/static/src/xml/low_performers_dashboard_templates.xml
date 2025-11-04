@@ -579,8 +579,14 @@
                               </textarea>
                             </div>
                             <div class="col-md-2 d-flex gap-2 justify-content-end">
-                              <button class="btn btn-success" t-on-click="saveComposeNote">Save</button>
-                              <button class="btn btn-outline-secondary" t-on-click="cancelComposeNote">Cancel</button>
+                              <button class="btn btn-success" t-on-click="saveComposeNote">
+                                <i class="fa fa-check me-1" aria-hidden="true"></i>
+                                Save
+                              </button>
+                              <button class="btn btn-danger" t-on-click="cancelComposeNote">
+                                <i class="fa fa-times me-1" aria-hidden="true"></i>
+                                Cancel
+                              </button>
                             </div>
                           </div>
                         </div>
