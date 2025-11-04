@@ -50,6 +50,7 @@ export class OwlLowPerformersDashboard extends Component {
       this._isSameArray(this.state.draftSelectedCategories, this.state.selectedCategories) &&
       this._isSameArray(this.state.draftSelectedRisks,      this.state.selectedRisks) &&
       this._isSameArray(this.state.draftSelectedIssues,     this.state.selectedIssues) &&
+      this._isSameArray(this.state.draftSelectedCalled,     this.state.selectedCalled) &&
       this.state.draftSelectedPeriod === this.state.selectedPeriod &&
       this.state.draftStartDate === this.state.startDate &&
       this.state.draftEndDate === this.state.endDate
@@ -168,6 +169,7 @@ export class OwlLowPerformersDashboard extends Component {
     const q  = (this.state.search || '').trim().toLowerCase();
     const qd = this.digits(q);
     const issuesSel = this.state.selectedIssues; // [] | ['Yes'] | ['No']
+    const calledSel = this.state.selectedCalled;
 
     const rows = Object.values(this.state.data || {}).filter(d => {
       const nameHit  = (d.name || '').toLowerCase().includes(q);
@@ -176,6 +178,9 @@ export class OwlLowPerformersDashboard extends Component {
 
       if (issuesSel.length) {
         if (!issuesSel.includes(d.issues_reported)) return false;
+      }
+      if (calledSel.length) {
+        if (!calledSel.includes(d.called_recently)) return false;
       }
       return true;
     });
@@ -420,12 +425,14 @@ export class OwlLowPerformersDashboard extends Component {
       selectedCategories: [],
       selectedRisks: [1, 2, 3],
       selectedIssues: [],
+      selectedCalled: [],
       selectedPeriod: 'Last Week',
       startDate: '', endDate: '',
       draftSelectedProducts: [],
       draftSelectedScores: [],
       draftSelectedCategories: [],
       draftSelectedIssues: [],
+      draftSelectedCalled: [], 
       draftSelectedRisks: [1, 2, 3],
       draftSelectedPeriod: 'Last Week',
       draftStartDate: '',
@@ -438,7 +445,7 @@ export class OwlLowPerformersDashboard extends Component {
         '2: avg trips/day ≤ 2 OR avg hours/day ≤ 2.\n' +
         '3: 2 < avg trips/day < 5 OR 2 < avg hours/day < 5.',
       showProducts: false, showScores: false, showCategories: false,
-      showRisks: false, showIssues: false, showPeriod: false,
+      showRisks: false, showIssues: false, showCalled: false, showPeriod: false,
 
       search: '',
       sortKey: 'name', sortDir: 'asc',
@@ -603,6 +610,7 @@ export class OwlLowPerformersDashboard extends Component {
     this.state.selectedCategories  = [...this.state.draftSelectedCategories];
     this.state.selectedRisks       = [...this.state.draftSelectedRisks];
     this.state.selectedIssues      = [...this.state.draftSelectedIssues];
+    this.state.selectedCalled      = [...this.state.draftSelectedCalled];
     this.state.selectedPeriod      = this.state.draftSelectedPeriod;
     this.state.startDate           = this.state.draftStartDate;
     this.state.endDate             = this.state.draftEndDate;
@@ -616,6 +624,7 @@ export class OwlLowPerformersDashboard extends Component {
     this.state.draftSelectedCategories = [...this.state.selectedCategories];
     this.state.draftSelectedRisks      = [...this.state.selectedRisks];
     this.state.draftSelectedIssues     = [...this.state.selectedIssues];
+    this.state.draftSelectedCalled     = [...this.state.selectedCalled];
     this.state.draftSelectedPeriod     = this.state.selectedPeriod;
     this.state.draftStartDate          = this.state.startDate;
     this.state.draftEndDate            = this.state.endDate;
