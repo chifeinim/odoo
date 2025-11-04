@@ -504,6 +504,17 @@
 
                   <div class="mt-4">
                     <h6>Issues</h6>
+
+                    <!-- NEW: subtitle showing range -->
+                    <t t-if="state.modalDriver.issues_range">
+                      <div class="text-muted small mt-1">
+                        from
+                        <t t-esc="formatDateYMDToDMY(state.modalDriver.issues_range.start)"/>
+                        to
+                        <t t-esc="formatDateYMDToDMY(state.modalDriver.issues_range.end)"/>
+                      </div>
+                    </t>
+
                     <div class="table-responsive">
                       <table class="table table-sm">
                         <thead>
@@ -516,25 +527,18 @@
                         </thead>
                         <tbody>
                           <t t-if="!state.modalDriver.issues || !state.modalDriver.issues.length">
-                            <tr><td colspan="3"><em>No issues in this window.</em></td></tr>
+                            <!-- FIX: colspan matches 4 columns -->
+                            <tr><td colspan="4"><em>No issues in this window.</em></td></tr>
                           </t>
                           <t t-else="">
                             <t t-foreach="state.modalDriver.issues"
-                               t-as="it"
-                               t-key="it.date_reported + it.category_path">
+                              t-as="it"
+                              t-key="it.date_reported + it.category_path">
                               <tr style="vertical-align: top;">
-                                <td style="white-space: nowrap;">
-                                  <t t-esc="it.category_path"/>
-                                </td>
-                                <td style="white-space: nowrap;">
-                                  <t t-esc="it.date_reported"/>
-                                </td>
-                                <td style="white-space: nowrap;">
-                                  <t t-esc="it.date_resolved or ''"/>
-                                </td>
-                                <td style="white-space: pre-wrap;">
-                                  <t t-esc="it.note"/>
-                                </td>
+                                <td style="white-space: nowrap;"><t t-esc="it.category_path"/></td>
+                                <td style="white-space: nowrap;"><t t-esc="it.date_reported"/></td>
+                                <td style="white-space: nowrap;"><t t-esc="it.date_resolved or ''"/></td>
+                                <td style="white-space: pre-wrap;"><t t-esc="it.note"/></td>
                               </tr>
                             </t>
                           </t>

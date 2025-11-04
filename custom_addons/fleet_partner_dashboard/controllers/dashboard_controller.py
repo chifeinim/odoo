@@ -1211,7 +1211,14 @@ class FleetDashboardController(http.Controller):
             ) if totals['accepts'] else 0.0,
         }
 
-        # --- H) Issues list uses the table's current window (unchanged) ---------
+        # --- H) Issues list uses the same window as call notes ----------------
+        notes_df = _first_monday_prev_8_weeks(today)
+        notes_dt = today  # inclusive to "now"
+        
+        # Scorecard uses same issues window as call notes
+        issues_df = notes_df
+        issues_dt = notes_dt
+        
         Issue = request.env['x_fleet_issue'].sudo()
         issues = Issue.search([
             ('driver_id', '=', drv.id),
@@ -1232,8 +1239,6 @@ class FleetDashboardController(http.Controller):
         
         # --- I) Call Notes for previous 8 weeks to today ----------------------
         CallNote = request.env['x_fleet_call_note'].sudo()
-        notes_df = _first_monday_prev_8_weeks(today)
-        notes_dt = today  # inclusive to "now"
 
         note_recs = CallNote.search([
             ('driver_id', '=', drv.id),
@@ -1257,6 +1262,10 @@ class FleetDashboardController(http.Controller):
                 'end':   metrics_dt.strftime('%Y-%m-%d'),
             },
             'notes_range': {
+                'start': notes_df.strftime('%Y-%m-%d'),
+                'end':   notes_dt.strftime('%Y-%m-%d'),
+            },
+            'issues_range': {
                 'start': notes_df.strftime('%Y-%m-%d'),
                 'end':   notes_dt.strftime('%Y-%m-%d'),
             },
