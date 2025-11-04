@@ -834,6 +834,18 @@ class FleetDashboardController(http.Controller):
           • 3: 2 < avg trips/day < 5  OR 2 < avg hours/day < 5
         """
         today = date.today()
+        
+        # Always-current Mon–Sun (ignores table filters)
+        this_mon = today - timedelta(days=today.weekday())
+        this_sun = this_mon + timedelta(days=6)
+
+        # Batch fetch: which drivers have call notes this week?
+        CallNote = request.env['x_fleet_call_note'].sudo()
+        notes = CallNote.search([
+            ('created_at', '>=', datetime.combine(this_mon, datetime.min.time())),
+            ('created_at', '<=', datetime.combine(this_sun, datetime.max.time())),
+        ])
+        called_recently_ids = set(notes.mapped('driver_id').ids)
 
         # --- A) Date window for the TABLE (not the risk) ---
         if start_date and end_date:
@@ -1019,6 +1031,8 @@ class FleetDashboardController(http.Controller):
                     ('date_reported', '>=', datetime.combine(df, datetime.min.time())),
                     ('date_reported', '<=', datetime.combine(dt_, datetime.max.time())),
                 ]))
+                
+            called_recently = 'Yes' if drv.id in called_recently_ids else 'No'
 
             data[drv.id] = {
                 'id': drv.id,
@@ -1035,6 +1049,7 @@ class FleetDashboardController(http.Controller):
                 'type': drv.type or '',
                 'quality_score': dqs_map.get(drv.id),
                 'hire_date': drv.hire_date and drv.hire_date.strftime('%Y-%m-%d'),
+                'called_recently': called_recently,
             }
 
         # Frontend does sorting/paging; we just ship the rows
@@ -1242,8 +1257,8 @@ class FleetDashboardController(http.Controller):
 
         note_recs = CallNote.search([
             ('driver_id', '=', drv.id),
-            ('created_at', '>=', datetime.combine(notes_df, datetime.min.time())),
-            ('created_at', '<=', datetime.combine(notes_dt, datetime.max.time())),
+            ('created_at',  '>=', datetime.combine(notes_df, datetime.min.time())),
+            ('created_at',  '<=', datetime.combine(notes_dt, datetime.max.time())),
         ], order='created_at desc, id desc')
 
         call_notes = [{
@@ -1279,14 +1294,16 @@ class FleetDashboardController(http.Controller):
         Driver = request.env['x_fleet_driver'].sudo().browse(int(driver_id))
         if not Driver.exists():
             return {'ok': False, 'error': 'Driver not found.'}
+
         rec = request.env['x_fleet_call_note'].sudo().create({
             'driver_id': Driver.id,
             'note': note,
-            # created_at and author_id auto
         })
         return {
             'ok': True,
             'row': {
+                'id': rec.id,
+                'driver_id': Driver.id,
                 'created_at': rec.created_at and rec.created_at.strftime('%Y-%m-%d %H:%M'),
                 'note': (rec.note or '').strip(),
                 'author': rec.author_id and rec.author_id.name or '',
@@ -1304,18 +1321,18 @@ class FleetDashboardController(http.Controller):
         Note = request.env['x_fleet_call_note'].sudo()
         domain = [('driver_id', '=', Driver.id)]
         if df:
-            domain.append(('create_date', '>=', datetime.combine(df, datetime.min.time())))
+            domain.append(('created_at',  '>=', datetime.combine(df, datetime.min.time())))
         if dt:
-            domain.append(('create_date', '<=', datetime.combine(dt, datetime.max.time())))
-        notes = Note.search(domain, order='create_date desc, id desc')
+            domain.append(('created_at',  '<=', datetime.combine(dt, datetime.max.time())))
+        notes = Note.search(domain, order='created_at desc, id desc')
 
         def _fmt(n):
             return {
                 'id': n.id,
                 'driver_id': n.driver_id.id,
                 'note': n.note or '',
-                'author': n.create_uid and n.create_uid.name or '',
-                'created_at': (n.create_date and n.create_date.strftime('%Y-%m-%d %H:%M')) or '',
+                'author': n.author_id and n.author_id.name or '',
+                'created_at': (n.created_at and n.created_at.strftime('%Y-%m-%d %H:%M')) or '',
             }
 
         return {'call_notes': [_fmt(n) for n in notes]}

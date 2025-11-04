@@ -737,27 +737,33 @@ export class OwlLowPerformersDashboard extends Component {
     if (!md || !txt) return;
 
     // 1) Create on server
-    const res = await this.env.services.rpc('/fleet_call_notes/create', {
-      driver_id: md.id,
-      note: txt,
-    });
+    const res = await this.env.services.rpc('/fleet_call_notes/create', { driver_id: md.id, note: txt }); 
 
-    const newRow = res?.note;
+    const newRow = res?.row;
     if (newRow) {
       // 2) Optimistic + immutable update (newest first)
       const nextNotes = [newRow, ...(md.call_notes || [])];
+
+      // ✅ NEW: mark this driver as "called recently" in the table immediately
+      if (this.state.data && this.state.data[md.id]) {
+        this.state.data[md.id] = {
+          ...this.state.data[md.id],
+          called_recently: 'Yes',
+        };
+      }
+
       this._setModalDriver({
         call_notes: nextNotes,
         _composeNoteOpen: false,
         _composeNoteText: '',
       });
     } else {
-      // still close composer even if server didn't return a row
       this._setModalDriver({
         _composeNoteOpen: false,
         _composeNoteText: '',
       });
     }
+
     try {
       const start = this.state.modalDriver?.notes_range?.start;
       const end   = this.state.modalDriver?.notes_range?.end;
@@ -766,7 +772,7 @@ export class OwlLowPerformersDashboard extends Component {
       });
       this._setModalDriver({ call_notes: ref?.call_notes || [] });
     } catch(e) {
-      // ignore, the optimistic update already updated the UI
+      // ignore
     }
   }
 

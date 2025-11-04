@@ -272,6 +272,7 @@
                 </th>
 
                 <th>Issues Reported</th>
+                <th>Called Recently</th>
               </tr>
             </thead>
 
@@ -312,6 +313,13 @@
                                   : ''"
                     t-att-aria-label="'Issues reported: ' + d.issues_reported">
                     <t t-esc="d.issues_reported"/>
+                  </td>
+                  <td
+                    t-att-class="d.called_recently === 'Yes' ? 'text-dark fw-bold' : ''"
+                    t-att-style="d.called_recently === 'Yes'
+                                  ? 'background-color:#d4edda !important;'
+                                  : ''">
+                    <t t-esc="d.called_recently"/>
                   </td>
                 </tr>
               </t>
