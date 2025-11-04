@@ -1242,8 +1242,14 @@ class FleetDashboardController(http.Controller):
         ], order='date_reported desc, id desc')
 
         def _cat_path(i):
-            parts = [p for p in [i.main_category, i.sub_category, i.sub_sub_category] if p]
-            return ', '.join(parts)
+            # Prefer computed labels from the model; fall back to controller _humanize
+            parts = [
+                i.main_category_label or _humanize(i.main_category),
+                i.sub_category_label or _humanize(i.sub_category),
+                i.sub_sub_category_label or _humanize(i.sub_sub_category),
+            ]
+            parts = [p for p in parts if p]
+            return ' › '.join(parts)  # nice breadcrumb-style separator
 
         issue_rows = [{
             'category_path': _cat_path(i),
