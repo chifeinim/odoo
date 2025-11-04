@@ -58,6 +58,22 @@
                   </tree>
                 </field>
               </page>
+              <page string="Call Notes">
+                <field name="call_note_ids" context="{'default_driver_id': active_id}">
+                  <tree editable="bottom">
+                    <field name="created_at" readonly="1"/>
+                    <field name="author_id" readonly="1"/>
+                    <field name="note"/>
+                  </tree>
+                  <form>
+                    <group>
+                      <field name="created_at" readonly="1"/>
+                      <field name="author_id" readonly="1"/>
+                      <field name="note"/>
+                    </group>
+                  </form>
+                </field>
+              </page>
             </notebook>
           </sheet>
         </form>

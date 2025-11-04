@@ -542,6 +542,79 @@
                       </table>
                     </div>
                   </div>
+
+                  <div class="mt-4">
+                    <div class="d-flex align-items-center gap-2">
+                      <h6 class="mb-0">Call Notes</h6>
+                      <button class="btn btn-sm btn-primary ms-auto"
+                              t-on-click="openComposeNote"
+                              t-att-disabled="state.modalDriver._composeNoteOpen">
+                        New Note
+                      </button>
+                    </div>
+                    <t t-if="state.modalDriver.notes_range">
+                      <div class="text-muted small mt-1">
+                        from
+                        <t t-esc="formatDateYMDToDMY(state.modalDriver.notes_range.start)"/>
+                        to
+                        <t t-esc="formatDateYMDToDMY(state.modalDriver.notes_range.end)"/>
+                      </div>
+                    </t>
+
+                    <!-- Compose row -->
+                    <t t-if="state.modalDriver._composeNoteOpen">
+                      <div class="card mb-2">
+                        <div class="card-body">
+                          <div class="row g-2 align-items-start">
+                            <div class="col-md-3">
+                              <div class="form-control-plaintext text-muted">
+                                <em></em>
+                              </div>
+                            </div>
+                            <div class="col-md-7">
+                              <textarea class="form-control" rows="2"
+                                        placeholder="Type call note…"
+                                        t-on-input="onComposeText">
+                                <t t-esc="state.modalDriver._composeNoteText or ''"/>
+                              </textarea>
+                            </div>
+                            <div class="col-md-2 d-flex gap-2 justify-content-end">
+                              <button class="btn btn-success" t-on-click="saveComposeNote">Save</button>
+                              <button class="btn btn-outline-secondary" t-on-click="cancelComposeNote">Cancel</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </t>
+
+                    <div class="table-responsive">
+                      <table class="table table-sm">
+                        <thead>
+                          <tr>
+                            <th style="white-space:nowrap;">Date</th>
+                            <th>Note</th>
+                            <th style="white-space:nowrap;">Author</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <t t-if="!state.modalDriver.call_notes || !state.modalDriver.call_notes.length">
+                            <tr><td colspan="3"><em>No call notes in this window.</em></td></tr>
+                          </t>
+                          <t t-else="">
+                            <t t-foreach="state.modalDriver.call_notes"
+                              t-as="cn"
+                              t-key="(cn.id || '') + (cn.created_at || '')">
+                              <tr style="vertical-align: top;">
+                                <td style="white-space:nowrap;"><t t-esc="cn.created_at"/></td>
+                                <td style="white-space: pre-wrap;"><t t-esc="cn.note"/></td>
+                                <td style="white-space:nowrap;"><t t-esc="cn.author or '-'"/></td>
+                              </tr>
+                            </t>
+                          </t>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
 
                 <div class="modal-footer">

@@ -697,6 +697,76 @@ export class OwlLowPerformersDashboard extends Component {
     this.state.modalDriver.series = res.series || null;
     this.state.modalDriver.issues = res.issues || [];
     this.state.modalDriver.metrics_range  = res.metrics_range || null;
+    this.state.modalDriver.call_notes = res.call_notes || [];
+    this.state.modalDriver.notes_range = res.notes_range || null;
+    this.state.modalDriver._composeNoteOpen = false;
+    this.state.modalDriver._composeNoteText = '';
+  }
+
+  _setModalDriver(patch) {
+    // shallow immutable update to force re-render
+    this.state.modalDriver = { ...(this.state.modalDriver || {}), ...patch };
+  }
+
+  openComposeNote() {
+    if (!this.state.modalDriver) return;
+    this._setModalDriver({
+      _composeNoteOpen: true,
+      _composeNoteText: '',
+    });
+  }
+
+  onComposeText(ev) {
+    const v = ev?.target?.value ?? '';
+    if (!this.state.modalDriver) return;
+    this._setModalDriver({ _composeNoteText: v });
+  }
+
+  cancelComposeNote() {
+    if (!this.state.modalDriver) return;
+    this._setModalDriver({
+      _composeNoteOpen: false,
+      _composeNoteText: '',
+    });
+  }
+
+  async saveComposeNote() {
+    const md = this.state.modalDriver;
+    const txt = (md?._composeNoteText || '').trim();
+    if (!md || !txt) return;
+
+    // 1) Create on server
+    const res = await this.env.services.rpc('/fleet_call_notes/create', {
+      driver_id: md.id,
+      note: txt,
+    });
+
+    const newRow = res?.note;
+    if (newRow) {
+      // 2) Optimistic + immutable update (newest first)
+      const nextNotes = [newRow, ...(md.call_notes || [])];
+      this._setModalDriver({
+        call_notes: nextNotes,
+        _composeNoteOpen: false,
+        _composeNoteText: '',
+      });
+    } else {
+      // still close composer even if server didn't return a row
+      this._setModalDriver({
+        _composeNoteOpen: false,
+        _composeNoteText: '',
+      });
+    }
+    try {
+      const start = this.state.modalDriver?.notes_range?.start;
+      const end   = this.state.modalDriver?.notes_range?.end;
+      const ref = await this.env.services.rpc('/fleet_call_notes/list', {
+        driver_id: md.id, start_date: start, end_date: end,
+      });
+      this._setModalDriver({ call_notes: ref?.call_notes || [] });
+    } catch(e) {
+      // ignore, the optimistic update already updated the UI
+    }
   }
 
   closeModal() {

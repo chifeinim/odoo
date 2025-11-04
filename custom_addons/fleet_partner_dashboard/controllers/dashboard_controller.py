@@ -56,6 +56,12 @@ def _last_7_days_excl_today(today: date) -> tuple[date, date]:
     start = end - timedelta(days=6)
     return start, end
 
+def _first_monday_prev_8_weeks(today: date) -> date:
+    # Monday of current week:
+    this_mon = today - timedelta(days=today.weekday())
+    # First Monday of the previous 8 weeks (back 8 weeks from current Monday)
+    return this_mon - timedelta(days=7*8)
+
 def _last_month_range(today: date) -> tuple[date, date]:
     """Previous full calendar month."""
     first_this_month = date(today.year, today.month, 1)
@@ -1223,13 +1229,84 @@ class FleetDashboardController(http.Controller):
             'date_resolved': i.resolved_on and i.resolved_on.strftime('%Y-%m-%d %H:%M') or '',
             'note':          (i.note or '').strip(),
         } for i in issues]
+        
+        # --- I) Call Notes for previous 8 weeks to today ----------------------
+        CallNote = request.env['x_fleet_call_note'].sudo()
+        notes_df = _first_monday_prev_8_weeks(today)
+        notes_dt = today  # inclusive to "now"
+
+        note_recs = CallNote.search([
+            ('driver_id', '=', drv.id),
+            ('created_at', '>=', datetime.combine(notes_df, datetime.min.time())),
+            ('created_at', '<=', datetime.combine(notes_dt, datetime.max.time())),
+        ], order='created_at desc, id desc')
+
+        call_notes = [{
+            'created_at': r.created_at and r.created_at.strftime('%Y-%m-%d %H:%M'),
+            'note': (r.note or '').strip(),
+            'author': r.author_id and r.author_id.name or '',
+        } for r in note_recs]
 
         return {
-            'cards': cards, 
-            'series': series, 
+            'cards': cards,
+            'series': series,
             'issues': issue_rows,
+            'call_notes': call_notes,
             'metrics_range': {
                 'start': metrics_df.strftime('%Y-%m-%d'),
                 'end':   metrics_dt.strftime('%Y-%m-%d'),
             },
+            'notes_range': {
+                'start': notes_df.strftime('%Y-%m-%d'),
+                'end':   notes_dt.strftime('%Y-%m-%d'),
+            },
         }
+        
+    @http.route('/fleet_call_notes/create', type='json', auth='user')
+    def call_notes_create(self, driver_id: int, note: str):
+        note = (note or '').strip()
+        if not note:
+            return {'ok': False, 'error': 'Note cannot be empty.'}
+        Driver = request.env['x_fleet_driver'].sudo().browse(int(driver_id))
+        if not Driver.exists():
+            return {'ok': False, 'error': 'Driver not found.'}
+        rec = request.env['x_fleet_call_note'].sudo().create({
+            'driver_id': Driver.id,
+            'note': note,
+            # created_at and author_id auto
+        })
+        return {
+            'ok': True,
+            'row': {
+                'created_at': rec.created_at and rec.created_at.strftime('%Y-%m-%d %H:%M'),
+                'note': (rec.note or '').strip(),
+                'author': rec.author_id and rec.author_id.name or '',
+            }
+        }
+        
+    @http.route('/fleet_call_notes/list', type='json', auth='user')
+    def call_notes_list(self, driver_id: int, start_date: str = None, end_date: str = None):
+        Driver = request.env['x_fleet_driver'].sudo().browse(int(driver_id))
+        if not Driver:
+            return {'call_notes': []}
+
+        df = datetime.strptime(start_date, '%Y-%m-%d').date() if start_date else None
+        dt = datetime.strptime(end_date,   '%Y-%m-%d').date() if end_date   else None
+        Note = request.env['x_fleet_call_note'].sudo()
+        domain = [('driver_id', '=', Driver.id)]
+        if df:
+            domain.append(('create_date', '>=', datetime.combine(df, datetime.min.time())))
+        if dt:
+            domain.append(('create_date', '<=', datetime.combine(dt, datetime.max.time())))
+        notes = Note.search(domain, order='create_date desc, id desc')
+
+        def _fmt(n):
+            return {
+                'id': n.id,
+                'driver_id': n.driver_id.id,
+                'note': n.note or '',
+                'author': n.create_uid and n.create_uid.name or '',
+                'created_at': (n.create_date and n.create_date.strftime('%Y-%m-%d %H:%M')) or '',
+            }
+
+        return {'call_notes': [_fmt(n) for n in notes]}

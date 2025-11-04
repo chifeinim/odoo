@@ -6,3 +6,4 @@ from . import issue
 from . import supabase_sync
 from . import supabase_queue
 from . import issue_attachment
+from . import fleet_call_note

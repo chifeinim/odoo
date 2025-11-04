@@ -76,5 +76,10 @@
             parent="menu_fleet_dashboard_root"
             action="action_x_fleet_issue"
             sequence="40"/>
+  <menuitem id="menu_x_fleet_call_note"
+            name="Call Notes"
+            parent="fleet_partner_dashboard.menu_fleet_dashboard_root"
+            action="action_x_fleet_call_note"
+            sequence="45"/>
 
 </odoo>
