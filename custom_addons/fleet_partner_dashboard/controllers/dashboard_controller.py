@@ -243,44 +243,37 @@ class FleetDashboardController(http.Controller):
             return {'error': 'Missing SIGNER_URL or SIGNER_API_KEY in system parameters'}
 
         def _get(path: str, params: dict) -> dict:
-            try:
-                r = requests.get(
-                    f"{SIGNER_URL}{path}",
-                    params=params,
-                    headers={"x-api-key": SIGNER_API_KEY},
-                    timeout=30,
-                )
+            url = f"{SIGNER_URL}{path}"
+            headers = {"x-api-key": SIGNER_API_KEY}
+            # (connect timeout, read timeout)
+            TIMEOUT = (5, 120)
 
-                # Be forgiving on client errors (e.g., bad date range)
-                if 400 <= r.status_code < 500:
-                    _logger.warning(
-                        "Signer %s returned %s: %s",
-                        path, r.status_code, (r.text or "")[:200],
-                    )
-                    return {"rows": [], "count": 0}
-
-                r.raise_for_status()
-
-                # Try to parse JSON and coerce to the expected shape
+            for attempt in range(3):  # simple retry loop
                 try:
-                    data = r.json()
-                except ValueError:
-                    _logger.warning("Signer %s returned non-JSON", path)
+                    r = requests.get(url, params=params, headers=headers, timeout=TIMEOUT)
+                    if 400 <= r.status_code < 500:
+                        _logger.warning("Signer %s returned %s: %s", path, r.status_code, (r.text or "")[:200])
+                        return {"rows": [], "count": 0}
+                    r.raise_for_status()
+                    try:
+                        data = r.json()
+                    except ValueError:
+                        _logger.warning("Signer %s returned non-JSON", path)
+                        return {"rows": [], "count": 0}
+                    if isinstance(data, dict) and "rows" in data and "count" in data:
+                        return data
+                    if isinstance(data, list):
+                        return {"rows": data, "count": len(data)}
                     return {"rows": [], "count": 0}
-
-                if isinstance(data, dict) and "rows" in data and "count" in data:
-                    return data
-                if isinstance(data, list):
-                    return {"rows": data, "count": len(data)}
-
-                return {"rows": [], "count": 0}
-
-            except requests.Timeout:
-                _logger.warning("Signer request timed out: %s", path)
-                return {"rows": [], "count": 0}
-            except requests.RequestException as e:
-                _logger.exception("Signer request failed: %s", e)
-                return {"rows": [], "count": 0}
+                except requests.Timeout:
+                    _logger.warning("Signer request timed out (attempt %d/3): %s", attempt+1, path)
+                    # brief backoff
+                    import time as _t; _t.sleep(1.0 * (attempt + 1))
+                    continue
+                except requests.RequestException as e:
+                    _logger.exception("Signer request failed: %s", e)
+                    break
+            return {"rows": [], "count": 0}
 
         # Pull a single combined set of driver-day rows covering prev+current
         if want_all_time:
@@ -865,33 +858,37 @@ class FleetDashboardController(http.Controller):
             return {'error': 'Missing SIGNER_URL or SIGNER_API_KEY in system parameters'}
 
         def _get(path: str, params: dict) -> dict:
-            try:
-                r = requests.get(
-                    f"{SIGNER_URL}{path}",
-                    params=params,
-                    headers={"x-api-key": SIGNER_API_KEY},
-                    timeout=30,
-                )
-                if 400 <= r.status_code < 500:
-                    _logger.warning("Signer %s returned %s: %s", path, r.status_code, (r.text or "")[:200])
-                    return {"rows": [], "count": 0}
-                r.raise_for_status()
+            url = f"{SIGNER_URL}{path}"
+            headers = {"x-api-key": SIGNER_API_KEY}
+            # (connect timeout, read timeout)
+            TIMEOUT = (5, 120)
+
+            for attempt in range(3):  # simple retry loop
                 try:
-                    data = r.json()
-                except ValueError:
-                    _logger.warning("Signer %s returned non-JSON", path)
+                    r = requests.get(url, params=params, headers=headers, timeout=TIMEOUT)
+                    if 400 <= r.status_code < 500:
+                        _logger.warning("Signer %s returned %s: %s", path, r.status_code, (r.text or "")[:200])
+                        return {"rows": [], "count": 0}
+                    r.raise_for_status()
+                    try:
+                        data = r.json()
+                    except ValueError:
+                        _logger.warning("Signer %s returned non-JSON", path)
+                        return {"rows": [], "count": 0}
+                    if isinstance(data, dict) and "rows" in data and "count" in data:
+                        return data
+                    if isinstance(data, list):
+                        return {"rows": data, "count": len(data)}
                     return {"rows": [], "count": 0}
-                if isinstance(data, dict) and "rows" in data and "count" in data:
-                    return data
-                if isinstance(data, list):
-                    return {"rows": data, "count": len(data)}
-                return {"rows": [], "count": 0}
-            except requests.Timeout:
-                _logger.warning("Signer request timed out: %s", path)
-                return {"rows": [], "count": 0}
-            except requests.RequestException as e:
-                _logger.exception("Signer request failed: %s", e)
-                return {"rows": [], "count": 0}
+                except requests.Timeout:
+                    _logger.warning("Signer request timed out (attempt %d/3): %s", attempt+1, path)
+                    # brief backoff
+                    import time as _t; _t.sleep(1.0 * (attempt + 1))
+                    continue
+                except requests.RequestException as e:
+                    _logger.exception("Signer request failed: %s", e)
+                    break
+            return {"rows": [], "count": 0}
 
         # --- C) Pull driver-day rows for:
         #       (1) the table window df..dt_
@@ -1076,24 +1073,37 @@ class FleetDashboardController(http.Controller):
             return {'error': 'Missing signer config'}
 
         def _get(path: str, params: dict) -> dict:
-            try:
-                r = requests.get(f"{SIGNER_URL}{path}", params=params, headers={"x-api-key": SIGNER_API_KEY}, timeout=30)
-                if 400 <= r.status_code < 500:
-                    _logger.warning("Signer %s returned %s: %s", path, r.status_code, (r.text or "")[:200])
-                    return {"rows": [], "count": 0}
-                r.raise_for_status()
+            url = f"{SIGNER_URL}{path}"
+            headers = {"x-api-key": SIGNER_API_KEY}
+            # (connect timeout, read timeout)
+            TIMEOUT = (5, 120)
+
+            for attempt in range(3):  # simple retry loop
                 try:
-                    data = r.json()
-                except ValueError:
+                    r = requests.get(url, params=params, headers=headers, timeout=TIMEOUT)
+                    if 400 <= r.status_code < 500:
+                        _logger.warning("Signer %s returned %s: %s", path, r.status_code, (r.text or "")[:200])
+                        return {"rows": [], "count": 0}
+                    r.raise_for_status()
+                    try:
+                        data = r.json()
+                    except ValueError:
+                        _logger.warning("Signer %s returned non-JSON", path)
+                        return {"rows": [], "count": 0}
+                    if isinstance(data, dict) and "rows" in data and "count" in data:
+                        return data
+                    if isinstance(data, list):
+                        return {"rows": data, "count": len(data)}
                     return {"rows": [], "count": 0}
-                if isinstance(data, dict) and "rows" in data and "count" in data:
-                    return data
-                if isinstance(data, list):
-                    return {"rows": data, "count": len(data)}
-                return {"rows": [], "count": 0}
-            except requests.RequestException:
-                _logger.exception("Signer request failed")
-                return {"rows": [], "count": 0}
+                except requests.Timeout:
+                    _logger.warning("Signer request timed out (attempt %d/3): %s", attempt+1, path)
+                    # brief backoff
+                    import time as _t; _t.sleep(1.0 * (attempt + 1))
+                    continue
+                except requests.RequestException as e:
+                    _logger.exception("Signer request failed: %s", e)
+                    break
+            return {"rows": [], "count": 0}
 
         # map this driver to its Yango id
         Driver = request.env['x_fleet_driver'].sudo()
