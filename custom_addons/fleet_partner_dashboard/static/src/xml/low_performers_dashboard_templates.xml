@@ -593,7 +593,7 @@
                           <tr>
                             <th style="white-space:nowrap;">Date</th>
                             <th>Note</th>
-                            <th style="white-space:nowrap;">Author</th>
+                            <th style="white-space:nowrap;">Caller</th>
                           </tr>
                         </thead>
                         <tbody>
