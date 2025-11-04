@@ -443,7 +443,8 @@ export class OwlLowPerformersDashboard extends Component {
         'Priority is computed from the PRIOR WEEK (Mon-Sun), accounting for a 6-day workweek.\n' +
         '1: avg trips/day ≤ 1 OR avg hours/day ≤ 1.\n' +
         '2: avg trips/day ≤ 2 OR avg hours/day ≤ 2.\n' +
-        '3: 2 < avg trips/day < 5 OR 2 < avg hours/day < 5.',
+        '3: 2 < avg trips/day < 5 OR 2 < avg hours/day < 5.\n' +
+        'Called Recently means the driver has been called this week.',
       showProducts: false, showScores: false, showCategories: false,
       showRisks: false, showIssues: false, showCalled: false, showPeriod: false,
 
