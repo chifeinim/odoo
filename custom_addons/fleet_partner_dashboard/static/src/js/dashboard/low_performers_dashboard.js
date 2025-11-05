@@ -449,7 +449,7 @@ export class OwlLowPerformersDashboard extends Component {
       showRisks: false, showIssues: false, showCalled: false, showPeriod: false,
 
       search: '',
-      sortKey: 'name', sortDir: 'asc',
+      sortKey: 'trips', sortDir: 'asc',
       pageSize: 100, page: 1,
 
       // modal
