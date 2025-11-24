@@ -795,6 +795,220 @@ class FleetDashboardController(http.Controller):
             },
         }
         
+    @http.route('/fleet_partner_performance/driver_detail', type='json', auth='user')
+    def performance_driver_detail(self, driver_id: int, start_date: str, end_date: str):
+        """
+        Driver scorecard for the PERFORMANCE dashboard.
+
+        Uses the performance dashboard's selected window (start_date/end_date)
+        for BOTH the cards and the charts. This intentionally differs from the
+        Low Performers endpoint which uses a rolling 8-week window.
+        """
+        today = date.today()
+        try:
+            df = datetime.strptime(start_date, '%Y-%m-%d').date()
+            dt_ = datetime.strptime(end_date,   '%Y-%m-%d').date()
+            if df > dt_:
+                df, dt_ = dt_, df
+        except Exception:
+            # Fallback: last full Mon–Sun week if bad/missing dates
+            df, dt_ = _last_week_range(today)
+
+        # Avoid partial "today" rows from metrics-db
+        dt_ = min(dt_, today - timedelta(days=1))
+
+        # signer config
+        icp = request.env['ir.config_parameter'].sudo()
+        SIGNER_URL     = (icp.get_param('media_signer.base_url') or os.environ.get('SIGNER_URL', '')).rstrip('/')
+        SIGNER_API_KEY = icp.get_param('media_signer.api_key')   or os.environ.get('SIGNER_API_KEY')
+        TENANT_CODE    = icp.get_param('metrics.tenant_code')    or os.environ.get('TENANT_CODE', 'anda')
+        if not SIGNER_URL or not SIGNER_API_KEY:
+            return {'error': 'Missing SIGNER_URL or SIGNER_API_KEY in system parameters'}
+
+        def _get(path: str, params: dict) -> dict:
+            url = f"{SIGNER_URL}{path}"
+            headers = {"x-api-key": SIGNER_API_KEY}
+            TIMEOUT = (5, 120)
+            for attempt in range(3):
+                try:
+                    r = requests.get(url, params=params, headers=headers, timeout=TIMEOUT)
+                    if 400 <= r.status_code < 500:
+                        _logger.warning("Signer %s returned %s: %s", path, r.status_code, (r.text or "")[:200])
+                        return {"rows": [], "count": 0}
+                    r.raise_for_status()
+                    try:
+                        data = r.json()
+                    except ValueError:
+                        _logger.warning("Signer %s returned non-JSON", path)
+                        return {"rows": [], "count": 0}
+                    if isinstance(data, dict) and "rows" in data and "count" in data:
+                        return data
+                    if isinstance(data, list):
+                        return {"rows": data, "count": len(data)}
+                    return {"rows": [], "count": 0}
+                except requests.Timeout:
+                    _logger.warning("Signer request timed out (attempt %d/3): %s", attempt+1, path)
+                    import time as _t; _t.sleep(1.0 * (attempt + 1))
+                    continue
+                except requests.RequestException as e:
+                    _logger.exception("Signer request failed: %s", e)
+                    break
+            return {"rows": [], "count": 0}
+
+        # Resolve driver -> Yango ID
+        Driver = request.env['x_fleet_driver'].sudo().browse(int(driver_id))
+        yid = (Driver.yango_driver_id or '').strip()
+        if not Driver or not yid:
+            return {'cards': {}, 'series': {}, 'issues': []}
+
+        # Pull daily rows for the requested window (metrics/driver-day)
+        resp = _get('/metrics/driver-day', {
+            'from_date': df.strftime('%Y-%m-%d'),
+            'to_date':   dt_.strftime('%Y-%m-%d'),
+            'tenant':    TENANT_CODE,
+        })
+        # keep only this driver's rows
+        rows = [r for r in resp.get('rows', []) if (r.get('driver_id') or '').strip() == yid]
+
+        # Bucketing like performance_data (day/week/month depending on span)
+        def _bucketize_span(df_, dt__):
+            span = (dt__ - df_).days + 1
+            buckets = []
+            if span <= 30:
+                cur = df_
+                while cur <= dt__:
+                    buckets.append((cur, cur, cur.strftime('%Y-%m-%d'), 'day'))
+                    cur += timedelta(days=1)
+            elif span < 90:
+                start = df_ - timedelta(days=df_.weekday())  # Monday
+                cur = start
+                while cur <= dt__:
+                    nxt = cur + timedelta(days=6)
+                    buckets.append((cur, min(nxt, dt__), cur.strftime('%Y-%m-%d'), 'week'))
+                    cur += timedelta(days=7)
+            else:
+                y0, m0 = df_.year, df_.month
+                y1, m1 = dt__.year, dt__.month
+                start_month = y0 * 12 + (m0 - 1)
+                end_month   = y1 * 12 + (m1 - 1)
+                for ym in range(start_month, end_month + 1):
+                    y, mo = divmod(ym, 12); mo += 1
+                    start_day = date(y, mo, 1)
+                    last_day  = date(y, mo, calendar.monthrange(y, mo)[1])
+                    buckets.append((start_day, min(last_day, dt__), start_day.strftime('%Y-%m'), 'month'))
+            return buckets
+
+        buckets = _bucketize_span(df, dt_)
+        labels  = [lbl for _, _, lbl, _ in buckets]
+
+        # helpers
+        def _bucket_key(d):
+            for bstart, bend, lbl, _ in buckets:
+                if bstart <= d <= bend:
+                    return lbl
+            return None
+
+        def _safe_div(a, b):
+            return (a / b) if b else 0.0
+
+        # Aggregate per-bucket
+        agg = {}
+        for lbl in labels:
+            agg[lbl] = {
+                'orders': 0, 'accepts': 0, 'completes': 0,
+                'sup_secs': 0.0, 'cash': 0.0, 'driver_cancels': 0,
+            }
+
+        for r in rows:
+            try:
+                day = datetime.strptime(r.get('day'), '%Y-%m-%d').date()
+            except Exception:
+                continue
+            lbl = _bucket_key(day)
+            if not lbl:
+                continue
+            a = agg[lbl]
+            a['orders']         += int(r.get('orders_total') or 0)
+            a['accepts']        += int(r.get('accepts') or 0)
+            a['completes']      += int(r.get('orders_completed') or 0)
+            a['sup_secs']       += float(r.get('supply_seconds') or 0.0)
+            a['cash']           += float(r.get('cash_sum') or 0.0)
+            a['driver_cancels'] += int(r.get('driver_cancellations') or 0)
+
+        # Build series required by the modal (same keys as low_performers modal)
+        series = {
+            'trips': [],
+            'supplyHours': [],
+            'cashEarned': [],
+            'acceptanceRate': [],
+            'completionRate': [],
+            'tripsPerHour': [],
+            'cancelledByDriverPct': [],
+        }
+        totals = {'orders':0, 'accepts':0, 'completes':0, 'sup_secs':0.0, 'cash':0.0, 'driver_cancels':0}
+
+        for lbl in labels:
+            a = agg[lbl]
+            hours = a['sup_secs'] / 3600.0
+            acc_pct  = _safe_div(a['accepts'] * 100.0, max(a['orders'], 1e-12)) if a['orders'] else 0.0
+            comp_pct = _safe_div(a['completes'] * 100.0, max(a['accepts'], 1e-12)) if a['accepts'] else 0.0
+            trph     = _safe_div(a['completes'], max(hours, 1e-12)) if hours else 0.0
+            cbd_pct  = _safe_div(a['driver_cancels'] * 100.0, max(a['accepts'], 1e-12)) if a['accepts'] else 0.0
+
+            series['trips'].append({'period': lbl, 'value': a['completes']})
+            series['supplyHours'].append({'period': lbl, 'value': hours})
+            series['cashEarned'].append({'period': lbl, 'value': a['cash']})
+            series['acceptanceRate'].append({'period': lbl, 'value': acc_pct})
+            series['completionRate'].append({'period': lbl, 'value': comp_pct})
+            series['tripsPerHour'].append({'period': lbl, 'value': trph})
+            series['cancelledByDriverPct'].append({'period': lbl, 'value': cbd_pct})
+
+            for k in totals.keys():
+                totals[k] += a[k]
+
+        total_hours = totals['sup_secs'] / 3600.0
+        cards = {
+            'cash': totals['cash'],
+            'trips': totals['completes'],
+            'hours': total_hours,
+            'acceptance_rate': _safe_div(totals['accepts'] * 100.0, max(totals['orders'], 1e-12)) if totals['orders'] else 0.0,
+            'completion_rate': _safe_div(totals['completes'] * 100.0, max(totals['accepts'], 1e-12)) if totals['accepts'] else 0.0,
+            'trips_per_hour': _safe_div(totals['completes'], max(total_hours, 1e-12)) if total_hours else 0.0,
+            'cancelled_by_driver': _safe_div(totals['driver_cancels'] * 100.0, max(totals['accepts'], 1e-12)) if totals['accepts'] else 0.0,
+        }
+
+        # Issues aligned to the same df..dt_ window
+        Issue = request.env['x_fleet_issue'].sudo()
+        issues = Issue.search([
+            ('driver_id', '=', Driver.id),
+            ('date_reported', '>=', datetime.combine(df, datetime.min.time())),
+            ('date_reported', '<=', datetime.combine(dt_, datetime.max.time())),
+        ], order='date_reported desc, id desc')
+
+        def _cat_path(i):
+            parts = [
+                i.main_category_label or _humanize(i.main_category),
+                i.sub_category_label or _humanize(i.sub_category),
+                i.sub_sub_category_label or _humanize(i.sub_sub_category),
+            ]
+            parts = [p for p in parts if p]
+            return ' › '.join(parts)
+
+        issue_rows = [{
+            'category_path': _cat_path(i),
+            'date_reported': i.date_reported and i.date_reported.strftime('%Y-%m-%d %H:%M'),
+            'date_resolved': i.resolved_on and i.resolved_on.strftime('%Y-%m-%d %H:%M') or '',
+            'note': (i.note or '').strip(),
+        } for i in issues]
+
+        return {
+            'cards': cards,
+            'series': series,
+            'issues': issue_rows,
+            'metrics_range': { 'start': df.strftime('%Y-%m-%d'), 'end': dt_.strftime('%Y-%m-%d') },
+            'issues_range':  { 'start': df.strftime('%Y-%m-%d'), 'end': dt_.strftime('%Y-%m-%d') },
+        }
+        
     @http.route('/fleet_low_performers/filters', type='json', auth='user')
     def low_perf_filters(self):
         Product = request.env['x_fleet_product_type'].sudo()

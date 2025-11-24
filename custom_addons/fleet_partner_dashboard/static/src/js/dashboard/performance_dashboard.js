@@ -361,7 +361,7 @@ export class OwlPerformanceDashboard extends Component {
     //   { cards: {...}, series: {...}, issues: [...] }
     // If you prefer, expose a new route like /fleet_partner_performance/driver_detail
     // that returns the same structure.
-    const res = await this.env.services.rpc('/fleet_low_performers/driver_detail', {
+    const res = await this.env.services.rpc('/fleet_partner_performance/driver_detail', {
       driver_id: d.id,
       start_date: this.state.startDate || undefined,
       end_date:   this.state.endDate   || undefined,
