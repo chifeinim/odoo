@@ -206,7 +206,6 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             "id": ...,
             "created_at": "...",
             "issue_id": ...,
-            "date_reported": "YYYY-MM-DD",
             "yango_driver_id": "...",
             "internal_driver_id": ...,
             "status": "...",
@@ -735,7 +734,18 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 self._queue_failed_row('issues', rec, '<missing>', 'missing issue_log id')
                 continue
 
-            yid = rec.get('yango_driver_id')
+            # 👇 NEW: support both yango_driver_id (old) and external_id (new)
+            yid = rec.get('yango_driver_id') or rec.get('external_id')
+
+            if not yid:
+                self._queue_failed_row(
+                    'issues',
+                    rec,
+                    str(ext_id),
+                    'missing external driver id (no yango_driver_id/external_id)'
+                )
+                continue
+
             drv = Driver.search([('yango_driver_id', '=', yid)], limit=1)
             if not drv:
                 self._queue_failed_row('issues', rec, str(ext_id), f"missing driver {yid}")
@@ -760,7 +770,6 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 if exists:
                     exists.write(vals)
                 else:
-                    # ensure name is string to match the unique(name) sql constraint consistently
                     vals['name'] = str(ext_id)
                     Issue.create(vals)
             except Exception as e:
