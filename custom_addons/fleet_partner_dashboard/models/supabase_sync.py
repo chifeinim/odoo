@@ -829,25 +829,27 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         Push mail.message rows (for x_fleet_issue) -> dashboard.issue_messages.
 
         Requires Supabase table:
-          - issue_log_id
-          - created_at
-          - author_name
-          - author_email
-          - body
-          - message_type
-          - subtype
-          - odoo_message_id (unique)
+        - issue_log_id
+        - created_at
+        - author_name
+        - author_email
+        - body
+        - message_type
+        - subtype
+        - odoo_message_id (unique)
         """
         if not messages:
             return
 
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/issue_messages"
+
+        # use the same header builder so X-Tenant-Secret is sent when configured
         headers = self._build_headers("dashboard")
         headers.update({
-            "Content-Type":  "application/json",
+            "Content-Type": "application/json",
             # merge on odoo_message_id when backfilling
-            "Prefer":        "return=minimal,resolution=merge-duplicates",
+            "Prefer": "return=minimal,resolution=merge-duplicates",
         })
 
         payloads = []
@@ -870,10 +872,95 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             author_name = msg.author_id.name or (msg.email_from or "Unknown")
             author_email = msg.email_from
 
-            # Body: strip HTML to plain text
+            # 1) Try normal body
             body_html = msg.body or ""
             body_plain = tools.html2plaintext(body_html).strip()
 
+            # 2) If body is empty, try to build from tracking values (field changes)
+            if not body_plain and msg.tracking_value_ids:
+                lines = []
+                for tv in msg.tracking_value_ids:
+                    # field_desc is the human label; fall back to field name
+                    field_label = getattr(tv, "field_desc", None) or getattr(tv, "field", None) or _("Field")
+                    field_type = getattr(tv, "field_type", None)
+
+                    def _as_unset_or_str(val):
+                        if val in (None, ""):
+                            return _("Unset")
+                        return str(val)
+
+                    old_raw = new_raw = None
+
+                    if field_type in ("char", "text", "html", "selection", "many2one"):
+                        # Most “human” values (status, categories, M2O labels, etc.)
+                        old_raw = tv.old_value_char or tv.old_value_text
+                        new_raw = tv.new_value_char or tv.new_value_text
+
+                    elif field_type in ("integer",):
+                        old_raw = tv.old_value_integer
+                        new_raw = tv.new_value_integer
+
+                    elif field_type in ("float", "monetary"):
+                        old_raw = tv.old_value_float or tv.old_value_monetary
+                        new_raw = tv.new_value_float or tv.new_value_monetary
+
+                    elif field_type in ("boolean",):
+                        # Represent booleans as Yes/No instead of 0/1
+                        old_int = tv.old_value_integer
+                        new_int = tv.new_value_integer
+
+                        def _bool_label(v):
+                            if v in (None, ""):
+                                return _("Unset")
+                            try:
+                                return _("Yes") if int(v) else _("No")
+                            except Exception:
+                                return str(v)
+
+                        old_str = _bool_label(old_int)
+                        new_str = _bool_label(new_int)
+                        lines.append(f"{field_label}: {old_str} → {new_str}")
+                        continue  # done with this tv
+
+                    elif field_type in ("datetime", "date"):
+                        old_dt = getattr(tv, "old_value_datetime", None)
+                        new_dt = getattr(tv, "new_value_datetime", None)
+
+                        if old_dt:
+                            if field_type == "datetime":
+                                old_raw = fields.Datetime.to_string(old_dt)
+                            else:
+                                old_raw = fields.Date.to_string(old_dt)
+                        if new_dt:
+                            if field_type == "datetime":
+                                new_raw = fields.Datetime.to_string(new_dt)
+                            else:
+                                new_raw = fields.Date.to_string(new_dt)
+
+                    else:
+                        # Fallback: try everything in a reasonable order
+                        old_raw = (
+                            tv.old_value_char
+                            or tv.old_value_text
+                            or tv.old_value_monetary
+                            or tv.old_value_integer
+                            or tv.old_value_float
+                        )
+                        new_raw = (
+                            tv.new_value_char
+                            or tv.new_value_text
+                            or tv.new_value_monetary
+                            or tv.new_value_integer
+                            or tv.new_value_float
+                        )
+
+                    old_str = _as_unset_or_str(old_raw)
+                    new_str = _as_unset_or_str(new_raw)
+                    lines.append(f"{field_label}: {old_str} → {new_str}")
+
+                body_plain = "\n".join(lines).strip()
+
+            # Still nothing? then it's genuinely uninteresting, skip it
             if not body_plain:
                 continue
 
@@ -892,7 +979,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         # Chunk large payloads
         CHUNK = 200
         for i in range(0, len(payloads), CHUNK):
-            chunk = payloads[i:i+CHUNK]
+            chunk = payloads[i:i + CHUNK]
             try:
                 resp = requests.post(
                     endpoint + "?on_conflict=odoo_message_id",
@@ -903,10 +990,10 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 if not resp.ok:
                     _logger.error(
                         "Failed to push issue_messages chunk %d-%d: %s %s",
-                        i+1, i+len(chunk), resp.status_code, resp.text
+                        i + 1, i + len(chunk), resp.status_code, resp.text
                     )
             except Exception:
-                _logger.exception("Exception while pushing issue_messages chunk %d-%d", i+1, i+len(chunk))
+                _logger.exception("Exception while pushing issue_messages chunk %d-%d", i + 1, i + len(chunk))
 
     @api.model
     def backfill_issue_states(self, limit=None, batch_size=200):
