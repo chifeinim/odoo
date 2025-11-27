@@ -85,16 +85,16 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     def _get_config(self):
         params = self.env['ir.config_parameter'].sudo()
         url = params.get_param('supabase.url')
-        # Prefer service key for writes; fall back to publishable for read-only.
         key = params.get_param('supabase.service_key') or params.get_param('supabase.publishable_key')
         if not url or not key:
             raise UserError("Supabase URL or key not found in ir.config_parameter.")
         return url.rstrip('/'), key
-
-
-    def _fetch_table(self, table, last_sync, page_size=1000, profile="external_data_yango"):
+    
+    def _build_headers(self, profile):
         base_url, key = self._get_config()
-        endpoint = f"{base_url}/rest/v1/{table}"
+        params = self.env['ir.config_parameter'].sudo()
+        tenant_secret = params.get_param('supabase.tenant_secret')
+
         headers = {
             "apikey":        key,
             "Authorization": f"Bearer {key}",
@@ -103,6 +103,14 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             "Content-Profile": profile,
             "Prefer":        "count=exact",
         }
+        if tenant_secret:
+            headers["X-Tenant-Secret"] = tenant_secret
+        return headers
+
+    def _fetch_table(self, table, last_sync, page_size=1000, profile="external_data_yango"):
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/{table}"
+        headers = self._build_headers(profile)
         all_rows = []
         offset = 0
         while True:
@@ -129,14 +137,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     def _fetch_page(self, table, last_sync, limit, offset, profile="external_data_yango"):
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/{table}"
-        headers = {
-            "apikey":        key,
-            "Authorization": f"Bearer {key}",
-            "Accept":        "application/json",
-            "Accept-Profile":  profile,
-            "Content-Profile": profile,
-            "Prefer":        "count=exact",
-        }
+        headers = self._build_headers(profile)
         params = {
             "select":     "*",
             "updated_at": f"gte.{last_sync}",
@@ -155,14 +156,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         """
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/orders"
-        headers = {
-            "apikey":        key,
-            "Authorization": f"Bearer {key}",
-            "Accept":        "application/json",
-            "Accept-Profile":  profile,
-            "Content-Profile": profile,
-            "Prefer":        "count=exact",
-        }
+        headers = self._build_headers(profile)
 
         # Build composite filter: updated_at > last_updated_at
         # OR (updated_at = last_updated_at AND id > last_id)
@@ -185,12 +179,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                                 page_size=1000, profile="external_data_yango"):
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/supply_hours"
-        headers = {
-            "apikey": key, "Authorization": f"Bearer {key}",
-            "Accept": "application/json",
-            "Accept-Profile": profile, "Content-Profile": profile,
-            "Prefer": "count=exact",
-        }
+        headers = self._build_headers(profile)
         ts_q  = urllib.parse.quote_plus(last_ts)
         yid_q = urllib.parse.quote_plus(last_yid or '')
         date_q= urllib.parse.quote_plus(last_date or '0001-01-01')
@@ -214,11 +203,12 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     
     def _fetch_issue_logs(self, last_sync, page_size=1000, profile="dashboard"):
         """
-        Fetch issue_logs joined with issues_list (embedded), filtered by created_at.
+        Fetch issue_logs joined with issues_list (embedded), filtered by updated_at.
         Returns rows like:
         {
             "id": ...,
             "created_at": "...",
+            "updated_at": "...",
             "issue_id": ...,
             "yango_driver_id": "...",
             "internal_driver_id": ...,
@@ -233,14 +223,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         """
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/issue_logs"
-        headers = {
-            "apikey": key,
-            "Authorization": f"Bearer {key}",
-            "Accept": "application/json",
-            "Accept-Profile": profile,
-            "Content-Profile": profile,
-            "Prefer": "count=exact",
-        }
+        headers = self._build_headers(profile)
 
         select = "*,issues_list:issue_id(main_category,sub_category,sub_sub_category)"
         all_rows = []
@@ -248,8 +231,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         while True:
             params = {
                 "select": select,
-                "created_at": f"gt.{last_sync}",
-                "order": "created_at.asc,id.asc",
+                "updated_at": f"gt.{last_sync}",
+                "order": "updated_at.asc,id.asc",
                 "limit": page_size,
                 "offset": offset,
             }
@@ -284,14 +267,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         # ---------- Step 1: issue_attachments (dashboard profile) ----------
         ia_endpoint = f"{base_url}/rest/v1/issue_attachments"
-        ia_headers = {
-            "apikey":          key,
-            "Authorization":   f"Bearer {key}",
-            "Accept":          "application/json",
-            "Accept-Profile":  profile,           # "dashboard"
-            "Content-Profile": profile,
-            "Prefer":          "count=exact",
-        }
+        ia_headers = self._build_headers(profile)
 
         all_rows, offset = [], 0
         select_ia = "id,created_at,issue_log_id,attachment_id"
@@ -326,14 +302,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         # ---------- Step 2: comms.attachments (comms profile) ----------
         att_endpoint = f"{base_url}/rest/v1/attachments"
-        att_headers = {
-            "apikey":          key,
-            "Authorization":   f"Bearer {key}",
-            "Accept":          "application/json",
-            "Accept-Profile":  "comms",
-            "Content-Profile": "comms",
-            "Prefer":          "count=exact",
-        }
+        att_headers = self._build_headers("comms")
         # Collect unique ids
         att_ids = sorted({r["attachment_id"] for r in all_rows if r.get("attachment_id")})
         att_map = {}
@@ -803,15 +772,11 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         """
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/issue_logs"
-        headers = {
-            "apikey":          key,
-            "Authorization":   f"Bearer {key}",
-            "Content-Type":    "application/json",
-            "Accept":          "application/json",
-            "Accept-Profile":  "dashboard",
-            "Content-Profile": "dashboard",
-            "Prefer":          "return=minimal",
-        }
+        headers = self._build_headers("dashboard")
+        headers.update({
+            "Content-Type":  "application/json",
+            "Prefer":        "return=minimal",
+        })
 
         issues = issues.sudo()
         _logger.info("Pushing Supabase issue state for %d issues", len(issues))
@@ -878,16 +843,12 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/issue_messages"
-        headers = {
-            "apikey":          key,
-            "Authorization":   f"Bearer {key}",
-            "Content-Type":    "application/json",
-            "Accept":          "application/json",
-            "Accept-Profile":  "dashboard",
-            "Content-Profile": "dashboard",
+        headers = self._build_headers("dashboard")
+        headers.update({
+            "Content-Type":  "application/json",
             # merge on odoo_message_id when backfilling
-            "Prefer":          "return=minimal,resolution=merge-duplicates",
-        }
+            "Prefer":        "return=minimal,resolution=merge-duplicates",
+        })
 
         payloads = []
         for msg in messages.sudo():
