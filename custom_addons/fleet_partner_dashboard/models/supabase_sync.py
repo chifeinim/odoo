@@ -1,5 +1,6 @@
-from odoo import models, api, fields, _
+from odoo import models, api, fields, tools, _
 from odoo.exceptions import UserError
+from odoo.fields import Datetime as OdooDatetime
 from requests.exceptions import HTTPError
 from datetime import datetime, timezone, timedelta
 from dateutil.parser import isoparse
@@ -7,6 +8,17 @@ import logging, requests, json, urllib.parse, re, traceback
 
 
 _logger = logging.getLogger(__name__)
+
+def _to_supabase_iso(dt):
+    """Convert an Odoo datetime (naive UTC) to RFC3339 UTC string."""
+    if not dt:
+        return None
+    # Odoo stores naive UTC; treat as UTC.
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.isoformat().replace('+00:00', 'Z')
 
 def _normalize_datetime(val):
     """Convert arbitrary ISO8601 (with offset / fractional seconds) into naive UTC 'YYYY-MM-DD HH:MM:SS'."""
@@ -73,10 +85,12 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     def _get_config(self):
         params = self.env['ir.config_parameter'].sudo()
         url = params.get_param('supabase.url')
-        key = params.get_param('supabase.publishable_key')
+        # Prefer service key for writes; fall back to publishable for read-only.
+        key = params.get_param('supabase.service_key') or params.get_param('supabase.publishable_key')
         if not url or not key:
-            raise UserError("Supabase URL or publishable key not found in ir.config_parameter.")
+            raise UserError("Supabase URL or key not found in ir.config_parameter.")
         return url.rstrip('/'), key
+
 
     def _fetch_table(self, table, last_sync, page_size=1000, profile="external_data_yango"):
         base_url, key = self._get_config()
@@ -777,6 +791,203 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         # return rows so caller can compute last_sync (created_at)
         return rows
+    
+    def _push_issue_state(self, issues):
+        """
+        Push x_fleet_issue fields -> dashboard.issue_logs:
+
+        issue_logs.id          == int(issue.name)
+        issue_logs.status      <- issue.status
+        issue_logs.date_resolved <- issue.resolved_on
+        issue_logs.can_work    <- issue.can_work
+        """
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/issue_logs"
+        headers = {
+            "apikey":          key,
+            "Authorization":   f"Bearer {key}",
+            "Content-Type":    "application/json",
+            "Accept":          "application/json",
+            "Accept-Profile":  "dashboard",
+            "Content-Profile": "dashboard",
+            "Prefer":          "return=minimal",
+        }
+
+        issues = issues.sudo()
+        _logger.info("Pushing Supabase issue state for %d issues", len(issues))
+
+        for issue in issues:
+            # Map Odoo Issue -> dashboard.issue_logs.id
+            try:
+                issue_log_id = int(issue.name)
+            except (TypeError, ValueError):
+                _logger.warning(
+                    "Issue %s has non-numeric name %r; cannot map to issue_logs.id, skipping",
+                    issue.id, issue.name,
+                )
+                continue
+
+            payload = {
+                "status":       issue.status,
+                "can_work":     issue.can_work,
+                # if resolved_on is falsy, send null to clear date_resolved
+                "date_resolved": _to_supabase_iso(issue.resolved_on) if issue.resolved_on else None,
+            }
+
+            params = {"id": f"eq.{issue_log_id}"}
+            try:
+                resp = requests.patch(
+                    endpoint,
+                    headers=headers,
+                    params=params,
+                    json=payload,
+                    timeout=10,
+                )
+                if not resp.ok:
+                    _logger.error(
+                        "Supabase issue_logs update failed for issue %s (issue_logs.id=%s): %s %s",
+                        issue.id, issue_log_id, resp.status_code, resp.text
+                    )
+                else:
+                    _logger.info(
+                        "Supabase issue_logs updated for issue %s (issue_logs.id=%s)",
+                        issue.id, issue_log_id
+                    )
+            except Exception:
+                _logger.exception(
+                    "Exception while pushing issue %s (issue_logs.id=%s) to Supabase",
+                    issue.id, issue_log_id
+                )
+
+    def _push_issue_messages(self, messages):
+        """
+        Push mail.message rows (for x_fleet_issue) -> dashboard.issue_messages.
+
+        Requires Supabase table:
+          - issue_log_id
+          - created_at
+          - author_name
+          - author_email
+          - body
+          - message_type
+          - subtype
+          - odoo_message_id (unique)
+        """
+        if not messages:
+            return
+
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/issue_messages"
+        headers = {
+            "apikey":          key,
+            "Authorization":   f"Bearer {key}",
+            "Content-Type":    "application/json",
+            "Accept":          "application/json",
+            "Accept-Profile":  "dashboard",
+            "Content-Profile": "dashboard",
+            # merge on odoo_message_id when backfilling
+            "Prefer":          "return=minimal,resolution=merge-duplicates",
+        }
+
+        payloads = []
+        for msg in messages.sudo():
+            if msg.model != 'x_fleet_issue' or not msg.res_id:
+                continue
+
+            issue = self.env['x_fleet_issue'].sudo().browse(msg.res_id)
+            if not issue.exists():
+                continue
+
+            # Map Odoo issue -> issue_logs.id
+            try:
+                issue_log_id = int(issue.name)
+            except (TypeError, ValueError):
+                _logger.warning("Cannot map issue %s to issue_logs.id for message %s", issue.id, msg.id)
+                continue
+
+            # Author
+            author_name = msg.author_id.name or (msg.email_from or "Unknown")
+            author_email = msg.email_from
+
+            # Body: strip HTML to plain text
+            body_html = msg.body or ""
+            body_plain = tools.html2plaintext(body_html).strip()
+
+            if not body_plain:
+                continue
+
+            vals = {
+                "odoo_message_id": msg.id,
+                "issue_log_id": issue_log_id,
+                "created_at": _to_supabase_iso(msg.date) if msg.date else None,
+                "author_name": author_name,
+                "author_email": author_email,
+                "body": body_plain,
+                "message_type": msg.message_type,
+                "subtype": msg.subtype_id and msg.subtype_id.description or None,
+            }
+            payloads.append({k: v for k, v in vals.items() if v is not None})
+
+        # Chunk large payloads
+        CHUNK = 200
+        for i in range(0, len(payloads), CHUNK):
+            chunk = payloads[i:i+CHUNK]
+            try:
+                resp = requests.post(
+                    endpoint + "?on_conflict=odoo_message_id",
+                    headers=headers,
+                    json=chunk,
+                    timeout=20,
+                )
+                if not resp.ok:
+                    _logger.error(
+                        "Failed to push issue_messages chunk %d-%d: %s %s",
+                        i+1, i+len(chunk), resp.status_code, resp.text
+                    )
+            except Exception:
+                _logger.exception("Exception while pushing issue_messages chunk %d-%d", i+1, i+len(chunk))
+
+    @api.model
+    def backfill_issue_states(self, limit=None, batch_size=200):
+        """
+        Backfill status / can_work / resolved_on from x_fleet_issue -> dashboard.issue_logs.
+
+        - limit: total number of issues to process (None = all)
+        - batch_size: number of issues per batch
+        """
+        Issue = self.env['x_fleet_issue'].sudo()
+        processed = 0
+        last_id = 0
+
+        while True:
+            this_batch_size = batch_size
+            if limit is not None:
+                remaining = limit - processed
+                if remaining <= 0:
+                    break
+                this_batch_size = min(this_batch_size, max(remaining, 0))
+
+            issues = Issue.search(
+                [('id', '>', last_id)],
+                order='id',
+                limit=this_batch_size,
+            )
+            if not issues:
+                break
+
+            _logger.info(
+                "Backfill issue states: pushing %d issues (ids %s..%s)",
+                len(issues), issues[0].id, issues[-1].id
+            )
+
+            self._push_issue_state(issues)
+            processed += len(issues)
+            last_id = issues[-1].id
+
+            self.env.cr.commit()
+
+        _logger.info("Backfilled %d issue states to Supabase", processed)
+        return processed
     
     @api.model
     def sync_issue_attachments(self, last_sync, rows=None, profile="dashboard"):

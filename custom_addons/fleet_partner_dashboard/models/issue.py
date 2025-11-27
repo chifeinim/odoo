@@ -53,14 +53,72 @@ class FleetIssue(models.Model):
     
     def write(self, vals):
         res = super().write(vals)
-        # if status changed, set/clear resolved_on accordingly
+
+        # existing resolution timestamp logic
         if 'status' in vals:
             for rec in self:
                 if rec.status == 'resolved' and not rec.resolved_on:
                     rec.resolved_on = fields.Datetime.now()
                 elif rec.status == 'unresolved' and rec.resolved_on:
                     rec.resolved_on = False
+
+        # If status / can_work / resolved_on changed, push to Supabase
+        changed = {'status', 'can_work', 'resolved_on'} & set(vals.keys())
+        if changed:
+            self.env['x_fleet_partner_supabase_sync']._push_issue_state(self)
+
         return res
+
+    
+    def message_post(self, **kwargs):
+        """
+        Extend mail.thread.message_post to push chatter messages to Supabase.
+        """
+        message = super().message_post(**kwargs)  # this is a mail.message recordset (usually size 1)
+        messages = message.sudo()
+
+        # Filter to meaningful chatter items only
+        messages = messages.filtered(
+            lambda m: m.model == self._name and m.message_type in ('comment', 'notification')
+        )
+
+        if messages:
+            self.env['x_fleet_partner_supabase_sync']._push_issue_messages(messages)
+
+        return message
+    
+    @api.model
+    def backfill_issue_messages_to_supabase(self, batch_size=500):
+        """
+        Backfill existing mail.message rows for x_fleet_issue into dashboard.issue_messages.
+
+        Uses odoo_message_id unique constraint in Supabase to avoid duplicates.
+        Run manually from shell or server action; safe to run multiple times.
+        """
+        Message = self.env['mail.message'].sudo()
+        Sync = self.env['x_fleet_partner_supabase_sync'].sudo()
+
+        last_id = 0
+        while True:
+            msgs = Message.search(
+                [
+                    ('model', '=', 'x_fleet_issue'),
+                    ('id', '>', last_id),
+                    ('message_type', 'in', ['comment', 'notification']),
+                ],
+                order='id',
+                limit=batch_size,
+            )
+            if not msgs:
+                break
+
+            Sync._push_issue_messages(msgs)
+            last_id = msgs[-1].id
+
+            # Commit in batches so progress is saved
+            self.env.cr.commit()
+
+        return True
 
     @api.model
     def _compute_can_work_label(self):
