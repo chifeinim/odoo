@@ -93,7 +93,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     def _build_headers(self, profile):
         base_url, key = self._get_config()
         params = self.env['ir.config_parameter'].sudo()
-        tenant_secret = params.get_param('supabase.tenant_secret')
+        tenant_secret = (params.get_param('supabase.tenant_secret') or '').strip()
 
         headers = {
             "apikey":        key,
@@ -106,6 +106,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         if tenant_secret:
             headers["X-Tenant-Secret"] = tenant_secret
         return headers
+
 
     def _fetch_table(self, table, last_sync, page_size=1000, profile="external_data_yango"):
         base_url, key = self._get_config()
@@ -203,7 +204,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     
     def _fetch_issue_logs(self, last_sync, page_size=1000, profile="dashboard"):
         """
-        Fetch issue_logs joined with issues_list (embedded), filtered by updated_at.
+        Fetch issue_logs joined with issues_list (embedded), filtered by created_at.
         Returns rows like:
         {
             "id": ...,
@@ -231,8 +232,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         while True:
             params = {
                 "select": select,
-                "updated_at": f"gt.{last_sync}",
-                "order": "updated_at.asc,id.asc",
+                "created_at": f"gt.{last_sync}",
+                "order": "created_at.asc,id.asc",
                 "limit": page_size,
                 "offset": offset,
             }
@@ -779,13 +780,22 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         })
 
         issues = issues.sudo()
-        _logger.info("Pushing Supabase issue state for %d issues", len(issues))
+        total = len(issues)
+        if not total:
+            return
+
+        ok = 0
+        skipped = 0
+        failed = 0
+
+        _logger.info("Pushing Supabase issue state for %d issues", total)
 
         for issue in issues:
             # Map Odoo Issue -> dashboard.issue_logs.id
             try:
                 issue_log_id = int(issue.name)
             except (TypeError, ValueError):
+                skipped += 1
                 _logger.warning(
                     "Issue %s has non-numeric name %r; cannot map to issue_logs.id, skipping",
                     issue.id, issue.name,
@@ -808,21 +818,25 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                     json=payload,
                     timeout=10,
                 )
-                if not resp.ok:
+                if resp.ok:
+                    ok += 1
+                else:
+                    failed += 1
                     _logger.error(
                         "Supabase issue_logs update failed for issue %s (issue_logs.id=%s): %s %s",
                         issue.id, issue_log_id, resp.status_code, resp.text
                     )
-                else:
-                    _logger.info(
-                        "Supabase issue_logs updated for issue %s (issue_logs.id=%s)",
-                        issue.id, issue_log_id
-                    )
             except Exception:
+                failed += 1
                 _logger.exception(
                     "Exception while pushing issue %s (issue_logs.id=%s) to Supabase",
                     issue.id, issue_log_id
                 )
+
+        _logger.info(
+            "Supabase issue_logs state push finished: total=%d, ok=%d, skipped=%d, failed=%d",
+            total, ok, skipped, failed,
+        )
 
     def _push_issue_messages(self, messages):
         """
