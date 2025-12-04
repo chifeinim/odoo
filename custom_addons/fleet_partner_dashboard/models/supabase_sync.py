@@ -212,10 +212,11 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             "updated_at": "...",
             "issue_id": ...,
             "yango_driver_id": "...",
-            "internal_driver_id": ...,
+            "internal_driver_id": "...",
             "status": "...",
             "can_work": true/false,
             "issues_list": {
+                "issue_type": "...",       # NEW
                 "main_category": "...",
                 "sub_category": "...",
                 "sub_sub_category": "..."
@@ -226,7 +227,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         endpoint = f"{base_url}/rest/v1/issue_logs"
         headers = self._build_headers(profile)
 
-        select = "*,issues_list:issue_id(main_category,sub_category,sub_sub_category)"
+        # include issue_type in the embedded issues_list
+        select = "*,issues_list:issue_id(issue_type,main_category,sub_category,sub_sub_category)"
         all_rows = []
         offset = 0
         while True:
@@ -237,7 +239,10 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 "limit": page_size,
                 "offset": offset,
             }
-            _logger.info("Fetching issue_logs %d→%d (page_size=%d)…", offset + 1, offset + page_size, page_size)
+            _logger.info(
+                "Fetching issue_logs %d→%d (page_size=%d)…",
+                offset + 1, offset + page_size, page_size
+            )
             resp = requests.get(endpoint, headers=headers, params=params, timeout=60)
             resp.raise_for_status()
             batch = resp.json() or []
@@ -739,6 +744,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             raw = {
                 'name':              ext_id,  # keep as text; unique enforced by SQL constraint
                 'date_reported':     _normalize_datetime(rec['created_at']) if rec.get('created_at') else None,
+                'issue_type':        il.get('issue_type'), # "support", "performance", "training"
                 'main_category':     il.get('main_category'),
                 'sub_category':      il.get('sub_category'),
                 'sub_sub_category':  il.get('sub_sub_category'),

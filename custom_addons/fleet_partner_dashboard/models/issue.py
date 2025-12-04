@@ -13,9 +13,13 @@ class FleetIssue(models.Model):
     driver_id = fields.Many2one('x_fleet_driver', string="Driver", required=True, ondelete='cascade')
 
     # free-form classification columns
+    issue_type       = fields.Char(string="Issue Type", tracking=True)
     main_category    = fields.Char(string="Main Category", required=True, tracking=True)
     sub_category     = fields.Char(string="Sub-Category", tracking=True)
     sub_sub_category = fields.Char(string="Sub-Sub-Category", tracking=True)
+    issue_type_label = fields.Char(
+        string="Issue Type", compute="_compute_category_labels",
+        search="_search_issue_type_label")
     main_category_label = fields.Char(
         string="Main Category", compute="_compute_category_labels",
         search="_search_main_category_label")
@@ -152,6 +156,7 @@ class FleetIssue(models.Model):
 
     def _compute_category_labels(self):
         for rec in self:
+            rec.issue_type_label = self._humanize(rec.issue_type)
             rec.main_category_label = self._humanize(rec.main_category)
             rec.sub_category_label = self._humanize(rec.sub_category)
             rec.sub_sub_category_label = self._humanize(rec.sub_sub_category)
@@ -159,6 +164,15 @@ class FleetIssue(models.Model):
     def action_refresh_signed_urls(self):
         self.mapped('ext_attachment_ids').ensure_fresh_url() # type: ignore
         return True
+    
+    @api.model
+    def _search_issue_type_label(self, operator, value):
+        norm = self._slug(value)
+        like = norm.replace('_', '%') if norm else norm
+        return ['|', '|',
+                ('issue_type', 'ilike', value),
+                ('issue_type', 'ilike', norm or value),
+                ('issue_type', 'ilike', like or value)]
 
     @api.model
     def _search_main_category_label(self, operator, value):

@@ -13,6 +13,7 @@
         <field name="date_reported"/>
         <field name="resolved_on" string="Resolved on" readonly="1"/>
         <field name="driver_id"/>
+        <!-- NEW: show issue type -->
         <field name="main_category_label" string="Main Category" readonly="1"/>
         <field name="sub_category_label" string="Sub-Category" readonly="1"/>
         <field name="sub_sub_category_label" string="Sub-Sub-Category" readonly="1"/>
@@ -35,6 +36,8 @@
             <field name="driver_id"/>
           </group>
           <group string="Classification">
+            <!-- NEW: show issue type (read-only since it comes from Supabase) -->
+            <field name="issue_type_label" string="Issue Type" readonly="1"/>
             <field name="main_category_label" string="Main Category" readonly="1"/>
             <field name="sub_category_label" string="Sub-Category" readonly="1"/>
             <field name="sub_sub_category_label" string="Sub-Sub-Category" readonly="1"/>
@@ -63,9 +66,16 @@
       <search string="Search Issues">
         <field name="name" string="Issue ID"/>
         <field name="driver_id"/>
+        <!-- NEW: searchable issue type label -->
+        <field name="issue_type_label" string="Issue Type"/>
         <field name="main_category_label" string="Main Category"/>
         <field name="sub_category_label" string="Sub-Category"/>
         <field name="sub_sub_category_label" string="Sub-Sub-Category"/>
+
+        <!-- NEW: default “Support” filter, matches Supabase enum value -->
+        <filter name="issue_type_support"
+                string="Support"
+                domain="[('issue_type', '=', 'support')]"/>
 
         <filter name="unresolved" string="Unresolved" domain="[('status','=','unresolved')]"/>
         <filter name="can_work_true" string="Can Work" domain="[('can_work','=',True)]"/>
@@ -83,9 +93,12 @@
     </field>
   </record>
 
+  <!-- Action: default to Support issues only -->
   <record id="action_x_fleet_issue" model="ir.actions.act_window">
     <field name="name">Issues</field>
     <field name="res_model">x_fleet_issue</field>
     <field name="view_mode">tree,form</field>
+    <!-- This makes the 'issue_type_support' filter active by default -->
+    <field name="context">{'search_default_issue_type_support': 1}</field>
   </record>
 </odoo>
