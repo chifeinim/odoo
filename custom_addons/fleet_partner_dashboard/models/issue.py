@@ -43,12 +43,17 @@ class FleetIssue(models.Model):
 
     @api.model
     def create(self, vals):
-        if vals.get('name','New') == 'New':
+        if vals.get('name', 'New') == 'New':
             vals['name'] = self.env['ir.sequence'].next_by_code('x_fleet_issue') or 'New'
         rec = super().create(vals)
         # stamp resolution time once, if created already resolved
         if rec.status == 'resolved' and not rec.resolved_on:
             rec.resolved_on = fields.Datetime.now()
+
+        # Push to Supabase unless we're in "import from Supabase" mode
+        if not self.env.context.get('skip_supabase_issue_push'):
+            rec.env['x_fleet_partner_supabase_sync']._push_issue_state(rec)
+
         return rec
     
     def write(self, vals):
@@ -64,11 +69,10 @@ class FleetIssue(models.Model):
 
         # If status / can_work / resolved_on changed, push to Supabase
         changed = {'status', 'can_work', 'resolved_on'} & set(vals.keys())
-        if changed:
+        if changed and not self.env.context.get('skip_supabase_issue_push'):
             self.env['x_fleet_partner_supabase_sync']._push_issue_state(self)
 
         return res
-
     
     def message_post(self, **kwargs):
         """

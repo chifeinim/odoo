@@ -204,7 +204,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     
     def _fetch_issue_logs(self, last_sync, page_size=1000, profile="dashboard"):
         """
-        Fetch issue_logs joined with issues_list (embedded), filtered by created_at.
+        Fetch issue_logs joined with issues_list (embedded), filtered by updated_at.
         Returns rows like:
         {
             "id": ...,
@@ -232,8 +232,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         while True:
             params = {
                 "select": select,
-                "created_at": f"gt.{last_sync}",
-                "order": "created_at.asc,id.asc",
+                "updated_at": f"gt.{last_sync}",
+                "order": "updated_at.asc,id.asc",
                 "limit": page_size,
                 "offset": offset,
             }
@@ -696,7 +696,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
     def sync_issues(self, last_sync, rows=None, profile="dashboard"):
         """
         Sync from dashboard.issue_logs joined with dashboard.issues_list.
-        Cursor uses issue_logs.created_at (NOT updated_at).
+        Cursor uses issue_logs.updated_at.
         """
         if rows is None:
             try:
@@ -752,14 +752,14 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             try:
                 exists = Issue.search([('name', '=', str(ext_id))], limit=1)
                 if exists:
-                    exists.write(vals)
+                    exists.with_context(skip_supabase_issue_push=True).write(vals)
                 else:
                     vals['name'] = str(ext_id)
-                    Issue.create(vals)
+                    Issue.with_context(skip_supabase_issue_push=True).create(vals)
             except Exception as e:
                 self._queue_failed_row('issues', rec, str(ext_id), str(e))
 
-        # return rows so caller can compute last_sync (created_at)
+        # return rows so caller can compute last_sync (updated_at)
         return rows
     
     def _push_issue_state(self, issues):
@@ -788,7 +788,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         skipped = 0
         failed = 0
 
-        _logger.info("Pushing Supabase issue state for %d issues", total)
+        _logger.debug("Pushing Supabase issue state for %d issues", total)
 
         for issue in issues:
             # Map Odoo Issue -> dashboard.issue_logs.id
@@ -833,7 +833,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                     issue.id, issue_log_id
                 )
 
-        _logger.info(
+        _logger.debug(
             "Supabase issue_logs state push finished: total=%d, ok=%d, skipped=%d, failed=%d",
             total, ok, skipped, failed,
         )
@@ -1221,9 +1221,9 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         is_cur = params.get_param('fleet_partner_dashboard.issues_cursor') or dr_cur
         is_rows = self.sync_issues(is_cur)
         if is_rows:
-            # issue_logs are filtered by created_at
+            # issue_logs are filtered by updated_at
             params.set_param('fleet_partner_dashboard.issues_cursor',
-                            max(r['created_at'] for r in is_rows))
+                            max(r['updated_at'] for r in is_rows))
             self.env.cr.commit()
             
         # 6) issue_attachments — cursor by created_at
