@@ -117,7 +117,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         while True:
             params = {
                 "select":     "*",
-                "updated_at": f"gte.{last_sync}",
+                "updated_at": f"gt.{last_sync}",
                 "order":      "updated_at.asc",
                 "limit":      page_size,
                 "offset":     offset,
@@ -345,33 +345,68 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
     @api.model
     def _upsert_product_types(self, rows):
-        _logger.info("Upserting %d product types", len(rows))
+        """
+        Upsert product types from external_data_yango.work_rules.
+
+        Canonical key = work_rule_id (stored as work_rule_external_id).
+        We keep other fields (kpi_type, description, bounds) under Odoo's control.
+        """
         ProductType = self.env['x_fleet_product_type'].sudo()
+        _logger.info("Upserting %d product types (via work_rule_id)", len(rows))
+
         new_vals = []
+
         for rec in rows:
-            name = rec.get('name')
-            if not name:
+            ext_id = rec.get('work_rule_id')
+            if not ext_id:
+                # If a work_rule row without work_rule_id ever appears, skip it
                 continue
-            if not ProductType.search([('name', '=', name)], limit=1):
-                new_vals.append({'name': name})
+
+            name = rec.get('name') or ext_id
+
+            # Backwards compat:
+            # 1) Try existing by external id
+            # 2) If none, try by name (old behavior), then attach ext_id to it
+            pt = ProductType.search([
+                '|',
+                ('work_rule_external_id', '=', ext_id),
+                ('name', '=', name),
+            ], limit=1)
+
+            vals_update = {
+                'name': name,
+                'work_rule_external_id': ext_id,
+            }
+
+            if pt:
+                # Update just the "identity" fields; do not touch kpi config
+                pt.write(vals_update)
+            else:
+                new_vals.append(vals_update)
+
         if new_vals:
             ProductType.create(new_vals)
             _logger.info("Bulk-created %d new product types", len(new_vals))
 
     @api.model
     def _upsert_drivers(self, rows, work_rule_map, from_queue=False):
-        """Upsert drivers. If from_queue=True and the row is invalid (e.g. no yango_driver_id),
-        raise so the retry job backs off. Missing work_rule mapping is non-fatal.
+        """Upsert drivers.
+
+        - Canonical link to product type is work_rule_id.
+        - product types are identified by x_fleet_product_type.work_rule_external_id.
+        - work_rule_map is still accepted as a fallback (work_rule_id -> name).
         """
         _logger.info("Upserting %d drivers", len(rows))
         ProductType = self.env['x_fleet_product_type'].sudo()
         Driver = self.env['x_fleet_driver'].sudo()
         new_vals = []
+
+        # cache by work_rule_id -> product_type_id
         pt_cache: dict[str, int] = {}
 
         for rec in rows:
             first = rec.get('first_name') or ''
-            last  = rec.get('last_name') or ''
+            last = rec.get('last_name') or ''
             full_name = (first + ' ' + last).strip() or None
 
             raw = {
@@ -384,19 +419,28 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             }
             vals = {k: v for k, v in raw.items() if v is not None}
 
-            # Map work_rule -> product_type (non-fatal if missing)
+            # Map work_rule -> product_type by external key
             wr_id = rec.get('work_rule_id')
             if wr_id:
-                pt_name = work_rule_map.get(wr_id)
-                if pt_name:
-                    if pt_name in pt_cache:
-                        vals['product_type_id'] = pt_cache[pt_name]
-                    else:
-                        pt = ProductType.search([('name', '=', pt_name)], limit=1)
-                        if not pt:
-                            pt = ProductType.create({'name': pt_name})
-                        vals['product_type_id'] = pt.id
-                        pt_cache[pt_name] = pt.id
+                pt_id = pt_cache.get(wr_id)
+                if not pt_id:
+                    # First try canonical external id
+                    pt = ProductType.search(
+                        [('work_rule_external_id', '=', wr_id)],
+                        limit=1
+                    )
+                    if not pt:
+                        # Fallback: try inferred name from work_rule_map, or default to wr_id
+                        pt_name = work_rule_map.get(wr_id) or wr_id
+                        pt = ProductType.create({
+                            'name': pt_name,
+                            'work_rule_external_id': wr_id,
+                        })
+
+                    pt_id = pt.id
+                    pt_cache[wr_id] = pt_id
+
+                vals['product_type_id'] = pt_id
 
             ext_id = rec.get('yango_driver_id')
             if not ext_id:
@@ -1194,7 +1238,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         # 1) work_rules
         wr_cur = params.get_param('fleet_partner_dashboard.work_rules_cursor') or '1970-01-01T00:00:00Z'
-        wr = self._fetch_table('work_rules', '1970-01-01T00:00:00Z')
+        wr = self._fetch_table('work_rules', wr_cur)
         self._upsert_product_types(wr)
         if wr:
             params.set_param('fleet_partner_dashboard.work_rules_cursor',
