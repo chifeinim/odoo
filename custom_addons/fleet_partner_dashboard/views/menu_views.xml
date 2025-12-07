@@ -2,7 +2,7 @@
   <!-- Root Menu -->
   <menuitem id="menu_fleet_dashboard_root"
             name="Fleet Dashboard"
-            action="action_fleet_driver"
+            action="action_performance_dashboard"
             sequence="10"/>
 
   <!-- Drivers -->
@@ -70,16 +70,40 @@
             sequence="30"
             action="action_low_performers_dashboard"/>
 
-  <!-- Issues -->
-  <menuitem id="menu_fleet_issue"
-            name="Issues"
-            parent="menu_fleet_dashboard_root"
-            action="action_x_fleet_issue"
-            sequence="40"/>
+  <!-- Call Center parent (reusing old Call Notes menu id) -->
   <menuitem id="menu_x_fleet_call_note"
-            name="Call Notes"
+            name="Call Center"
             parent="fleet_partner_dashboard.menu_fleet_dashboard_root"
+            sequence="2"/>
+
+  <!-- Call Center children -->
+
+  <!-- Placeholder for future Call Center Workflow dashboard.
+       No action yet; you can attach an act_url or act_window later. -->
+  <menuitem id="menu_call_center_workflow"
+            name="Call Center Workflow"
+            parent="menu_x_fleet_call_note"
+            sequence="10"/>
+
+  <!-- Segments -->
+  <menuitem id="menu_x_fleet_cc_segment"
+            name="Segments"
+            parent="menu_x_fleet_call_note"
+            action="action_x_fleet_cc_segment"
+            sequence="20"/>
+
+  <!-- Segment per Product -->
+  <menuitem id="menu_x_fleet_cc_segment_product"
+            name="Segment per Product"
+            parent="menu_x_fleet_call_note"
+            action="action_x_fleet_cc_segment_product"
+            sequence="30"/>
+
+  <!-- Call Notes list -->
+  <menuitem id="menu_x_fleet_call_note_list"
+            name="Call Notes"
+            parent="menu_x_fleet_call_note"
             action="action_x_fleet_call_note"
-            sequence="45"/>
+            sequence="40"/>
 
 </odoo>

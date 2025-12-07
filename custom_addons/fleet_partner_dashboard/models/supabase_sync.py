@@ -1325,6 +1325,3 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 fail += 1
 
         _logger.info("DLQ retry run: processed=%d, ok=%d, failed(backoff)=%d", len(items), ok, fail)
-
-
-

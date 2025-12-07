@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <data>
+
+    <!-- ===================== x_fleet_cc_segment ===================== -->
+
+    <!-- Tree view -->
+    <record id="view_x_fleet_cc_segment_tree" model="ir.ui.view">
+      <field name="name">x.fleet.cc.segment.tree</field>
+      <field name="model">x_fleet_cc_segment</field>
+      <field name="arch" type="xml">
+        <tree string="Call Center Segments">
+          <field name="name"/>
+          <field name="code"/>
+          <field name="enabled"/>
+          <field name="min_days_since_hire"/>
+          <field name="churn_inactive_days"/>
+          <field name="active_hours_threshold"/>
+          <field name="active_trips_threshold"/>
+        </tree>
+      </field>
+    </record>
+
+    <!-- Form view -->
+    <record id="view_x_fleet_cc_segment_form" model="ir.ui.view">
+      <field name="name">x.fleet.cc.segment.form</field>
+      <field name="model">x_fleet_cc_segment</field>
+      <field name="arch" type="xml">
+        <form string="Call Center Segment">
+          <sheet>
+            <group>
+              <field name="name"/>
+              <field name="code"/>
+              <field name="enabled"/>
+            </group>
+
+            <notebook>
+              <page string="Default Rules">
+                <group>
+                  <group>
+                    <field name="min_days_since_hire"/>
+                    <field name="churn_inactive_days"/>
+                  </group>
+                  <group>
+                    <field name="active_hours_threshold"/>
+                    <field name="active_trips_threshold"/>
+                  </group>
+                </group>
+              </page>
+
+              <page string="Per Product Types">
+                <field name="product_line_ids">
+                  <tree editable="bottom" string="Segment per Product">
+                    <field name="product_type_id"/>
+                    <field name="enabled"/>
+                    <field name="work_rule_external_id" readonly="1"/>
+                    <field name="min_days_since_hire"/>
+                    <field name="churn_inactive_days"/>
+                    <field name="active_hours_threshold"/>
+                    <field name="active_trips_threshold"/>
+                  </tree>
+                </field>
+              </page>
+            </notebook>
+          </sheet>
+        </form>
+      </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_x_fleet_cc_segment" model="ir.actions.act_window">
+      <field name="name">Segments</field>
+      <field name="res_model">x_fleet_cc_segment</field>
+      <field name="view_mode">tree,form</field>
+      <field name="help" type="html">
+        <p class="o_view_nocontent_smiling_face">
+          Create segments (New / Active / Churn) and their default rules.
+        </p>
+      </field>
+    </record>
+
+    <!-- ===================== x_fleet_cc_segment_product ===================== -->
+
+    <!-- Tree view -->
+    <record id="view_x_fleet_cc_segment_product_tree" model="ir.ui.view">
+      <field name="name">x.fleet.cc.segment.product.tree</field>
+      <field name="model">x_fleet_cc_segment_product</field>
+      <field name="arch" type="xml">
+        <tree string="Segment per Product">
+          <field name="segment_id"/>
+          <field name="product_type_id"/>
+          <field name="enabled"/>
+          <field name="work_rule_external_id" readonly="1"/>
+          <field name="min_days_since_hire"/>
+          <field name="churn_inactive_days"/>
+          <field name="active_hours_threshold"/>
+          <field name="active_trips_threshold"/>
+        </tree>
+      </field>
+    </record>
+
+    <!-- Form view -->
+    <record id="view_x_fleet_cc_segment_product_form" model="ir.ui.view">
+      <field name="name">x.fleet.cc.segment.product.form</field>
+      <field name="model">x_fleet_cc_segment_product</field>
+      <field name="arch" type="xml">
+        <form string="Segment per Product">
+          <sheet>
+            <group>
+              <field name="segment_id"/>
+              <field name="product_type_id"/>
+              <field name="enabled"/>
+            </group>
+
+            <group string="Overrides">
+              <group>
+                <field name="min_days_since_hire"/>
+                <field name="churn_inactive_days"/>
+              </group>
+              <group>
+                <field name="active_hours_threshold"/>
+                <field name="active_trips_threshold"/>
+                <field name="work_rule_external_id" readonly="1"/>
+              </group>
+            </group>
+          </sheet>
+        </form>
+      </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_x_fleet_cc_segment_product" model="ir.actions.act_window">
+      <field name="name">Segment per Product</field>
+      <field name="res_model">x_fleet_cc_segment_product</field>
+      <field name="view_mode">tree,form</field>
+      <field name="help" type="html">
+        <p class="o_view_nocontent_smiling_face">
+          Configure which segments apply to which product types, and override defaults.
+        </p>
+      </field>
+    </record>
+
+  </data>
+</odoo>
