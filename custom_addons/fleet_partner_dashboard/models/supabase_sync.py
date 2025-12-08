@@ -69,6 +69,20 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         return ts, yid or yid_default, d
     
+    def _get_platform_id(self):
+        """
+        Helper: get crm.platforms.id this Odoo instance should write under.
+        Simplest approach: store it in ir.config_parameter as 'supabase.platform_id'.
+        """
+        params = self.env['ir.config_parameter'].sudo()
+        pid = params.get_param('supabase.platform_id')
+        if not pid:
+            raise UserError("Supabase platform_id not configured (set 'supabase.platform_id' in ir.config_parameter).")
+        try:
+            return int(pid)
+        except ValueError:
+            raise UserError(f"Invalid supabase.platform_id value: {pid!r}")
+    
     def _queue_failed_row(self, table, rec, record_key, reason=None):
         Q = self.env['x_supabase_sync_queue'].sudo()
         existing = Q.search([('table','=',table), ('record_key','=',record_key)], limit=1)
@@ -1166,6 +1180,218 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 self._queue_failed_row("issue_attachments", r, str(r.get("attachment", {}).get("id") or r.get("issue_log_id") or "<unknown>"), str(e))
 
         return rows
+    
+
+    def _push_performance_issue_rules(self, rules):
+        """
+        Upsert x_fleet_performance_issue_rule -> dashboard.performance_issue_rules.
+        Uses id as the conflict key.
+        """
+        rules = rules.sudo()
+        if not rules:
+            return
+
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/performance_issue_rules"
+        headers = self._build_headers("dashboard")
+        headers.update({
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal,resolution=merge-duplicates",
+        })
+
+        platform_id = self._get_platform_id()
+
+        payload = []
+        for r in rules:
+            vals = {
+                "id": int(r.id),
+                "platform_id": platform_id,
+                "code": r.code,
+                "name": r.name,
+                "enabled": bool(r.enabled),
+                "min_days_since_hire": r.min_days_since_hire,
+                "churn_inactive_days": r.churn_inactive_days,
+                "active_hours_threshold": r.active_hours_threshold,
+                "active_trips_threshold": r.active_trips_threshold,
+            }
+            payload.append(vals)
+
+        if not payload:
+            return
+
+        params = {"on_conflict": "id"}
+        try:
+            resp = requests.post(endpoint, headers=headers, params=params, json=payload, timeout=20)
+            if not resp.ok:
+                _logger.error(
+                    "Supabase performance_issue_rules upsert failed: %s %s",
+                    resp.status_code, resp.text
+                )
+        except Exception:
+            _logger.exception("Exception while pushing performance_issue_rules to Supabase")
+            
+    def _delete_performance_issue_rules(self, rules):
+        rules = rules.sudo()
+        ids = [str(r.id) for r in rules if r.id]
+        if not ids:
+            return
+
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/performance_issue_rules"
+        headers = self._build_headers("dashboard")
+
+        params = {
+            "id": f"in.({','.join(ids)})"
+        }
+        try:
+            resp = requests.delete(endpoint, headers=headers, params=params, timeout=20)
+            if not resp.ok:
+                _logger.error(
+                    "Supabase performance_issue_rules delete failed: %s %s",
+                    resp.status_code, resp.text
+                )
+        except Exception:
+            _logger.exception("Exception while deleting performance_issue_rules in Supabase")
+            
+    def _push_performance_issue_exceptions(self, exceptions, insert=False):
+        """
+        Sync x_fleet_performance_issue_exception -> dashboard.performance_issue_exceptions.
+
+        If insert=True  → use POST (plain insert, no on_conflict).
+        If insert=False → use PATCH filtered by id (plain update).
+
+        We send:
+        - id                  <- Odoo exception.id  (for insert only)
+        - issue_rule_id       <- rule_id.id
+        - product_external_id <- product_type.work_rule_external_id
+        - enabled + thresholds
+
+        product_id is always computed in Postgres by trigger
+        (dashboard.set_exception_product_id).
+        """
+        exceptions = exceptions.sudo()
+        if not exceptions:
+            return
+
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/performance_issue_exceptions"
+
+        if insert:
+            # -------- INSERT path (create) --------
+            headers = self._build_headers("dashboard")
+            headers.update({
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",  # no upsert semantics needed here
+            })
+
+            payload = []
+            for e in exceptions:
+                if not e.rule_id:
+                    continue
+
+                cfg = e.get_effective_config_dict()
+                product_ext = e.work_rule_external_id or cfg.get("work_rule_external_id")
+
+                vals = {
+                    "id": int(e.id),
+                    "issue_rule_id": int(e.rule_id.id),
+                    "product_external_id": product_ext,
+                    "enabled": bool(e.enabled),
+                    "min_days_since_hire": cfg.get("min_days_since_hire"),
+                    "churn_inactive_days": cfg.get("churn_inactive_days"),
+                    "active_hours_threshold": cfg.get("active_hours_threshold"),
+                    "active_trips_threshold": cfg.get("active_trips_threshold"),
+                }
+                payload.append(vals)
+
+            if not payload:
+                return
+
+            try:
+                resp = requests.post(
+                    endpoint,
+                    headers=headers,
+                    json=payload,
+                    timeout=20,
+                )
+                if not resp.ok:
+                    _logger.error(
+                        "Supabase performance_issue_exceptions INSERT failed: %s %s",
+                        resp.status_code, resp.text
+                    )
+            except Exception:
+                _logger.exception(
+                    "Exception while inserting performance_issue_exceptions to Supabase"
+                )
+
+        else:
+            # -------- UPDATE path (write) --------
+            headers = self._build_headers("dashboard")
+            headers.update({
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            })
+
+            for e in exceptions:
+                if not e.rule_id:
+                    continue
+
+                cfg = e.get_effective_config_dict()
+                product_ext = e.work_rule_external_id or cfg.get("work_rule_external_id")
+
+                body = {
+                    "issue_rule_id": int(e.rule_id.id),
+                    "product_external_id": product_ext,
+                    "enabled": bool(e.enabled),
+                    "min_days_since_hire": cfg.get("min_days_since_hire"),
+                    "churn_inactive_days": cfg.get("churn_inactive_days"),
+                    "active_hours_threshold": cfg.get("active_hours_threshold"),
+                    "active_trips_threshold": cfg.get("active_trips_threshold"),
+                }
+
+                params = {"id": f"eq.{int(e.id)}"}
+
+                try:
+                    resp = requests.patch(
+                        endpoint,
+                        headers=headers,
+                        params=params,
+                        json=body,
+                        timeout=20,
+                    )
+                    if not resp.ok:
+                        _logger.error(
+                            "Supabase performance_issue_exceptions UPDATE failed for id=%s: %s %s",
+                            e.id, resp.status_code, resp.text
+                        )
+                except Exception:
+                    _logger.exception(
+                        "Exception while updating performance_issue_exceptions id=%s in Supabase",
+                        e.id
+                    )
+
+    def _delete_performance_issue_exceptions(self, exceptions):
+        exceptions = exceptions.sudo()
+        ids = [str(e.id) for e in exceptions if e.id]
+        if not ids:
+            return
+
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/performance_issue_exceptions"
+        headers = self._build_headers("dashboard")
+
+        params = {
+            "id": f"in.({','.join(ids)})"
+        }
+        try:
+            resp = requests.delete(endpoint, headers=headers, params=params, timeout=20)
+            if not resp.ok:
+                _logger.error(
+                    "Supabase performance_issue_exceptions delete failed: %s %s",
+                    resp.status_code, resp.text
+                )
+        except Exception:
+            _logger.exception("Exception while deleting performance_issue_exceptions in Supabase")
     
     def sync_supply_hours(self, cursor):
         """
