@@ -30,6 +30,12 @@
             parent="menu_fleet_dashboard_root"
             action="action_fleet_product_type"/>
 
+  <!-- Issues -->
+  <menuitem id="menu_fleet_issue"
+            name="Issues"
+            parent="menu_fleet_dashboard_root"
+            action="action_x_fleet_issue"/>
+
   <!-- Parent “Technical” under Fleet Dashboard root -->
   <menuitem id="menu_fleet_technical"
             name="Technical"
