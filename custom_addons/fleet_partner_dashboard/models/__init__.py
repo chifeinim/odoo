@@ -7,5 +7,5 @@ from . import supabase_sync
 from . import supabase_queue
 from . import issue_attachment
 from . import fleet_call_note
-from . import fleet_cc_segment
-from . import fleet_cc_segment_product
+from . import fleet_performance_issue_rule
+from . import fleet_performance_issue_exception

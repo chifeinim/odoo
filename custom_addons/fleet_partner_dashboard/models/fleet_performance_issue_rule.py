@@ -1,9 +1,9 @@
 from odoo import models, fields
 
 
-class FleetCallCenterSegment(models.Model):
-    _name = "x_fleet_cc_segment"
-    _description = "Call Center Driver Segment"
+class FleetPerformanceIssueRule(models.Model):
+    _name = "x_fleet_performance_issue_rule"
+    _description = "Performance Issue Rule"
 
     name = fields.Char(required=True)
     code = fields.Selection(
@@ -21,7 +21,7 @@ class FleetCallCenterSegment(models.Model):
     enabled = fields.Boolean(
         string="Enabled",
         default=True,
-        help="If unchecked, this segment is completely ignored.",
+        help="If unchecked, this rule is completely ignored.",
     )
 
     # ---------- DEFAULT RULE PARAMETERS (GLOBAL) ----------
@@ -46,7 +46,7 @@ class FleetCallCenterSegment(models.Model):
         default=0,
         help=(
             "If total hours online in the previous Monday–Sunday week are "
-            "less than or equal to this value, the driver is considered for the ACTIVE segment. "
+            "less than or equal to this value, the driver is considered for the ACTIVE rule. "
             "Use 0 to mean '0 hours online'."
         ),
     )
@@ -56,22 +56,22 @@ class FleetCallCenterSegment(models.Model):
         default=0,
         help=(
             "If total trips completed in the previous Monday–Sunday week are "
-            "less than or equal to this value, the driver is considered for the ACTIVE segment. "
+            "less than or equal to this value, the driver is considered for the ACTIVE rule. "
             "Use 0 to mean '0 trips'."
         ),
     )
 
-    # Per-product overrides
+    # Per-product overrides (exceptions)
     product_line_ids = fields.One2many(
-        "x_fleet_cc_segment_product",
-        "segment_id",
-        string="Per-Product Overrides",
+        "x_fleet_performance_issue_exception",
+        "rule_id",
+        string="Per-Product Exceptions",
     )
 
     _sql_constraints = [
         (
-            "segment_code_uniq",
+            "rule_code_uniq",
             "unique(code)",
-            "Each segment code (new/active/churn) must be unique.",
+            "Each rule code (new/active/churn) must be unique.",
         )
     ]

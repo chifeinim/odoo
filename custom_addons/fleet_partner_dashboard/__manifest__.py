@@ -12,7 +12,7 @@
         'data/ir_cron_supabase.xml',
         'security/ir.model.access.csv',
         'views/fleet_call_note_views.xml',
-        'views/fleet_cc_segment_views.xml',
+        'views/fleet_performance_issue_rule_views.xml',
         'views/fleet_driver_views.xml',
         'views/fleet_order_views.xml',
         'views/product_type_views.xml',

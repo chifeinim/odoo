@@ -91,18 +91,18 @@
             parent="menu_x_fleet_call_note"
             sequence="10"/>
 
-  <!-- Segments -->
-  <menuitem id="menu_x_fleet_cc_segment"
-            name="Segments"
+  <!-- Issue Rules -->
+  <menuitem id="menu_x_fleet_performance_issue_rule"
+            name="Issue Rules"
             parent="menu_x_fleet_call_note"
-            action="action_x_fleet_cc_segment"
+            action="action_x_fleet_performance_issue_rule"
             sequence="20"/>
 
-  <!-- Segment per Product -->
-  <menuitem id="menu_x_fleet_cc_segment_product"
-            name="Segment per Product"
+  <!-- Rule Exceptions per Product -->
+  <menuitem id="menu_x_fleet_performance_issue_exception"
+            name="Rule Exceptions"
             parent="menu_x_fleet_call_note"
-            action="action_x_fleet_cc_segment_product"
+            action="action_x_fleet_performance_issue_exception"
             sequence="30"/>
 
   <!-- Call Notes list -->
