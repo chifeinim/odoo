@@ -138,15 +138,15 @@ class FleetIssue(models.Model):
         for rec in self:
             rec.can_work_label = _("Yes") if rec.can_work else _("No")
 
-    @api.depends('status','can_work')
+    @api.depends('status')
     def _compute_color(self):
         for rec in self:
             if rec.status == 'resolved':
                 rec.color = 3
-            elif rec.can_work:
-                rec.color = 1
-            else:
+            elif rec.status == 'unresolved':
                 rec.color = 2
+            else:
+                rec.color = 1
                 
     def _humanize(self, s):
         return s.replace('_', ' ').strip().title() if s else False
