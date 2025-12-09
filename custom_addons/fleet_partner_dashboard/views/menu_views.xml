@@ -89,6 +89,7 @@
   <menuitem id="menu_call_center_workflow"
             name="Call Center Workflow"
             parent="menu_x_fleet_call_note"
+            action="action_call_center_dashboard"
             sequence="10"/>
 
   <!-- Issue Rules -->
