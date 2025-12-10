@@ -34,16 +34,27 @@ class CallCenterDashboardController(http.Controller):
             {'key': 'performance', 'label': 'Performance'},
             {'key': 'training', 'label': 'Training'},
         ]
+
+        # NEW: driver types from x_fleet_driver.type selection
+        Driver = request.env['x_fleet_driver'].sudo()
+        driver_selection = Driver._fields['type'].selection or []
+        driver_types = [
+            {'key': key, 'label': label}
+            for key, label in driver_selection
+        ]
+
         return {
             'product_types': product_types,
             'issue_types': issue_types,
+            'driver_types': driver_types,   # NEW
         }
+
 
     # -------------------------------------------------------------------------
     # Kanban board data
     # -------------------------------------------------------------------------
     @http.route('/fleet_call_center/board_data', type='json', auth='user')
-    def call_center_board_data(self, products=None, issue_types=None):
+    def call_center_board_data(self, products=None, issue_types=None, driver_types=None):
         """
         Returns columns -> cards (drivers) for the Kanban-style call center board.
 
@@ -62,6 +73,7 @@ class CallCenterDashboardController(http.Controller):
         """
         products = products or []
         issue_types = issue_types or []
+        driver_types = driver_types or [] 
 
         Issue = request.env['x_fleet_issue'].sudo()
 
@@ -115,6 +127,13 @@ class CallCenterDashboardController(http.Controller):
         if products:
             issues = issues.filtered(
                 lambda i: i.driver_id and i.driver_id.product_type_id.id in products
+            )
+            
+        # NEW: filter by driver type
+        if driver_types:
+            issues = issues.filtered(
+                lambda i: i.driver_id
+                and (i.driver_id.type or 'other') in driver_types
             )
 
         # ----- Aggregate into columns -> driver cards -----------------------

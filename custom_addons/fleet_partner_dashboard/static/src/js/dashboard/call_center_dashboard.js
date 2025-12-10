@@ -39,9 +39,11 @@ export class OwlCallCenterDashboard extends Component {
   isDirty() {
     return !(
       this._isSameArray(this.state.draftSelectedProducts, this.state.selectedProducts) &&
-      this._isSameArray(this.state.draftSelectedIssueTypes, this.state.selectedIssueTypes)
+      this._isSameArray(this.state.draftSelectedIssueTypes, this.state.selectedIssueTypes) &&
+      this._isSameArray(this.state.draftSelectedDriverTypes, this.state.selectedDriverTypes) // NEW
     );
   }
+
 
   // ---------- sticky filters/search heights ---------------------------------
   _recomputeStickyHeights() {
@@ -126,13 +128,17 @@ export class OwlCallCenterDashboard extends Component {
       productTypes: [],
       issueTypes: [],
       statusOptions: [],
+      driverTypes: [],
 
       selectedProducts: [],
       selectedIssueTypes: [],
+      selectedDriverTypes: [],
       draftSelectedProducts: [],
       draftSelectedIssueTypes: [],
+      draftSelectedDriverTypes: [],
       showProducts: false,
       showIssueTypes: false,
+      showDriverTypes: false,
 
       search: '',
       columns: [],
@@ -167,6 +173,8 @@ export class OwlCallCenterDashboard extends Component {
 
       this.state.draftSelectedProducts = [...this.state.selectedProducts];
       this.state.draftSelectedIssueTypes = [...this.state.selectedIssueTypes];
+      this.state.draftSelectedDriverTypes = [...this.state.selectedDriverTypes]; // NEW
+
 
       this._recomputeStickyHeights();
       this._onResizeWin = () => this._recomputeStickyHeights();
@@ -217,40 +225,50 @@ export class OwlCallCenterDashboard extends Component {
 
   // ---------- RPCs ----------------------------------------------------------
   async _fetchFilters() {
-    const { product_types, issue_types } =
+    const { product_types, issue_types, driver_types } =
       await this.env.services.rpc('/fleet_call_center/filters', {});
+
     this.state.productTypes = product_types || [];
     this.state.issueTypes = issue_types || [];
+    this.state.driverTypes = driver_types || [];   // NEW
 
     // default: all issue types selected
     this.state.selectedIssueTypes = (issue_types || []).map(i => i.key);
 
+    // NEW: default all driver types selected
+    this.state.selectedDriverTypes = (driver_types || []).map(d => d.key);
+
     // hard-code status options to match ISSUE_STATUS_SELECTION
     this.state.statusOptions = [
-      { key: 'unresolved', label: 'Not Started' },
-      { key: 'resolved', label: 'Resolved' },
-      { key: 'requires_follow_up_call', label: 'Requires Follow-Up Call' },
-      { key: 'invited_to_office', label: 'Invited To Office' },
-      { key: 'invited_to_workshop', label: 'Invited To Workshop' },
+      { key: 'unresolved', 'label': 'Not Started' },
+      { key: 'resolved', 'label': 'Resolved' },
+      { key: 'requires_follow_up_call', 'label': 'Requires Follow-Up Call' },
+      { key: 'invited_to_office', 'label': 'Invited To Office' },
+      { key: 'invited_to_workshop', 'label': 'Invited To Workshop' },
     ];
   }
+
 
   async _fetchBoard() {
     this.state.loading = true;
     const payload = {
       products: this.state.selectedProducts,
       issue_types: this.state.selectedIssueTypes,
+      driver_types: this.state.selectedDriverTypes, // NEW
     };
     const resp = await this.env.services.rpc('/fleet_call_center/board_data', payload);
     this.state.columns = resp.columns || [];
     this.state.loading = false;
   }
 
+
   async applyFilters() {
     this.state.selectedProducts = [...this.state.draftSelectedProducts];
     this.state.selectedIssueTypes = [...this.state.draftSelectedIssueTypes];
+    this.state.selectedDriverTypes = [...this.state.draftSelectedDriverTypes]; // NEW
     await this._fetchBoard();
   }
+
 
   // ---------- filters / search ---------------------------------------------
   toggleDropdown(flagName) {

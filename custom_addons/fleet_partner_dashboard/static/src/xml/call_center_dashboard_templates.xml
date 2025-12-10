@@ -39,6 +39,27 @@
             </div>
           </div>
 
+          <!-- Driver Type -->
+          <div class="dropdown" t-att-class="{'show': state.showDriverTypes}">
+            <button class="btn btn-primary dropdown-toggle"
+                    t-on-click="() => toggleDropdown('showDriverTypes')">
+              Driver Type
+              <t t-if="state.draftSelectedDriverTypes.length">
+                (<t t-esc="state.draftSelectedDriverTypes.length"/>)
+              </t>
+            </button>
+            <div class="dropdown-menu"
+                 t-att-class="{'show': state.showDriverTypes}">
+              <t t-foreach="state.driverTypes" t-as="dt" t-key="dt.key">
+                <button class="dropdown-item"
+                        t-att-class="{'active': state.draftSelectedDriverTypes.includes(dt.key)}"
+                        t-on-click="() => toggleFilter('selectedDriverTypes', dt.key)">
+                  <t t-esc="dt.label"/>
+                </button>
+              </t>
+            </div>
+          </div>
+
           <!-- Issue Type -->
           <div class="dropdown" t-att-class="{'show': state.showIssueTypes}">
             <button class="btn btn-primary dropdown-toggle"
