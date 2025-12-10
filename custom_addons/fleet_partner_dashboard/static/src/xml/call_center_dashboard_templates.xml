@@ -223,9 +223,9 @@
                   <div class="row">
                     <!-- LEFT: driver info -->
                     <div class="col-md-3">
-                      <div><strong>Name:</strong> <t t-esc="state.modalDriver.name"/></div>
-                      <div><strong>Phone:</strong> <t t-esc="state.modalDriver.phone"/></div>
-                      <div><strong>Product:</strong> <t t-esc="state.modalDriver.product"/></div>
+                      <div><strong>Name: </strong> <t t-esc="state.modalDriver.name"/></div>
+                      <div><strong>Phone: </strong> <t t-esc="state.modalDriver.phone"/></div>
+                      <div><strong>Product: </strong> <t t-esc="state.modalDriver.product"/></div>
                     </div>
 
                     <!-- RIGHT: cards / charts toggle -->
@@ -477,17 +477,17 @@
                       </t>
                       <t t-else="">
                         <div class="mb-3">
-                          <strong>Driver:</strong>
+                          <strong>Driver: </strong>
                           <t t-esc="state.issueDetail.issue.driver.name"/>
                           <span class="mx-2">•</span>
-                          <strong>Phone:</strong>
+                          <strong>Phone: </strong>
                           <t t-esc="state.issueDetail.issue.driver.phone"/>
                         </div>
                         <div class="mb-3">
-                          <strong>Type:</strong>
+                          <strong>Type: </strong>
                           <t t-esc="state.issueDetail.issue.issue_type"/>
                           <br/>
-                          <strong>Category:</strong>
+                          <strong>Category: </strong>
                           <t t-esc="state.issueDetail.issue.main_category"/>
                           <t t-if="state.issueDetail.issue.sub_category">
                             <span class="mx-1">›</span>
@@ -498,7 +498,7 @@
                             <t t-esc="state.issueDetail.issue.sub_sub_category"/>
                           </t>
                           <br/>
-                          <strong>Status:</strong>
+                          <strong>Status: </strong>
                           <t t-esc="state.issueDetail.issue.status_label"/>
                         </div>
                         <div class="mb-3">
@@ -564,7 +564,7 @@
                     </div>
                     <div class="modal-body">
                       <div class="mb-2">
-                        <strong>Current status:</strong>
+                        <strong>Current status: </strong>
                         <t t-esc="state.statusModal.current_status_label"/>
                       </div>
                       <div class="mb-3">

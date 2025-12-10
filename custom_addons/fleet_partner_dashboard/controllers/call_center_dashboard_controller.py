@@ -47,18 +47,18 @@ class CallCenterDashboardController(http.Controller):
         """
         Returns columns -> cards (drivers) for the Kanban-style call center board.
 
-        - Columns are based on issue.status:
+        Issues included should match the driver-detail rules:
+
+          • All outstanding support + training issues (status != 'resolved', any date)
+          • All issues (any type) that were RESOLVED in the current week
+          • All performance issues that were REPORTED in the current week
+
+        Columns are still based on issue.status:
           unresolved, requires_follow_up_call, invited_to_office,
           invited_to_workshop, resolved.
 
-        - Only issues with these statuses (plus "unresponsive") are included.
-        - "unresponsive" issues are *treated as Not Started* for now and the
-          corresponding driver cards are shown at the bottom of the Not Started
-          column, under an "Unresponsive" section.
-
-        - Filters:
-            products    -> list of x_fleet_product_type ids
-            issue_types -> list of strings (support, performance, training)
+        'unresponsive' is treated as 'unresolved' but flagged so it can be
+        sorted to the bottom of the column.
         """
         products = products or []
         issue_types = issue_types or []
@@ -75,23 +75,49 @@ class CallCenterDashboardController(http.Controller):
         ]
         status_keys = [k for k, _ in status_defs]
 
-        # We'll also look at "unresponsive" as a special-case flag
-        domain = [
+        # ----- Build the same issue set as driver_detail --------------------
+        today = date.today()
+        week_from = today - timedelta(days=today.weekday())  # Monday
+        week_to = today                                      # include today
+
+        start_dt = datetime.combine(week_from, datetime.min.time())
+        end_dt = datetime.combine(week_to, datetime.max.time())
+
+        # 1) Support + training, still open, any date
+        open_support_training = Issue.search([
+            ('issue_type', 'in', ['support', 'training']),
+            ('status', '!=', 'resolved'),
             ('status', 'in', status_keys + ['unresponsive']),
-        ]
+        ])
+
+        # 2) Any issue resolved in the current week
+        resolved_this_week = Issue.search([
+            ('status', '=', 'resolved'),
+            ('resolved_on', '>=', start_dt),
+            ('resolved_on', '<=', end_dt),
+        ])
+
+        # 3) Performance issues reported in the current week
+        perf_this_week = Issue.search([
+            ('issue_type', '=', 'performance'),
+            ('date_reported', '>=', start_dt),
+            ('date_reported', '<=', end_dt),
+            ('status', 'in', status_keys + ['unresponsive']),
+        ])
+
+        # Union deduplicates overlapping issues (e.g. perf issue resolved this week)
+        issues = open_support_training | resolved_this_week | perf_this_week
+
+        # Apply optional filters
         if issue_types:
-            domain.append(('issue_type', 'in', issue_types))
+            issues = issues.filtered(lambda i: (i.issue_type or '').strip() in issue_types)
 
-        issues = Issue.search(domain)
-
-        # Filter by product (via driver.product_type_id) if requested
         if products:
             issues = issues.filtered(
-                lambda i: i.driver_id
-                and i.driver_id.product_type_id.id in products
+                lambda i: i.driver_id and i.driver_id.product_type_id.id in products
             )
 
-        # Build columns: key -> {'key', 'label', 'cards_dict'}
+        # ----- Aggregate into columns -> driver cards -----------------------
         columns_map = {
             key: {
                 'key': key,
@@ -101,13 +127,11 @@ class CallCenterDashboardController(http.Controller):
             for key, label in status_defs
         }
 
-        # Aggregate issues per driver per column
         for issue in issues:
             drv = issue.driver_id
             if not drv:
                 continue
 
-            # For now, treat unresponsive as "Not Started" but mark card as unresponsive
             status = issue.status or 'unresolved'
             is_unresponsive = (status == 'unresponsive')
             if is_unresponsive:
@@ -139,7 +163,6 @@ class CallCenterDashboardController(http.Controller):
                 }
                 cards_dict[drv.id] = card
 
-            # Classify issue type
             t = (issue.issue_type or '').strip().lower()
             t_key = t if t in ('support', 'performance', 'training') else 'other'
             card['type_counts'][t_key] = card['type_counts'].get(t_key, 0) + 1
@@ -149,14 +172,11 @@ class CallCenterDashboardController(http.Controller):
                 card['is_unresponsive'] = True
 
         # Convert card dicts -> arrays and sort:
-        #   - responsive cards first (is_unresponsive = False)
-        #   - then unresponsive
-        #   - within each group, sort by driver name
+        #   responsive cards first, then unresponsive, each group by driver name
         columns = []
         for key, label in status_defs:
             col = columns_map[key]
             cards = list(col['cards_dict'].values())
-
             cards.sort(
                 key=lambda c: (
                     1 if c.get('is_unresponsive') else 0,
