@@ -18,7 +18,7 @@
         <field name="sub_category_label" string="Sub-Category" readonly="1"/>
         <field name="sub_sub_category_label" string="Sub-Sub-Category" readonly="1"/>
         <field name="can_work_label" readonly="1"/>
-        <field name="note"/>
+        <field name="translated_note"/>
       </tree>
     </field>
   </record>
@@ -47,6 +47,7 @@
             <field name="resolved_on" readonly="1"/>
             <field name="can_work" widget="boolean_toggle" string="Can Work"/>
             <field name="note"/>
+            <field name="translated_note"/>
           </group>
         </sheet>
         <div class="oe_chatter">

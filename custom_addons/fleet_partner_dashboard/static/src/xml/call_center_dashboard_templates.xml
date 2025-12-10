@@ -507,11 +507,21 @@
                           <t t-esc="state.issueDetail.issue.status_label"/>
                         </div>
                         <div class="mb-3">
-                          <strong>Reporter Note:</strong>
-                          <div style="white-space: pre-wrap;">
-                            <t t-esc="state.issueDetail.issue.note"/>
-                          </div>
+                        <strong>Reporter Note (translated):</strong>
+                        <div style="white-space: pre-wrap;">
+                            <!-- fall back to original note if no translation yet -->
+                            <t t-esc="state.issueDetail.issue.translated_note or state.issueDetail.issue.note"/>
                         </div>
+                        </div>
+
+                        <t t-if="state.issueDetail.issue.note">
+                        <div class="mb-3">
+                            <strong>Original Reporter Note:</strong>
+                            <div style="white-space: pre-wrap;">
+                            <t t-esc="state.issueDetail.issue.note"/>
+                            </div>
+                        </div>
+                        </t>
 
                         <h6>Call Notes</h6>
                         <div class="table-responsive">

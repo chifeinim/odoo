@@ -430,7 +430,7 @@ class CallCenterDashboardController(http.Controller):
                 'date_resolved': i.resolved_on and i.resolved_on.strftime('%Y-%m-%d %H:%M') or '',
                 'status': _human_status(i.status),
                 'status_raw': i.status,
-                'reporter_note': (i.note or '').strip(),
+                'reporter_note': (i.translated_note or i.note or '').strip(),
             })
 
         return {
@@ -477,6 +477,7 @@ class CallCenterDashboardController(http.Controller):
             'status': issue.status or '',
             'status_label': status_labels.get(issue.status) or humanize(issue.status),
             'note': (issue.note or '').strip(),
+            'translated_note': (issue.translated_note or '').strip(),
             'driver': {
                 'id': issue.driver_id.id,
                 'name': issue.driver_id.name or '',

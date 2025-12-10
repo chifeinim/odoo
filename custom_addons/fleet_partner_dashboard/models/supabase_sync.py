@@ -777,7 +777,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 self._queue_failed_row('issues', rec, '<missing>', 'missing issue_log id')
                 continue
 
-            # 👇 NEW: support both yango_driver_id (old) and external_id (new)
+            # support both yango_driver_id (old) and external_id (new)
             yid = rec.get('yango_driver_id') or rec.get('external_id')
 
             if not yid:
@@ -798,15 +798,17 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             raw = {
                 'name':              ext_id,  # keep as text; unique enforced by SQL constraint
                 'date_reported':     _normalize_datetime(rec['created_at']) if rec.get('created_at') else None,
-                'issue_type':        il.get('issue_type'), # "support", "performance", "training"
+                'issue_type':        il.get('issue_type'),  # "support", "performance", "training"
                 'main_category':     il.get('main_category'),
                 'sub_category':      il.get('sub_category'),
                 'sub_sub_category':  il.get('sub_sub_category'),
-                'status':            rec.get('status'),     # 'unresolved' / 'resolved' expected
-                'can_work':          rec.get('can_work'),   # boolean from issue_logs
+                'status':            rec.get('status'),           # 'unresolved' / 'resolved'
+                'can_work':          rec.get('can_work'),         # boolean
                 'driver_id':         drv.id,
-                'note':              rec.get('note')
+                'note':              rec.get('note'),
+                'translated_note':   rec.get('translated_note'),
             }
+            # Only keep non-None values so we don't overwrite existing data with nulls
             vals = {k: v for k, v in raw.items() if v is not None}
 
             try:
@@ -821,7 +823,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         # return rows so caller can compute last_sync (updated_at)
         return rows
-    
+
     def _push_issue_state(self, issues):
         """
         Push x_fleet_issue fields -> dashboard.issue_logs:
