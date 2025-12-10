@@ -73,7 +73,7 @@ export class OwlCallCenterDashboard extends Component {
     }
 
     const labelsRaw = series.map(p => p.period);
-    const labelsFmt = labelsRaw.map(p => p); // simple for now
+    const labelsFmt = labelsRaw.map(p => p);
     const values = series.map(p => p.value);
 
     // global Chart from chart.umd.min.js
@@ -125,6 +125,8 @@ export class OwlCallCenterDashboard extends Component {
       // filters
       productTypes: [],
       issueTypes: [],
+      statusOptions: [],
+
       selectedProducts: [],
       selectedIssueTypes: [],
       draftSelectedProducts: [],
@@ -135,10 +137,24 @@ export class OwlCallCenterDashboard extends Component {
       search: '',
       columns: [],
 
-      // modal
+      // driver detail modal
       showModal: false,
       modalDriver: null,
       showCharts: false,
+
+      // issue detail modal
+      issueModalOpen: false,
+      issueDetail: null,
+
+      // status change modal
+      statusModalOpen: false,
+      statusModal: {
+        issue_id: null,
+        current_status: '',
+        current_status_label: '',
+        new_status: '',
+        note: '',
+      },
     });
 
     this.filtersBarRef = useRef('filtersBar');
@@ -155,6 +171,16 @@ export class OwlCallCenterDashboard extends Component {
       this._recomputeStickyHeights();
       this._onResizeWin = () => this._recomputeStickyHeights();
       window.addEventListener('resize', this._onResizeWin, { passive: true });
+
+      // ESC key closes nested modals (status > issue > driver)
+      this._onKeyUp = (ev) => {
+        if (ev.key === 'Escape' || ev.key === 'Esc') {
+          if (this.state.statusModalOpen) this.closeStatusModal();
+          else if (this.state.issueModalOpen) this.closeIssueModal();
+          else if (this.state.showModal) this.closeModal();
+        }
+      };
+      window.addEventListener('keyup', this._onKeyUp);
     });
 
     onPatched(() => {
@@ -181,6 +207,9 @@ export class OwlCallCenterDashboard extends Component {
       if (this._onResizeWin) {
         window.removeEventListener('resize', this._onResizeWin);
       }
+      if (this._onKeyUp) {
+        window.removeEventListener('keyup', this._onKeyUp);
+      }
       this._destroyCharts();
       this._teardownModalPortal();
     });
@@ -193,8 +222,18 @@ export class OwlCallCenterDashboard extends Component {
     this.state.productTypes = product_types || [];
     this.state.issueTypes = issue_types || [];
 
-    // defaults: all issue types selected
+    // default: all issue types selected
     this.state.selectedIssueTypes = (issue_types || []).map(i => i.key);
+
+    // hard-code status options to match ISSUE_STATUS_SELECTION
+    this.state.statusOptions = [
+      { key: 'unresolved', label: 'Not Started' },
+      { key: 'resolved', label: 'Resolved' },
+      { key: 'requires_follow_up_call', label: 'Requires Follow-Up Call' },
+      { key: 'invited_to_office', label: 'Invited To Office' },
+      { key: 'invited_to_workshop', label: 'Invited To Workshop' },
+      { key: 'unresponsive', label: 'Unresponsive' },
+    ];
   }
 
   async _fetchBoard() {
@@ -253,7 +292,7 @@ export class OwlCallCenterDashboard extends Component {
     return this.visibleCards(col).filter(c => c.is_unresponsive);
   }
 
-  // ---------- modal logic ---------------------------------------------------
+  // ---------- modal logic: driver detail -----------------------------------
   async openDriver(card) {
     this.state.modalDriver = {
       driver_id: card.driver_id,
@@ -289,12 +328,11 @@ export class OwlCallCenterDashboard extends Component {
       return;
     }
 
-    // draw charts on next frame when DOM is ready
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const host = this.modalRef?.el;
-        if (!host || !this.state.modalDriver?.series) return;
-        const s = this.state.modalDriver.series;
+        const s = this.state.modalDriver?.series;
+        if (!host || !s) return;
         this.renderBarChart(host.querySelector('#cc_chart_cash'), s.cashEarned, 'Gross Revenue');
         this.renderBarChart(host.querySelector('#cc_chart_trips'), s.trips, 'Trips');
         this.renderBarChart(host.querySelector('#cc_chart_hours'), s.supplyHours, 'Hours Online');
@@ -310,8 +348,101 @@ export class OwlCallCenterDashboard extends Component {
     this.state.showModal = false;
     this.state.modalDriver = null;
     this.state.showCharts = false;
+    this.state.issueModalOpen = false;
+    this.state.statusModalOpen = false;
+    this.state.issueDetail = null;
     this._destroyCharts();
     this._teardownModalPortal();
+  }
+
+  // ---------- modal logic: issue detail ------------------------------------
+  async openIssue(issueRow) {
+    this.state.issueModalOpen = true;
+    this.state.issueDetail = null;
+
+    const res = await this.env.services.rpc('/fleet_call_center/issue_detail', {
+      issue_id: issueRow.id,
+    });
+
+    if (res && res.ok) {
+      this.state.issueDetail = res;
+    } else {
+      this.state.issueModalOpen = false;
+    }
+  }
+
+  closeIssueModal() {
+    this.state.issueModalOpen = false;
+    this.state.issueDetail = null;
+  }
+
+  // ---------- modal logic: status change -----------------------------------
+  openStatusModal(issueRow) {
+    const currentLabel = issueRow.status || issueRow.status_raw || '';
+    this.state.statusModal = {
+      issue_id: issueRow.id,
+      current_status: issueRow.status_raw,
+      current_status_label: currentLabel,
+      new_status: issueRow.status_raw,
+      note: '',
+    };
+    this.state.statusModalOpen = true;
+  }
+
+  closeStatusModal() {
+    this.state.statusModalOpen = false;
+  }
+
+  onStatusChange(ev) {
+    this.state.statusModal.new_status = ev.target.value;
+  }
+
+  onStatusNote(ev) {
+    this.state.statusModal.note = ev.target.value || '';
+  }
+
+  async submitStatusChange() {
+    const payload = {
+      issue_id: this.state.statusModal.issue_id,
+      new_status: this.state.statusModal.new_status,
+      note: this.state.statusModal.note,
+    };
+
+    const res = await this.env.services.rpc('/fleet_call_center/update_issue_status', payload);
+
+    if (!res || !res.ok) {
+      window.alert(res && res.error ? res.error : 'Failed to update status');
+      return;
+    }
+
+    const updated = res.issue;
+
+    // Update issue row in driver modal
+    if (this.state.modalDriver && Array.isArray(this.state.modalDriver.issues)) {
+      const arr = this.state.modalDriver.issues;
+      const idx = arr.findIndex(i => i.id === updated.id);
+      if (idx !== -1) {
+        arr[idx] = {
+          ...arr[idx],
+          status: updated.status_label || updated.status || arr[idx].status,
+          status_raw: updated.status || arr[idx].status_raw,
+          date_resolved: updated.date_resolved || arr[idx].date_resolved,
+        };
+      }
+    }
+
+    // If issue detail modal is open for this issue, refresh it
+    if (this.state.issueModalOpen &&
+        this.state.issueDetail &&
+        this.state.issueDetail.issue &&
+        this.state.issueDetail.issue.id === updated.id) {
+      await this.openIssue({ id: updated.id });
+    }
+
+    // Refresh board so cards move columns if needed
+    await this._fetchBoard();
+
+    this.closeStatusModal();
   }
 
   // ---------- modal portal to <body> ---------------------------------------

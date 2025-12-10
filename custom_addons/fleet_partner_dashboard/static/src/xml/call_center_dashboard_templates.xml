@@ -182,11 +182,13 @@
           </t>
         </div>
 
-        <!-- MODAL (driver detail) -->
+        <!-- DRIVER MODAL + nested modals -->
         <t t-if="state.showModal">
           <div class="modal d-block lp-modal-overlay"
                tabindex="-1"
                t-ref="cc_modal">
+
+            <!-- driver detail modal -->
             <div class="modal-dialog modal-xl" style="max-width: 80vw;">
               <div class="modal-content">
 
@@ -408,13 +410,33 @@
                           <t t-else="">
                             <t t-foreach="state.modalDriver.issues" t-as="it" t-key="it.id">
                               <tr style="vertical-align: top;">
-                                <td style="white-space: nowrap;"><t t-esc="it.id"/></td>
-                                <td style="white-space: nowrap;"><t t-esc="it.issue_type"/></td>
-                                <td style="white-space: nowrap;"><t t-esc="it.category_path"/></td>
-                                <td style="white-space: nowrap;"><t t-esc="it.date_reported"/></td>
-                                <td style="white-space: nowrap;"><t t-esc="it.date_resolved"/></td>
-                                <td style="white-space: nowrap;"><t t-esc="it.status"/></td>
-                                <td style="white-space: pre-wrap;"><t t-esc="it.reporter_note"/></td>
+                                <!-- clickable issue ID -> issue detail modal -->
+                                <td style="white-space: nowrap;">
+                                  <a href="#" t-on-click="() => openIssue(it)">
+                                    <t t-esc="it.id"/>
+                                  </a>
+                                </td>
+                                <td style="white-space: nowrap;">
+                                  <t t-esc="it.issue_type"/>
+                                </td>
+                                <td style="white-space: nowrap;">
+                                  <t t-esc="it.category_path"/>
+                                </td>
+                                <td style="white-space: nowrap;">
+                                  <t t-esc="it.date_reported"/>
+                                </td>
+                                <td style="white-space: nowrap;">
+                                  <t t-esc="it.date_resolved"/>
+                                </td>
+                                <td style="white-space: nowrap;">
+                                  <button class="btn btn-sm btn-outline-primary"
+                                          t-on-click="() => openStatusModal(it)">
+                                    <t t-esc="it.status or it.status_raw"/>
+                                  </button>
+                                </td>
+                                <td style="white-space: pre-wrap;">
+                                  <t t-esc="it.reporter_note"/>
+                                </td>
                               </tr>
                             </t>
                           </t>
@@ -433,6 +455,153 @@
 
               </div>
             </div>
+
+            <!-- ISSUE DETAIL MODAL (nested) -->
+            <t t-if="state.issueModalOpen">
+              <div class="modal d-block" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title">
+                        Issue
+                        <t t-if="state.issueDetail and state.issueDetail.issue">
+                          <t t-esc="state.issueDetail.issue.name"/>
+                        </t>
+                      </h5>
+                      <button type="button" class="btn-close"
+                              t-on-click="closeIssueModal"/>
+                    </div>
+                    <div class="modal-body">
+                      <t t-if="!state.issueDetail">
+                        <div>Loading…</div>
+                      </t>
+                      <t t-else="">
+                        <div class="mb-3">
+                          <strong>Driver:</strong>
+                          <t t-esc="state.issueDetail.issue.driver.name"/>
+                          <span class="mx-2">•</span>
+                          <strong>Phone:</strong>
+                          <t t-esc="state.issueDetail.issue.driver.phone"/>
+                        </div>
+                        <div class="mb-3">
+                          <strong>Type:</strong>
+                          <t t-esc="state.issueDetail.issue.issue_type"/>
+                          <br/>
+                          <strong>Category:</strong>
+                          <t t-esc="state.issueDetail.issue.main_category"/>
+                          <t t-if="state.issueDetail.issue.sub_category">
+                            <span class="mx-1">›</span>
+                            <t t-esc="state.issueDetail.issue.sub_category"/>
+                          </t>
+                          <t t-if="state.issueDetail.issue.sub_sub_category">
+                            <span class="mx-1">›</span>
+                            <t t-esc="state.issueDetail.issue.sub_sub_category"/>
+                          </t>
+                          <br/>
+                          <strong>Status:</strong>
+                          <t t-esc="state.issueDetail.issue.status_label"/>
+                        </div>
+                        <div class="mb-3">
+                          <strong>Reporter Note:</strong>
+                          <div style="white-space: pre-wrap;">
+                            <t t-esc="state.issueDetail.issue.note"/>
+                          </div>
+                        </div>
+
+                        <h6>Call Notes</h6>
+                        <div class="table-responsive">
+                          <table class="table table-sm">
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th>Author</th>
+                                <th>Status Change</th>
+                                <th>Note</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <t t-if="!state.issueDetail.call_notes || !state.issueDetail.call_notes.length">
+                                <tr><td colspan="4"><em>No call notes.</em></td></tr>
+                              </t>
+                              <t t-else="">
+                                <t t-foreach="state.issueDetail.call_notes" t-as="cn" t-key="cn.id">
+                                  <tr>
+                                    <td style="white-space: nowrap;">
+                                      <t t-esc="cn.created_at"/>
+                                    </td>
+                                    <td style="white-space: nowrap;">
+                                      <t t-esc="cn.author"/>
+                                    </td>
+                                    <td style="white-space: nowrap;">
+                                      <t t-esc="cn.status_from_label"/> →
+                                      <t t-esc="cn.status_to_label"/>
+                                    </td>
+                                    <td style="white-space: pre-wrap;">
+                                      <t t-esc="cn.note"/>
+                                    </td>
+                                  </tr>
+                                </t>
+                              </t>
+                            </tbody>
+                          </table>
+                        </div>
+                      </t>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </t>
+
+            <!-- STATUS CHANGE MODAL (nested) -->
+            <t t-if="state.statusModalOpen">
+              <div class="modal d-block" tabindex="-1">
+                <div class="modal-dialog">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Update Issue Status</h5>
+                      <button type="button" class="btn-close"
+                              t-on-click="closeStatusModal"/>
+                    </div>
+                    <div class="modal-body">
+                      <div class="mb-2">
+                        <strong>Current status:</strong>
+                        <t t-esc="state.statusModal.current_status_label"/>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">New status</label>
+                        <select class="form-select" t-on-change="onStatusChange">
+                          <t t-foreach="state.statusOptions" t-as="st" t-key="st.key">
+                            <option t-att-value="st.key"
+                                    t-att-selected="st.key === state.statusModal.new_status">
+                              <t t-esc="st.label"/>
+                            </option>
+                          </t>
+                        </select>
+                      </div>
+                      <div class="mb-3">
+                        <label class="form-label">Call note (required)</label>
+                        <textarea class="form-control" rows="3"
+                                  placeholder="Describe the outcome of the call…"
+                                  t-on-input="onStatusNote">
+                          <t t-esc="state.statusModal.note"/>
+                        </textarea>
+                      </div>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-secondary"
+                              t-on-click="closeStatusModal">
+                        Cancel
+                      </button>
+                      <button type="button" class="btn btn-primary"
+                              t-on-click="submitStatusChange">
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </t>
+
           </div>
         </t>
 

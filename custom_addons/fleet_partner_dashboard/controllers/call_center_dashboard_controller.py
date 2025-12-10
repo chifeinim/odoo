@@ -410,3 +410,117 @@ class CallCenterDashboardController(http.Controller):
                 'end': week_to.strftime('%Y-%m-%d'),
             },
         }
+        
+    # -------------------------------------------------------------------------
+    # Single issue detail (for Issue ID modal)
+    # -------------------------------------------------------------------------
+    
+    @http.route('/fleet_call_center/issue_detail', type='json', auth='user')
+    def call_center_issue_detail(self, issue_id: int):
+        Issue = request.env['x_fleet_issue'].sudo()
+        issue = Issue.browse(int(issue_id or 0))
+        if not issue.exists():
+            return {'ok': False, 'error': 'Issue not found.'}
+
+        # Map status code -> label from the selection on the model
+        status_labels = dict(Issue._fields['status'].selection)
+
+        def _label(code, label_field_name):
+            rec_label = getattr(issue, label_field_name, False)
+            if rec_label:
+                return rec_label
+            return humanize(getattr(issue, code, '') or '')
+
+        issue_data = {
+            'id': issue.id,
+            'name': issue.name or '',
+            'issue_type': issue.issue_type_label or humanize(issue.issue_type),
+            'main_category': _label('main_category', 'main_category_label'),
+            'sub_category': _label('sub_category', 'sub_category_label'),
+            'sub_sub_category': _label('sub_sub_category', 'sub_sub_category_label'),
+            'status': issue.status or '',
+            'status_label': status_labels.get(issue.status) or humanize(issue.status),
+            'note': (issue.note or '').strip(),
+            'driver': {
+                'id': issue.driver_id.id,
+                'name': issue.driver_id.name or '',
+                'phone': issue.driver_id.phone or '',
+            },
+        }
+
+        CallNote = request.env['x_fleet_issue_call_note'].sudo()
+        notes = CallNote.search(
+            [('issue_id', '=', issue.id)],
+            order='created_at desc, id desc',
+        )
+
+        call_notes = []
+        for n in notes:
+            call_notes.append({
+                'id': n.id,
+                'created_at': n.created_at and n.created_at.strftime('%Y-%m-%d %H:%M') or '',
+                'author': n.author_id and n.author_id.name or '',
+                'status_from': n.status_from or '',
+                'status_to': n.status_to or '',
+                'status_from_label': status_labels.get(n.status_from) or humanize(n.status_from),
+                'status_to_label': status_labels.get(n.status_to) or humanize(n.status_to),
+                'note': n.note or '',
+            })
+
+        return {
+            'ok': True,
+            'issue': issue_data,
+            'call_notes': call_notes,
+        }
+        
+    # -------------------------------------------------------------------------
+    # Update issue status + create issue call note
+    # -------------------------------------------------------------------------
+    
+    @http.route('/fleet_call_center/update_issue_status', type='json', auth='user')
+    def call_center_update_issue_status(self, issue_id: int, new_status: str, note: str = ''):
+        Issue = request.env['x_fleet_issue'].sudo()
+        issue = Issue.browse(int(issue_id or 0))
+        if not issue.exists():
+            return {'ok': False, 'error': 'Issue not found.'}
+
+        new_status = (new_status or '').strip()
+        note = (note or '').strip()
+
+        # Require a note – the UI is already enforcing this, but double-check
+        if not note:
+            return {'ok': False, 'error': 'Call note is required.'}
+
+        status_labels = dict(Issue._fields['status'].selection)
+        valid_statuses = set(status_labels.keys())
+
+        if new_status not in valid_statuses:
+            return {'ok': False, 'error': 'Invalid status.'}
+
+        old_status = issue.status
+
+        vals = {'status': new_status}
+        # If marking resolved, set resolved_on if not already set
+        if new_status == 'resolved' and not issue.resolved_on:
+            vals['resolved_on'] = fields.Datetime.now()
+
+        issue.write(vals)
+
+        # Create the issue call note
+        CallNote = request.env['x_fleet_issue_call_note'].sudo()
+        CallNote.create({
+            'issue_id': issue.id,
+            'note': note,
+            'status_from': old_status,
+            'status_to': new_status,
+        })
+
+        return {
+            'ok': True,
+            'issue': {
+                'id': issue.id,
+                'status': issue.status,
+                'status_label': status_labels.get(issue.status) or humanize(issue.status),
+                'date_resolved': issue.resolved_on and issue.resolved_on.strftime('%Y-%m-%d %H:%M') or '',
+            },
+        }
