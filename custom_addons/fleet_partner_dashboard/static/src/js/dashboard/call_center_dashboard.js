@@ -299,12 +299,16 @@ export class OwlCallCenterDashboard extends Component {
       name: card.name,
       phone: card.phone,
       product: card.product,
+      driver_type: '',
+      driver_type_label: '',
+      hire_date: '',
       cards: null,
       series: null,
       issues: [],
       metrics_range: null,
       issues_range: null,
     };
+
     this.state.showModal = true;
     this.state.showCharts = false;
 
@@ -319,6 +323,16 @@ export class OwlCallCenterDashboard extends Component {
     this.state.modalDriver.issues = res.issues || [];
     this.state.modalDriver.metrics_range = res.metrics_range || null;
     this.state.modalDriver.issues_range = res.issues_range || null;
+
+    if (res.driver) {
+      const d = res.driver;
+      this.state.modalDriver.name = d.name || this.state.modalDriver.name;
+      this.state.modalDriver.phone = d.phone || this.state.modalDriver.phone;
+      this.state.modalDriver.product = d.product || this.state.modalDriver.product;
+      this.state.modalDriver.driver_type = d.type || '';
+      this.state.modalDriver.driver_type_label = d.type_label || '';
+      this.state.modalDriver.hire_date = d.hire_date || '';
+    }
   }
 
   toggleModalView() {

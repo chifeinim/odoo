@@ -231,9 +231,31 @@ class CallCenterDashboardController(http.Controller):
         )
 
         Driver = request.env['x_fleet_driver'].sudo().browse(int(driver_id))
+
+        # build driver payload (type + hire date included)
+        driver_type_labels = dict(Driver._fields['type'].selection)
+        driver_payload = {
+            'id': Driver.id,
+            'name': Driver.name or '',
+            'phone': Driver.phone or '',
+            'product': Driver.product_type_id.name or '',
+            'type': Driver.type or '',
+            'type_label': driver_type_labels.get(Driver.type) or humanize(Driver.type),
+            # keep as Y-M-D so we can reuse formatDateYMDToDMY in JS
+            'hire_date': Driver.hire_date and Driver.hire_date.strftime('%Y-%m-%d') or '',
+        }
+
         yid = (Driver.yango_driver_id or '').strip()
         if not Driver or not yid:
-            return {'cards': {}, 'series': {}, 'issues': []}
+            # no metrics if we can't map to Yango ID, but still return driver shell
+            return {
+                'driver': driver_payload,
+                'cards': {},
+                'series': {},
+                'issues': [],
+                'metrics_range': None,
+                'issues_range': None,
+            }
 
         # Pull driver-day rows from Supabase-backed metrics
         resp = signer_get('/metrics/driver-day', {
@@ -434,6 +456,7 @@ class CallCenterDashboardController(http.Controller):
             })
 
         return {
+            'driver': driver_payload,
             'cards': cards,
             'series': series,
             'issues': issue_rows,
@@ -446,6 +469,7 @@ class CallCenterDashboardController(http.Controller):
                 'end': week_to.strftime('%Y-%m-%d'),
             },
         }
+
         
     # -------------------------------------------------------------------------
     # Single issue detail (for Issue ID modal)

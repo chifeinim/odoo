@@ -226,7 +226,17 @@
                       <div><strong>Name: </strong> <t t-esc="state.modalDriver.name"/></div>
                       <div><strong>Phone: </strong> <t t-esc="state.modalDriver.phone"/></div>
                       <div><strong>Product: </strong> <t t-esc="state.modalDriver.product"/></div>
+                      <t t-if="state.modalDriver.driver_type_label">
+                        <div><strong>Activity: </strong> <t t-esc="state.modalDriver.driver_type_label"/></div>
+                      </t>
+                      <t t-if="state.modalDriver.hire_date">
+                        <div>
+                          <strong>Hire Date: </strong>
+                          <t t-esc="formatDateYMDToDMY(state.modalDriver.hire_date)"/>
+                        </div>
+                      </t>
                     </div>
+
 
                     <!-- RIGHT: cards / charts toggle -->
                     <div class="col-md-9">
