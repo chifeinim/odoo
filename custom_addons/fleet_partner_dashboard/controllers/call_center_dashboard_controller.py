@@ -184,8 +184,9 @@ class CallCenterDashboardController(http.Controller):
         - Issues table:
             * Support + training issues:
                   all NON-resolved, any date
+            * All issues (any type) that were RESOLVED in the CURRENT week
             * Performance issues:
-                  only ones from the CURRENT week
+                  only ones created (reported) in the CURRENT week
         """
         today = date.today()
 
@@ -337,28 +338,43 @@ class CallCenterDashboardController(http.Controller):
         }
 
         # ---- Issues window logic -------------------------------------------
-        week_from, week_to = this_week_range(today)
+        # "Current week" = Monday of this week up to *today* (inclusive).
+        week_from = today - timedelta(days=today.weekday())  # Monday
+        week_to = today                                      # include today
 
         Issue = request.env['x_fleet_issue'].sudo()
 
-        # 1) Support + training, not resolved, any date
-        domain_st = [
+        start_dt = datetime.combine(week_from, datetime.min.time())
+        end_dt = datetime.combine(week_to, datetime.max.time())
+
+        # 1) Support + training, still open, any date
+        domain_open_st = [
             ('driver_id', '=', Driver.id),
             ('issue_type', 'in', ['support', 'training']),
             ('status', '!=', 'resolved'),
         ]
-        issues_st = Issue.search(domain_st)
+        issues_open_st = Issue.search(domain_open_st)
 
-        # 2) Performance, current week only
-        domain_perf = [
+        # 2) Any issue resolved in the current week
+        domain_resolved_week = [
+            ('driver_id', '=', Driver.id),
+            ('status', '=', 'resolved'),
+            ('resolved_on', '>=', start_dt),
+            ('resolved_on', '<=', end_dt),
+        ]
+        issues_resolved_week = Issue.search(domain_resolved_week)
+
+        # 3) Performance issues created (reported) in the current week
+        domain_perf_week = [
             ('driver_id', '=', Driver.id),
             ('issue_type', '=', 'performance'),
-            ('date_reported', '>=', datetime.combine(week_from, datetime.min.time())),
-            ('date_reported', '<=', datetime.combine(week_to, datetime.max.time())),
+            ('date_reported', '>=', start_dt),
+            ('date_reported', '<=', end_dt),
         ]
-        issues_perf = Issue.search(domain_perf)
+        issues_perf_week = Issue.search(domain_perf_week)
 
-        issues = issues_st | issues_perf
+        # Union of all three sets; Odoo recordset union deduplicates by id
+        issues = issues_open_st | issues_resolved_week | issues_perf_week
 
         # Sort newest first
         issues = issues.sorted(

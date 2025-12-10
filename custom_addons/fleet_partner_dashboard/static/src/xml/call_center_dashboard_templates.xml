@@ -11,7 +11,7 @@
       <t t-else="">
 
         <!-- Title -->
-        <h1 class="mb-4">Call Center – Workflow</h1>
+        <h1 class="mb-4">Call Center Workflow</h1>
 
         <!-- FILTER BAR (sticky layer 1) -->
         <div t-ref="filtersBar"
