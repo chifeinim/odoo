@@ -365,7 +365,8 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         Canonical key = work_rule_id (stored as work_rule_external_id).
         We keep other fields (kpi_type, description, bounds) under Odoo's control.
         """
-        ProductType = self.env['x_fleet_product_type'].sudo()
+        # include inactive product types in search
+        ProductType = self.env['x_fleet_product_type'].with_context(active_test=False).sudo()
         _logger.info("Upserting %d product types (via work_rule_id)", len(rows))
 
         new_vals = []
@@ -408,19 +409,17 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         - Canonical link to product type is work_rule_id.
         - product types are identified by x_fleet_product_type.work_rule_external_id.
-        - work_rule_map is still accepted as a fallback (work_rule_id -> name).
         """
         _logger.info("Upserting %d drivers", len(rows))
-        ProductType = self.env['x_fleet_product_type'].sudo()
+        # include inactive product types when mapping work rules
+        ProductType = self.env['x_fleet_product_type'].with_context(active_test=False).sudo()
         Driver = self.env['x_fleet_driver'].sudo()
         new_vals = []
-
-        # cache by work_rule_id -> product_type_id
         pt_cache: dict[str, int] = {}
 
         for rec in rows:
             first = rec.get('first_name') or ''
-            last = rec.get('last_name') or ''
+            last  = rec.get('last_name') or ''
             full_name = (first + ' ' + last).strip() or None
 
             raw = {
@@ -438,19 +437,17 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             if wr_id:
                 pt_id = pt_cache.get(wr_id)
                 if not pt_id:
-                    # First try canonical external id
                     pt = ProductType.search(
                         [('work_rule_external_id', '=', wr_id)],
                         limit=1
                     )
                     if not pt:
-                        # Fallback: try inferred name from work_rule_map, or default to wr_id
+                        # Fallback: name from work_rule_map, or wr_id
                         pt_name = work_rule_map.get(wr_id) or wr_id
                         pt = ProductType.create({
                             'name': pt_name,
                             'work_rule_external_id': wr_id,
                         })
-
                     pt_id = pt.id
                     pt_cache[wr_id] = pt_id
 
@@ -462,7 +459,6 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 if from_queue:
                     raise ValueError(msg)
                 _logger.warning(msg)
-                # queue and continue on normal run
                 self._queue_failed_row('drivers', rec, '<missing_yango_driver_id>', msg)
                 continue
 
