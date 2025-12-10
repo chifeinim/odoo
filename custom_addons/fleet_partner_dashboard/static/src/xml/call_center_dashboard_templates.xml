@@ -468,8 +468,13 @@
                           <t t-esc="state.issueDetail.issue.name"/>
                         </t>
                       </h5>
-                      <button type="button" class="btn-close"
-                              t-on-click="closeIssueModal"/>
+                      <!-- UPDATED CLOSE BUTTON -->
+                      <button type="button"
+                              class="close"
+                              aria-label="Close"
+                              t-on-click="closeIssueModal">
+                        <span aria-hidden="true">×</span>
+                      </button>
                     </div>
                     <div class="modal-body">
                       <t t-if="!state.issueDetail">
@@ -559,8 +564,13 @@
                   <div class="modal-content">
                     <div class="modal-header">
                       <h5 class="modal-title">Update Issue Status</h5>
-                      <button type="button" class="btn-close"
-                              t-on-click="closeStatusModal"/>
+                      <!-- UPDATED CLOSE BUTTON -->
+                      <button type="button"
+                              class="close"
+                              aria-label="Close"
+                              t-on-click="closeStatusModal">
+                        <span aria-hidden="true">×</span>
+                      </button>
                     </div>
                     <div class="modal-body">
                       <div class="mb-2">
