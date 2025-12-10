@@ -232,7 +232,6 @@ export class OwlCallCenterDashboard extends Component {
       { key: 'requires_follow_up_call', label: 'Requires Follow-Up Call' },
       { key: 'invited_to_office', label: 'Invited To Office' },
       { key: 'invited_to_workshop', label: 'Invited To Workshop' },
-      { key: 'unresponsive', label: 'Unresponsive' },
     ];
   }
 
@@ -302,6 +301,7 @@ export class OwlCallCenterDashboard extends Component {
       driver_type: '',
       driver_type_label: '',
       hire_date: '',
+      is_unresponsive_today: false,
       cards: null,
       series: null,
       issues: [],
@@ -332,6 +332,7 @@ export class OwlCallCenterDashboard extends Component {
       this.state.modalDriver.driver_type = d.type || '';
       this.state.modalDriver.driver_type_label = d.type_label || '';
       this.state.modalDriver.hire_date = d.hire_date || '';
+      this.state.modalDriver.is_unresponsive_today = !!d.is_unresponsive_today;
     }
   }
 
@@ -357,6 +358,34 @@ export class OwlCallCenterDashboard extends Component {
       });
     });
   }
+
+  async toggleDriverUnresponsive() {
+    const drv = this.state.modalDriver;
+    if (!drv || !drv.driver_id) {
+      return;
+    }
+
+    const currently = !!drv.is_unresponsive_today;
+
+    const res = await this.env.services.rpc(
+      '/fleet_call_center/set_driver_unresponsive',
+      {
+        driver_id: drv.driver_id,
+        unresponsive: !currently,
+      }
+    );
+
+    if (!res || !res.ok) {
+      window.alert(res && res.error ? res.error : 'Failed to update driver.');
+      return;
+    }
+
+    drv.is_unresponsive_today = !!res.is_unresponsive_today;
+
+    // Refresh board so the card jumps between "responsive" and "unresponsive" section
+    await this._fetchBoard();
+  }
+
 
   closeModal() {
     this.state.showModal = false;

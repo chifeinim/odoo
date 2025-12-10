@@ -32,6 +32,10 @@ class FleetDriver(models.Model):
     issue_ids = fields.One2many('x_fleet_issue', 'driver_id', string="Issues") #Contextual link to a list of issues
     order_ids = fields.One2many('x_fleet_order', 'driver_id', string="Orders") #Contextual link to a list of orders
     call_note_ids = fields.One2many('x_fleet_call_note', 'driver_id', string="Call Notes") #Contextual link to a list of call notes
+    callcenter_unresponsive_on = fields.Date(
+        string="Unresponsive (Call Center) On",
+        help="If equal to today's date, the driver is treated as unresponsive on the call center board."
+    )
     
     _sql_constraints = [
     ('unique_yango_driver_id', 'unique(yango_driver_id)', 'Each driver must have a unique Yango Driver ID.'),

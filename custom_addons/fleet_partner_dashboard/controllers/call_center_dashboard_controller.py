@@ -76,7 +76,7 @@ class CallCenterDashboardController(http.Controller):
         status_keys = [k for k, _ in status_defs]
 
         # ----- Build the same issue set as driver_detail --------------------
-        today = date.today()
+        today = fields.Date.context_today(request.env.user)
         week_from = today - timedelta(days=today.weekday())  # Monday
         week_to = today                                      # include today
 
@@ -133,11 +133,7 @@ class CallCenterDashboardController(http.Controller):
                 continue
 
             status = issue.status or 'unresolved'
-            is_unresponsive = (status == 'unresponsive')
-            if is_unresponsive:
-                col_key = 'unresolved'
-            else:
-                col_key = status
+            col_key = status if status in status_keys else 'unresolved'
 
             if col_key not in columns_map:
                 continue
@@ -159,7 +155,11 @@ class CallCenterDashboardController(http.Controller):
                         'other': 0,
                     },
                     'total_issues': 0,
-                    'is_unresponsive': False,
+                    # NEW: unresponsive is driver-level, based on today's date
+                    'is_unresponsive': bool(
+                        drv.callcenter_unresponsive_on
+                        and drv.callcenter_unresponsive_on == today
+                    ),
                 }
                 cards_dict[drv.id] = card
 
@@ -167,9 +167,6 @@ class CallCenterDashboardController(http.Controller):
             t_key = t if t in ('support', 'performance', 'training') else 'other'
             card['type_counts'][t_key] = card['type_counts'].get(t_key, 0) + 1
             card['total_issues'] += 1
-
-            if is_unresponsive:
-                card['is_unresponsive'] = True
 
         # Convert card dicts -> arrays and sort:
         #   responsive cards first, then unresponsive, each group by driver name
@@ -208,7 +205,7 @@ class CallCenterDashboardController(http.Controller):
             * Performance issues:
                   only ones created (reported) in the CURRENT week
         """
-        today = date.today()
+        today = fields.Date.context_today(request.env.user)
 
         # ---- Metrics window (same as performance dashboard style) -----------
         if start_date and end_date:
@@ -243,6 +240,10 @@ class CallCenterDashboardController(http.Controller):
             'type_label': driver_type_labels.get(Driver.type) or humanize(Driver.type),
             # keep as Y-M-D so we can reuse formatDateYMDToDMY in JS
             'hire_date': Driver.hire_date and Driver.hire_date.strftime('%Y-%m-%d') or '',
+            'is_unresponsive_today': bool(
+                Driver.callcenter_unresponsive_on
+                and Driver.callcenter_unresponsive_on == today
+            ),
         }
 
         yid = (Driver.yango_driver_id or '').strip()
@@ -584,4 +585,29 @@ class CallCenterDashboardController(http.Controller):
                 'status_label': status_labels.get(issue.status) or humanize(issue.status),
                 'date_resolved': issue.resolved_on and issue.resolved_on.strftime('%Y-%m-%d %H:%M') or '',
             },
+        }
+
+    @http.route('/fleet_call_center/set_driver_unresponsive', type='json', auth='user')
+    def call_center_set_driver_unresponsive(self, driver_id: int, unresponsive: bool):
+        Driver = request.env['x_fleet_driver'].sudo().browse(int(driver_id or 0))
+        if not Driver.exists():
+            return {'ok': False, 'error': 'Driver not found.'}
+
+        today = fields.Date.context_today(Driver)
+
+        vals = {}
+        if unresponsive:
+            vals['callcenter_unresponsive_on'] = today
+        else:
+            vals['callcenter_unresponsive_on'] = False
+
+        Driver.write(vals)
+
+        return {
+            'ok': True,
+            'driver_id': Driver.id,
+            'is_unresponsive_today': bool(
+                Driver.callcenter_unresponsive_on
+                and Driver.callcenter_unresponsive_on == today
+            ),
         }

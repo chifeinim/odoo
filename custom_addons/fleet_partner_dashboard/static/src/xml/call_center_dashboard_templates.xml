@@ -104,13 +104,19 @@
                   <div class="cc-card"
                        t-on-click="() => openDriver(card)">
                     <div class="cc-card-header">
-                      <div class="cc-card-title"><t t-esc="card.name"/></div>
-                      <div class="cc-card-sub text-muted small">
+                    <div class="cc-card-title">
+                        <t t-esc="card.name"/>
+                        <t t-if="card.is_unresponsive">
+                        <!-- small warning icon if driver is unresponsive today -->
+                        <span title="Unresponsive today"> ⚠️</span>
+                        </t>
+                    </div>
+                    <div class="cc-card-sub text-muted small">
                         <t t-esc="card.phone"/>
-                      </div>
-                      <div class="cc-card-sub text-muted small">
+                    </div>
+                    <div class="cc-card-sub text-muted small">
                         <t t-esc="card.product"/>
-                      </div>
+                    </div>
                     </div>
                     <div class="cc-card-body small">
                       <div>Total issues: <t t-esc="card.total_issues"/></div>
@@ -145,15 +151,20 @@
                   <t t-foreach="unrespCards" t-as="card" t-key="'u-' + card.driver_id">
                     <div class="cc-card cc-card-unresponsive"
                          t-on-click="() => openDriver(card)">
-                      <div class="cc-card-header">
-                        <div class="cc-card-title"><t t-esc="card.name"/></div>
-                        <div class="cc-card-sub text-muted small">
-                          <t t-esc="card.phone"/>
+                        <div class="cc-card-header">
+                        <div class="cc-card-title">
+                            <t t-esc="card.name"/>
+                            <t t-if="card.is_unresponsive">
+                            <span title="Unresponsive today"> ⚠️</span>
+                            </t>
                         </div>
                         <div class="cc-card-sub text-muted small">
-                          <t t-esc="card.product"/>
+                            <t t-esc="card.phone"/>
                         </div>
-                      </div>
+                        <div class="cc-card-sub text-muted small">
+                            <t t-esc="card.product"/>
+                        </div>
+                        </div>
                       <div class="cc-card-body small">
                         <div>Total issues: <t t-esc="card.total_issues"/></div>
                         <div class="mt-1">
@@ -235,8 +246,23 @@
                           <t t-esc="formatDateYMDToDMY(state.modalDriver.hire_date)"/>
                         </div>
                       </t>
-                    </div>
 
+                      <!-- NEW: unresponsive toggle -->
+                      <div class="mt-3">
+                        <button class="btn btn-sm"
+                                t-att-class="state.modalDriver.is_unresponsive_today
+                                             ? 'btn-warning'
+                                             : 'btn-outline-warning'"
+                                t-on-click="toggleDriverUnresponsive">
+                          <t t-if="state.modalDriver.is_unresponsive_today">
+                            Mark responsive
+                          </t>
+                          <t t-else="">
+                            Mark unresponsive today
+                          </t>
+                        </button>
+                      </div>
+                    </div>
 
                     <!-- RIGHT: cards / charts toggle -->
                     <div class="col-md-9">
