@@ -14,6 +14,7 @@
         'views/fleet_call_note_views.xml',
         'views/fleet_performance_issue_rule_views.xml',
         'views/fleet_driver_views.xml',
+        'views/fleet_car_views.xml',
         'views/fleet_order_views.xml',
         'views/product_type_views.xml',
         'views/driver_dashboard.xml',

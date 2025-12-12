@@ -10,6 +10,7 @@
           <field name="name"/>
           <field name="phone"/>
           <field name="yango_driver_id"/>
+          <field name="car_id"/>
           <field name="hire_date"/>
           <field name="training_rating"/>
           <field name="work_status"/>
@@ -30,6 +31,7 @@
               <field name="name"/>
               <field name="phone"/>
               <field name="yango_driver_id"/>
+              <field name="car_id"/>
               <field name="hire_date"/>
               <field name="training_rating"/>
             </group>

@@ -9,32 +9,43 @@
   <menuitem id="menu_fleet_driver"
             name="Drivers"
             parent="menu_fleet_dashboard_root"
-            action="action_fleet_driver"/>
+            action="action_fleet_driver"
+            sequence="11"/>
+
+  <!-- Cars -->
+  <menuitem id="menu_fleet_car"
+            name="Cars"
+            parent="menu_fleet_dashboard_root"
+            action="action_fleet_car"
+            sequence="12"/>
+
+  <!-- Product Types -->
+  <menuitem id="menu_fleet_product_type"
+            name="Product Types"
+            parent="menu_fleet_dashboard_root"
+            action="action_fleet_product_type"
+            sequence="13"/>
 
   <!-- Orders -->
   <menuitem id="menu_fleet_order"
             name="Orders"
             parent="menu_fleet_dashboard_root"
-            action="action_fleet_order"/>
+            action="action_fleet_order"
+            sequence="14"/>
 
   <!-- Supply Hours -->
   <menuitem id="menu_driver_supply_hours"
             name="Supply Hours"
             parent="menu_fleet_dashboard_root"
             action="action_driver_supply_hours"
-            sequence="17"/>
-
-  <!-- Product Types -->
-  <menuitem id="menu_fleet_product_type"
-            name="Product Types"
-            parent="menu_fleet_dashboard_root"
-            action="action_fleet_product_type"/>
+            sequence="15"/>
 
   <!-- Issues -->
   <menuitem id="menu_fleet_issue"
             name="Issues"
             parent="menu_fleet_dashboard_root"
-            action="action_x_fleet_issue"/>
+            action="action_x_fleet_issue"
+            sequence="16"/>
 
   <!-- Parent “Technical” under Fleet Dashboard root -->
   <menuitem id="menu_fleet_technical"

@@ -29,6 +29,7 @@ class FleetDriver(models.Model):
         ('other', 'Other')
         ], default='other', string="Activity") #driver_type, after cleaning to include other
     product_type_id = fields.Many2one('x_fleet_product_type', string="Product Type") # work_rule_id, after cleaning to main products + other
+    car_id = fields.Many2one('x_fleet_car', string="Car") #car_id
     issue_ids = fields.One2many('x_fleet_issue', 'driver_id', string="Issues") #Contextual link to a list of issues
     order_ids = fields.One2many('x_fleet_order', 'driver_id', string="Orders") #Contextual link to a list of orders
     call_note_ids = fields.One2many('x_fleet_call_note', 'driver_id', string="Call Notes") #Contextual link to a list of call notes
