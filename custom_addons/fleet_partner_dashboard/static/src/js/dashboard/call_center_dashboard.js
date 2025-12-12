@@ -316,6 +316,7 @@ export class OwlCallCenterDashboard extends Component {
       name: card.name,
       phone: card.phone,
       product: card.product,
+      car_label: card.car_label || '',
       driver_type: '',
       driver_type_label: '',
       hire_date: '',
@@ -347,6 +348,7 @@ export class OwlCallCenterDashboard extends Component {
       this.state.modalDriver.name = d.name || this.state.modalDriver.name;
       this.state.modalDriver.phone = d.phone || this.state.modalDriver.phone;
       this.state.modalDriver.product = d.product || this.state.modalDriver.product;
+      this.state.modalDriver.car_label = d.car_label || this.state.modalDriver.car_label;
       this.state.modalDriver.driver_type = d.type || '';
       this.state.modalDriver.driver_type_label = d.type_label || '';
       this.state.modalDriver.hire_date = d.hire_date || '';

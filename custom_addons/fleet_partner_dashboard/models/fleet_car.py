@@ -5,7 +5,7 @@ class FleetCar(models.Model):
     _name = "x_fleet_car"
     _description = "Fleet Car"
 
-    name = fields.Char(string="Number", required=True)  # license plate / number
+    name = fields.Char(string="License Plate", required=True)  # license plate / number
     car_id = fields.Char(string="Car ID", required=True, index=True)
     brand = fields.Char(string="Brand")
     model = fields.Char(string="Model")

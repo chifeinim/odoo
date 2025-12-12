@@ -162,11 +162,15 @@ class CallCenterDashboardController(http.Controller):
 
             card = cards_dict.get(drv.id)
             if not card:
+                car_label = ''
+                if drv.car_id:
+                    car_label = drv.car_id.name or drv.car_id.number or drv.car_id.callsign or ''
                 card = {
                     'driver_id': drv.id,
                     'name': drv.name,
                     'phone': drv.phone or '',
                     'product': drv.product_type_id.name or '',
+                    'car_label': car_label,
                     'type_counts': {
                         'support': 0,
                         'performance': 0,
@@ -255,6 +259,7 @@ class CallCenterDashboardController(http.Controller):
             'name': Driver.name or '',
             'phone': Driver.phone or '',
             'product': Driver.product_type_id.name or '',
+            'car_label': Driver.car_id and (Driver.car_id.name or Driver.car_id.number or Driver.car_id.callsign) or '',
             'type': Driver.type or '',
             'type_label': driver_type_labels.get(Driver.type) or humanize(Driver.type),
             # keep as Y-M-D so we can reuse formatDateYMDToDMY in JS

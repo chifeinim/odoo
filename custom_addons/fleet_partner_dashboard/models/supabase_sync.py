@@ -414,8 +414,10 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         # include inactive product types when mapping work rules
         ProductType = self.env['x_fleet_product_type'].with_context(active_test=False).sudo()
         Driver = self.env['x_fleet_driver'].sudo()
+        Car = self.env['x_fleet_car'].sudo()
         new_vals = []
         pt_cache: dict[str, int] = {}
+        car_cache = {}
 
         for rec in rows:
             first = rec.get('first_name') or ''
@@ -452,6 +454,16 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                     pt_cache[wr_id] = pt_id
 
                 vals['product_type_id'] = pt_id
+
+            car_ext_id = rec.get('car_id')
+            if car_ext_id:
+                car_ref = car_cache.get(car_ext_id)
+                if car_ref is None:
+                    car = Car.search([('car_id', '=', car_ext_id)], limit=1)
+                    car_ref = car.id or False
+                    car_cache[car_ext_id] = car_ref
+                if car_ref:
+                    vals['car_id'] = car_ref
 
             ext_id = rec.get('yango_driver_id')
             if not ext_id:
@@ -490,6 +502,59 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                         if from_queue:
                             raise
                         self._queue_failed_row('drivers', rec, ext_id or '<missing>', str(e))
+    @api.model
+    def _upsert_cars(self, rows):
+        """
+        Upsert cars fetched from external_data_yango.cars.
+        """
+        _logger.info("Upserting %d cars", len(rows))
+        Car = self.env['x_fleet_car'].sudo()
+        if not rows:
+            return
+
+        dedup = {}
+        for rec in rows:
+            car_ext_id = rec.get('car_id') or rec.get('id')
+            if not car_ext_id:
+                continue
+            dedup[car_ext_id] = rec
+
+        if not dedup:
+            return
+
+        car_ids = list(dedup.keys())
+        existing = Car.search([('car_id', 'in', car_ids)]) if car_ids else Car.browse()
+        car_map = {car.car_id: car for car in existing}
+
+        new_vals = []
+        for car_ext_id, rec in dedup.items():
+            name = rec.get('number') or rec.get('callsign') or car_ext_id
+            year_val = rec.get('year')
+            try:
+                year_int = int(year_val) if year_val is not None else None
+            except (TypeError, ValueError):
+                year_int = None
+
+            vals = {
+                'name': name,
+                'brand': rec.get('brand'),
+                'model': rec.get('model'),
+                'color': rec.get('color'),
+                'year': year_int,
+                'vin': rec.get('vin'),
+                'status': rec.get('status'),
+            }
+
+            car = car_map.get(car_ext_id)
+            if car:
+                car.write(vals)
+            else:
+                vals['car_id'] = car_ext_id
+                new_vals.append(vals)
+
+        if new_vals:
+            Car.create(new_vals)
+            _logger.info("Bulk-created %d new cars", len(new_vals))
 
     @api.model
     def _upsert_orders(self, rows, from_queue=False):
@@ -1468,11 +1533,20 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             params.set_param('fleet_partner_dashboard.work_rules_cursor',
                             max(r['updated_at'] for r in wr))
             self.env.cr.commit()
+        work_map = {r['work_rule_id']: r.get('name') for r in wr if r.get('work_rule_id')}
+
+        # 2) cars
+        car_cur = params.get_param('fleet_partner_dashboard.cars_cursor') or wr_cur
+        cars = self._fetch_table('cars', car_cur)
+        self._upsert_cars(cars)
+        if cars:
+            params.set_param('fleet_partner_dashboard.cars_cursor',
+                             max(r['updated_at'] for r in cars))
+            self.env.cr.commit()
 
         # 2) drivers
-        dr_cur = params.get_param('fleet_partner_dashboard.drivers_cursor') or wr_cur
+        dr_cur = params.get_param('fleet_partner_dashboard.drivers_cursor') or car_cur
         dr = self._fetch_table('drivers', dr_cur)
-        work_map = {r['work_rule_id']: r['name'] for r in wr}
         self._upsert_drivers(dr, work_map)
         if dr:
             params.set_param('fleet_partner_dashboard.drivers_cursor',

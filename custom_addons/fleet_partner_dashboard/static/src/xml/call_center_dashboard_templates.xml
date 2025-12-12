@@ -138,6 +138,11 @@
                     <div class="cc-card-sub text-muted small">
                         <t t-esc="card.product"/>
                     </div>
+                    <t t-if="card.car_label">
+                      <div class="cc-card-sub text-muted small">
+                          <t t-esc="card.car_label"/>
+                      </div>
+                    </t>
                     </div>
                     <div class="cc-card-body small">
                       <div>Total issues: <t t-esc="card.total_issues"/></div>
@@ -185,6 +190,11 @@
                         <div class="cc-card-sub text-muted small">
                             <t t-esc="card.product"/>
                         </div>
+                        <t t-if="card.car_label">
+                          <div class="cc-card-sub text-muted small">
+                              <t t-esc="card.car_label"/>
+                          </div>
+                        </t>
                         </div>
                       <div class="cc-card-body small">
                         <div>Total issues: <t t-esc="card.total_issues"/></div>
@@ -258,6 +268,9 @@
                       <div><strong>Name: </strong> <t t-esc="state.modalDriver.name"/></div>
                       <div><strong>Phone: </strong> <t t-esc="state.modalDriver.phone"/></div>
                       <div><strong>Product: </strong> <t t-esc="state.modalDriver.product"/></div>
+                      <t t-if="state.modalDriver.car_label">
+                        <div><strong>Car: </strong> <t t-esc="state.modalDriver.car_label"/></div>
+                      </t>
                       <t t-if="state.modalDriver.driver_type_label">
                         <div><strong>Activity: </strong> <t t-esc="state.modalDriver.driver_type_label"/></div>
                       </t>
