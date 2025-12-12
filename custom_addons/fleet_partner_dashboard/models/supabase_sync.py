@@ -863,6 +863,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             raw = {
                 'name':              ext_id,  # keep as text; unique enforced by SQL constraint
                 'date_reported':     _normalize_datetime(rec['created_at']) if rec.get('created_at') else None,
+                'resolved_on':       _normalize_datetime(rec['date_resolved']) if rec.get('date_resolved') else None,
                 'issue_type':        il.get('issue_type'),  # "support", "performance", "training"
                 'main_category':     il.get('main_category'),
                 'sub_category':      il.get('sub_category'),
