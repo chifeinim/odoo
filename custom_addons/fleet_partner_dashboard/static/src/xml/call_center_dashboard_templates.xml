@@ -483,7 +483,7 @@
                                 <!-- clickable issue ID -> issue detail modal -->
                                 <td style="white-space: nowrap;">
                                   <a href="#" t-on-click="() => openIssue(it)">
-                                    <t t-esc="it.id"/>
+                                    <t t-esc="it.issue_name or it.id"/>
                                   </a>
                                 </td>
                                 <td style="white-space: nowrap;">
