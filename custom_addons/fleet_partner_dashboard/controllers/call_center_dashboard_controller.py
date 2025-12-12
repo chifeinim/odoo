@@ -94,6 +94,8 @@ class CallCenterDashboardController(http.Controller):
 
         start_dt = datetime.combine(week_from, datetime.min.time())
         end_dt = datetime.combine(week_to, datetime.max.time())
+        today_start = datetime.combine(today, datetime.min.time())
+        today_end = datetime.combine(today, datetime.max.time())
 
         # 1) Support + training, still open, any date
         open_support_training = Issue.search([
@@ -102,11 +104,11 @@ class CallCenterDashboardController(http.Controller):
             ('status', 'in', status_keys + ['unresponsive']),
         ])
 
-        # 2) Any issue resolved in the current week
+        # 2) Any issue resolved today
         resolved_this_week = Issue.search([
             ('status', '=', 'resolved'),
-            ('resolved_on', '>=', start_dt),
-            ('resolved_on', '<=', end_dt),
+            ('resolved_on', '>=', today_start),
+            ('resolved_on', '<=', today_end),
         ])
 
         # 3) Performance issues reported in the current week
@@ -119,6 +121,14 @@ class CallCenterDashboardController(http.Controller):
 
         # Union deduplicates overlapping issues (e.g. perf issue resolved this week)
         issues = open_support_training | resolved_this_week | perf_this_week
+
+        # Ensure the "Resolved" column only reflects issues resolved today.
+        issues = issues.filtered(
+            lambda i: not (
+                (i.status or '') == 'resolved'
+                and (not i.resolved_on or not (today_start <= i.resolved_on <= today_end))
+            )
+        )
 
         # Apply optional filters
         if issue_types:
