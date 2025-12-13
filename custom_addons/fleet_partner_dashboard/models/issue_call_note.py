@@ -7,7 +7,6 @@ ISSUE_STATUS_SELECTION = [
     ('requires_follow_up_call', 'Requires Follow-Up Call'),
     ('invited_to_office', 'Invited To Office'),
     ('invited_to_workshop', 'Invited To Workshop'),
-    ('unresponsive', 'Unresponsive'),
 ]
 
 

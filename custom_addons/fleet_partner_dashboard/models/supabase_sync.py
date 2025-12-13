@@ -1268,7 +1268,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         payload = []
         for r in rules:
             vals = {
-                "id": int(r.id),
+                "odoo_id": int(r.id),
                 "platform_id": platform_id,
                 "code": r.code,
                 "name": r.name,
@@ -1283,7 +1283,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         if not payload:
             return
 
-        params = {"on_conflict": "id"}
+        params = {"on_conflict": "platform_id,odoo_id"}
         try:
             resp = requests.post(endpoint, headers=headers, params=params, json=payload, timeout=20)
             if not resp.ok:
@@ -1303,9 +1303,12 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/performance_issue_rules"
         headers = self._build_headers("dashboard")
+        
+        platform_id = self._get_platform_id()
 
         params = {
-            "id": f"in.({','.join(ids)})"
+            "platform_id": f"eq.{platform_id}",
+            "odoo_id": f"in.({','.join(ids)})",
         }
         try:
             resp = requests.delete(endpoint, headers=headers, params=params, timeout=20)
@@ -1325,8 +1328,9 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         If insert=False → use PATCH filtered by id (plain update).
 
         We send:
-        - id                  <- Odoo exception.id  (for insert only)
-        - issue_rule_id       <- rule_id.id
+        - platform_id         <- platform_id
+        - odoo_id             <- e.id
+        - rule_odoo_id        <- e.rule_id.id
         - product_external_id <- product_type.work_rule_external_id
         - enabled + thresholds
 
@@ -1339,6 +1343,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/performance_issue_exceptions"
+        platform_id = self._get_platform_id()
 
         if insert:
             # -------- INSERT path (create) --------
@@ -1357,8 +1362,9 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 product_ext = e.work_rule_external_id or cfg.get("work_rule_external_id")
 
                 vals = {
-                    "id": int(e.id),
-                    "issue_rule_id": int(e.rule_id.id),
+                    "odoo_id": int(e.id),
+                    "platform_id": platform_id,
+                    "rule_odoo_id": int(e.rule_id.id),
                     "product_external_id": product_ext,
                     "enabled": bool(e.enabled),
                     "min_days_since_hire": cfg.get("min_days_since_hire"),
@@ -1404,7 +1410,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 product_ext = e.work_rule_external_id or cfg.get("work_rule_external_id")
 
                 body = {
-                    "issue_rule_id": int(e.rule_id.id),
+                    "rule_odoo_id": int(e.rule_id.id),
                     "product_external_id": product_ext,
                     "enabled": bool(e.enabled),
                     "min_days_since_hire": cfg.get("min_days_since_hire"),
@@ -1413,7 +1419,10 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                     "active_trips_threshold": cfg.get("active_trips_threshold"),
                 }
 
-                params = {"id": f"eq.{int(e.id)}"}
+                params = {
+                    "platform_id": f"eq.{platform_id}",
+                    "odoo_id": f"eq.{int(e.id)}",
+                }
 
                 try:
                     resp = requests.patch(
@@ -1443,9 +1452,11 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         base_url, key = self._get_config()
         endpoint = f"{base_url}/rest/v1/performance_issue_exceptions"
         headers = self._build_headers("dashboard")
+        platform_id = self._get_platform_id()
 
         params = {
-            "id": f"in.({','.join(ids)})"
+            "platform_id": f"eq.{platform_id}",
+            "odoo_id": f"in.({','.join(ids)})",
         }
         try:
             resp = requests.delete(endpoint, headers=headers, params=params, timeout=20)
