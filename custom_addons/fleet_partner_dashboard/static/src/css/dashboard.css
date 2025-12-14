@@ -170,16 +170,13 @@ body.lp-modal-open .fp-sticky-header {
 /* ===== Call Center Kanban board ====================================== */
 
 .cc-board {
-  display: flex;
-  flex-direction: row;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1rem;
-  overflow-x: auto;
   padding-bottom: 0.5rem;
 }
 
 .cc-column {
-  min-width: 260px;
-  max-width: 280px;
   background-color: #ffffff;
   border-radius: 0.75rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
