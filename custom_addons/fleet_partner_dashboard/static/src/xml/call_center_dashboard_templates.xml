@@ -630,6 +630,41 @@
                             </tbody>
                           </table>
                         </div>
+
+                        <t t-if="state.issueDetail.attachments and state.issueDetail.attachments.length">
+                          <div class="mt-3">
+                            <h6>Attachments</h6>
+                            <button class="btn btn-secondary btn-sm mb-2"
+                                    t-on-click="() => refreshIssueAttachments(state.issueDetail.issue)">
+                              Reload Attachments
+                            </button>
+                            <div class="row g-3">
+                              <t t-foreach="state.issueDetail.attachments" t-as="att" t-key="att.id">
+                                <div class="col-md-6">
+                                  <div class="card">
+                                    <div class="card-body">
+                                      <t t-if="att.kind == 'image'">
+                                        <img t-att-src="att.signed_url" class="img-fluid" alt="Attachment"/>
+                                      </t>
+                                      <t t-if="att.kind == 'video'">
+                                        <video controls="controls" t-att-src="att.signed_url" style="width:100%;"></video>
+                                      </t>
+                                      <t t-if="att.kind == 'audio'">
+                                        <audio controls="controls" t-att-src="att.signed_url" style="width:100%;"></audio>
+                                      </t>
+                                      <t t-if="att.kind == 'pdf'">
+                                        <iframe t-att-src="att.signed_url" style="width:100%;height:300px;border:0;"></iframe>
+                                      </t>
+                                      <t t-if="att.kind == 'other'">
+                                        <a t-att-href="att.signed_url" target="_blank">Open attachment</a>
+                                      </t>
+                                    </div>
+                                  </div>
+                                </div>
+                              </t>
+                            </div>
+                          </div>
+                        </t>
                       </t>
                     </div>
                   </div>

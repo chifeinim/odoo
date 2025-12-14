@@ -563,10 +563,20 @@ class CallCenterDashboardController(http.Controller):
                 'note': n.note or '',
             })
 
+        attachments = []
+        for att in issue.ext_attachment_ids.sudo():
+            attachments.append({
+                'id': att.id,
+                'kind': att.kind or 'other',
+                'signed_url': att.signed_url or '',
+                'key': att.key or '',
+            })
+
         return {
             'ok': True,
             'issue': issue_data,
             'call_notes': call_notes,
+            'attachments': attachments,
         }
         
     # -------------------------------------------------------------------------
@@ -645,3 +655,23 @@ class CallCenterDashboardController(http.Controller):
                 and Driver.callcenter_unresponsive_on == today
             ),
         }
+
+    @http.route('/fleet_call_center/refresh_issue_attachments', type='json', auth='user')
+    def call_center_refresh_issue_attachments(self, issue_id: int):
+        Issue = request.env['x_fleet_issue'].sudo()
+        issue = Issue.browse(int(issue_id or 0))
+        if not issue.exists():
+            return {'ok': False, 'error': 'Issue not found.'}
+
+        issue.action_refresh_signed_urls()
+
+        attachments = []
+        for att in issue.ext_attachment_ids.sudo():
+            attachments.append({
+                'id': att.id,
+                'kind': att.kind or 'other',
+                'signed_url': att.signed_url or '',
+                'key': att.key or '',
+            })
+
+        return {'ok': True, 'attachments': attachments}

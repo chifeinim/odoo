@@ -324,6 +324,7 @@ export class OwlCallCenterDashboard extends Component {
       cards: null,
       series: null,
       issues: [],
+      attachments: [],
       metrics_range: null,
       issues_range: null,
     };
@@ -340,6 +341,7 @@ export class OwlCallCenterDashboard extends Component {
     this.state.modalDriver.cards = res.cards || {};
     this.state.modalDriver.series = res.series || {};
     this.state.modalDriver.issues = res.issues || [];
+    this.state.modalDriver.attachments = res.attachments || [];
     this.state.modalDriver.metrics_range = res.metrics_range || null;
     this.state.modalDriver.issues_range = res.issues_range || null;
 
@@ -535,6 +537,23 @@ export class OwlCallCenterDashboard extends Component {
     }
     this._modalPortaled = false;
     try { document.body.classList.remove('lp-modal-open'); } catch (e) {}
+  }
+
+  async refreshIssueAttachments(issue) {
+    const issueId = issue?.id;
+    if (!issueId) {
+      return;
+    }
+    const res = await this.env.services.rpc('/fleet_call_center/refresh_issue_attachments', {
+      issue_id: issueId,
+    });
+    if (!res || !res.ok) {
+      window.alert(res && res.error ? res.error : 'Failed to refresh attachments');
+      return;
+    }
+    if (this.state.issueDetail && this.state.issueDetail.issue && this.state.issueDetail.issue.id === issueId) {
+      this.state.issueDetail.attachments = res.attachments || [];
+    }
   }
 }
 
