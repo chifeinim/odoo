@@ -241,10 +241,10 @@ export class OwlCallCenterDashboard extends Component {
     // hard-code status options to match ISSUE_STATUS_SELECTION
     this.state.statusOptions = [
       { key: 'unresolved', 'label': 'Not Started' },
-      { key: 'resolved', 'label': 'Resolved' },
       { key: 'requires_follow_up_call', 'label': 'Requires Follow-Up Call' },
       { key: 'invited_to_office', 'label': 'Invited To Office' },
       { key: 'invited_to_workshop', 'label': 'Invited To Workshop' },
+      { key: 'resolved', 'label': 'Resolved' },
     ];
   }
 

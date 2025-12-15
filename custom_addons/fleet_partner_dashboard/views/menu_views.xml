@@ -117,11 +117,11 @@
             action="action_x_fleet_performance_issue_exception"
             sequence="30"/>
 
-  <!-- Call Notes list -->
+  <!-- Issue Call Notes list -->
   <menuitem id="menu_x_fleet_call_note_list"
-            name="Call Notes"
+            name="Issue Call Notes"
             parent="menu_x_fleet_call_note"
-            action="action_x_fleet_call_note"
+            action="action_x_fleet_issue_call_note"
             sequence="40"/>
 
 </odoo>

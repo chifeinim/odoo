@@ -1136,6 +1136,87 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                     )
             except Exception:
                 _logger.exception("Exception while pushing issue_messages chunk %d-%d", i + 1, i + len(chunk))
+                
+    def _push_issue_call_notes(self, notes):
+        """
+        Push x_fleet_issue_call_note -> dashboard.issue_call_notes.
+
+        Supabase table expects:
+        - issue_log_id        (FK to dashboard.issue_logs.id)
+        - created_at          (timestamp)
+        - author_name         (text)
+        - note                (text)
+        - status_from         (dashboard.status)
+        - status_to           (dashboard.status)
+        - odoo_call_note_id   (unique)
+        """
+        if not notes:
+            return
+
+        base_url, key = self._get_config()
+        endpoint = f"{base_url}/rest/v1/issue_call_notes"
+
+        headers = self._build_headers("dashboard")
+        headers.update({
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal,resolution=merge-duplicates",
+        })
+
+        payloads = []
+        for n in notes.sudo():
+            issue = n.issue_id
+            if not issue:
+                continue
+
+            # Same mapping as issue_messages: Odoo issue name stores the issue_logs.id
+            try:
+                issue_log_id = int(issue.name)
+            except (TypeError, ValueError):
+                _logger.warning(
+                    "Cannot map issue %s to issue_logs.id for call note %s",
+                    issue.id, n.id
+                )
+                continue
+
+            author = n.author_id
+            author_name = author.name if author else "Unknown"
+
+            vals = {
+                "odoo_call_note_id": n.id,
+                "issue_log_id": issue_log_id,
+                "created_at": _to_supabase_iso(n.created_at) if n.created_at else None,
+                "author_name": author_name,
+                "note": (n.note or "").strip(),
+                "status_from": n.status_from or None,
+                "status_to": n.status_to or None,
+            }
+
+            # Drop None values so we don't accidentally override defaults
+            payloads.append({k: v for k, v in vals.items() if v is not None})
+
+        if not payloads:
+            return
+
+        CHUNK = 200
+        for i in range(0, len(payloads), CHUNK):
+            chunk = payloads[i:i + CHUNK]
+            try:
+                resp = requests.post(
+                    endpoint + "?on_conflict=odoo_call_note_id",
+                    headers=headers,
+                    json=chunk,
+                    timeout=20,
+                )
+                if not resp.ok:
+                    _logger.error(
+                        "Failed to push issue_call_notes chunk %d-%d: %s %s",
+                        i + 1, i + len(chunk), resp.status_code, resp.text
+                    )
+            except Exception:
+                _logger.exception(
+                    "Exception while pushing issue_call_notes chunk %d-%d",
+                    i + 1, i + len(chunk)
+                )
 
     @api.model
     def backfill_issue_states(self, limit=None, batch_size=200):

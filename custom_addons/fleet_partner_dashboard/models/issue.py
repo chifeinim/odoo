@@ -31,10 +31,10 @@ class FleetIssue(models.Model):
         search="_search_sub_sub_category_label")
 
     status   = fields.Selection([('unresolved','Not Started'),
-                                 ('resolved','Resolved'),
                                  ('requires_follow_up_call','Requires Follow-Up Call'),
                                  ('invited_to_office','Invited To Office'),
-                                 ('invited_to_workshop','Invited To Workshop'),],
+                                 ('invited_to_workshop','Invited To Workshop'),
+                                 ('resolved','Resolved'),],
                                 default='unresolved', tracking=True)
 
     # NEW: resolved timestamp
