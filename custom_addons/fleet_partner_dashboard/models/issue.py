@@ -73,6 +73,8 @@ class FleetIssue(models.Model):
             for rec in self:
                 if rec.status == 'resolved' and not rec.resolved_on:
                     rec.resolved_on = fields.Datetime.now()
+                    if rec.driver_id and rec.driver_id.callcenter_unresponsive_on:
+                        rec.driver_id.callcenter_unresponsive_on = False
                 elif rec.status == 'unresolved' and rec.resolved_on:
                     rec.resolved_on = False
 
