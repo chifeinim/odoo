@@ -119,8 +119,14 @@ class CallCenterDashboardController(http.Controller):
             ('status', 'in', status_keys + ['unresponsive']),
         ])
 
+        # 4) Performance issues that are "in progress" (not Not Started) regardless of date
+        perf_in_progress = Issue.search([
+            ('issue_type', '=', 'performance'),
+            ('status', 'in', ['requires_follow_up_call', 'invited_to_office', 'invited_to_workshop']),
+        ])
+
         # Union deduplicates overlapping issues (e.g. perf issue resolved this week)
-        issues = open_support_training | resolved_this_week | perf_this_week
+        issues = open_support_training | resolved_this_week | perf_this_week | perf_in_progress
 
         # Ensure the "Resolved" column only reflects issues resolved today.
         issues = issues.filtered(
@@ -451,7 +457,15 @@ class CallCenterDashboardController(http.Controller):
         issues_perf_week = Issue.search(domain_perf_week)
 
         # Union of all three sets; Odoo recordset union deduplicates by id
-        issues = issues_open_st | issues_resolved_week | issues_perf_week
+        # 4) Performance issues currently in progress (not Not Started), regardless of date
+        domain_perf_in_progress = [
+            ('driver_id', '=', Driver.id),
+            ('issue_type', '=', 'performance'),
+            ('status', 'in', ['requires_follow_up_call', 'invited_to_office', 'invited_to_workshop']),
+        ]
+        issues_perf_in_progress = Issue.search(domain_perf_in_progress)
+
+        issues = issues_open_st | issues_resolved_week | issues_perf_week | issues_perf_in_progress
 
         # Sort newest first
         issues = issues.sorted(
