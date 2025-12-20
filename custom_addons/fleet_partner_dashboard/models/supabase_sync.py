@@ -1148,7 +1148,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
         - note                (text)
         - status_from         (dashboard.status)
         - status_to           (dashboard.status)
-        - odoo_call_note_id   (unique)
+        - odoo_call_note_id   (unique PER issue_log_id)
         """
         if not notes:
             return
@@ -1168,7 +1168,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             if not issue:
                 continue
 
-            # Same mapping as issue_messages: Odoo issue name stores the issue_logs.id
+            # Same mapping as issue_messages: Odoo issue.name stores dashboard.issue_logs.id
             try:
                 issue_log_id = int(issue.name)
             except (TypeError, ValueError):
@@ -1183,7 +1183,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
 
             vals = {
                 "odoo_call_note_id": n.id,
-                "issue_log_id": issue_log_id,
+                "issue_log_id": issue_log_id,  # MUST be present for composite on_conflict
                 "created_at": _to_supabase_iso(n.created_at) if n.created_at else None,
                 "author_name": author_name,
                 "note": (n.note or "").strip(),
@@ -1191,7 +1191,6 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
                 "status_to": n.status_to or None,
             }
 
-            # Drop None values so we don't accidentally override defaults
             payloads.append({k: v for k, v in vals.items() if v is not None})
 
         if not payloads:
@@ -1202,7 +1201,7 @@ class FleetPartnerSupabaseSync(models.AbstractModel):
             chunk = payloads[i:i + CHUNK]
             try:
                 resp = requests.post(
-                    endpoint + "?on_conflict=odoo_call_note_id",
+                    endpoint + "?on_conflict=issue_log_id,odoo_call_note_id",
                     headers=headers,
                     json=chunk,
                     timeout=20,
