@@ -23,6 +23,7 @@ odoo/addons/base/maintenance
 # window installation config file
 /odoo.conf
 /odoo18.conf
+odoo18.log
 
 # generated for windows installer?
 install/win32/*.bat
